@@ -1,0 +1,11 @@
+venv/
+.env
+.cache/
+report.html
+briefing-*.json
+briefing-*.md
+reports/
+logs/
+__pycache__/
+*.pyc
+.DS_Store

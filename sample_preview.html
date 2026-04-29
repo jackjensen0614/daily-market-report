@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Daily Market Report · 2026-04-22</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+:root {
+  --bg: #0b0d12;
+  --bg-panel: #12151d;
+  --bg-panel-2: #181c26;
+  --border: #232836;
+  --text: #e6e8ef;
+  --text-dim: #8a92a6;
+  --text-faint: #5a6278;
+  --accent: #6ee7b7;
+  --green: #22c55e;
+  --green-dim: #0f3a22;
+  --red: #ef4444;
+  --red-dim: #3a1414;
+  --yellow: #f59e0b;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  font-size: 14px; line-height: 1.45;
+}
+.wrap {
+  max-width: 1400px; margin: 0 auto; padding: 28px 32px 72px;
+}
+header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px;
+  flex-wrap: wrap; gap: 12px;
+}
+h1 {
+  font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em;
+}
+h1 .subtle { color: var(--text-dim); font-weight: 400; margin-left: 10px; font-size: 15px; }
+h2 {
+  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim); margin: 32px 0 12px;
+}
+.meta { color: var(--text-faint); font-size: 12px; }
+.warn {
+  background: #2a1d08; border: 1px solid #5b3d12; color: #f0c77a;
+  padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px;
+}
+
+/* Index tiles */
+.index-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;
+}
+.tile {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px;
+}
+.tile .label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.tile .value { font-size: 22px; font-weight: 600; margin-top: 6px; letter-spacing: -0.01em; }
+.tile .delta { font-size: 13px; margin-top: 2px; }
+
+/* Colored numbers */
+.up   { color: var(--green); }
+.down { color: var(--red); }
+.flat { color: var(--text-dim); }
+.num  { font-variant-numeric: tabular-nums; }
+
+/* Main 2-col grid for mover sections */
+.cols {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;
+}
+@media (max-width: 980px) { .cols { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0; overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.panel-head h3 {
+  margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.02em;
+}
+.panel-head .sub { color: var(--text-faint); font-size: 12px; }
+
+/* Mover rows */
+.mover {
+  display: grid; grid-template-columns: 64px 1fr auto; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: start;
+}
+.mover:last-child { border-bottom: none; }
+.mover .sym { font-weight: 700; letter-spacing: 0.02em; }
+.mover .name { color: var(--text-dim); font-size: 12px; margin-top: 2px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mover .why { color: var(--text); font-size: 12.5px; margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--border); color: #cfd4e3; }
+.mover .news { margin-top: 6px; }
+.mover .news a { display: block; color: #b7c0d6; font-size: 12px; text-decoration: none; margin: 2px 0; }
+.mover .news a:hover { color: #dce3f5; text-decoration: underline; }
+.mover .news .pub { color: var(--text-faint); font-size: 11px; }
+.mover .right { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mover .right .pct { font-weight: 600; font-size: 15px; }
+.mover .right .px { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.pill {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 11px; margin-left: 6px;
+}
+.pill.up { background: #0e2a1a; border-color: #1a4c30; color: #6ee7b7; }
+.pill.down { background: #2a0e0e; border-color: #4c1a1a; color: #fca5a5; }
+
+/* Narrative cards */
+.narr {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 20px; margin: 12px 0 8px;
+}
+.narr p { margin: 8px 0; color: #dde2f0; }
+.narr .label {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.narr.risk { border-color: #5b3d12; background: #1f1708; }
+.narr.risk p { color: #f0c77a; }
+
+/* Watch list */
+.watch-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }
+.watch-item {
+  background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px;
+}
+.watch-item .sym { font-weight: 700; }
+.watch-item .why { color: var(--text-dim); font-size: 12.5px; margin-top: 4px; }
+
+/* Table for calendars */
+table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+th, td {
+  text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 600;
+}
+tr:last-child td { border-bottom: none; }
+td.sym { font-weight: 600; white-space: nowrap; }
+td.time { color: var(--text-dim); white-space: nowrap; }
+
+footer {
+  margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--text-faint); font-size: 12px; text-align: center;
+}
+a { color: #8ab4f8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Daily Market Report
+      <span class="subtle">Prior session · Wednesday, April 22, 2026</span>
+    </h1>
+    <div class="meta">Generated 2026-04-23 08:45 UTC-04:00 · Today is Thursday, April 23, 2026</div>
+  </div>
+  <div class="meta">
+    
+  </div>
+</header>
+
+<h2>Indices & Macro</h2>
+<div class="index-grid">
+  
+    <div class="tile">
+      <div class="label">S&P 500</div>
+      <div class="value num">5,823.41</div>
+      <div class="delta num up">+23.11 (+0.40%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">Dow Jones</div>
+      <div class="value num">44,123.55</div>
+      <div class="delta num down">-85.22 (-0.19%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">Nasdaq Composite</div>
+      <div class="value num">19,411.05</div>
+      <div class="delta num up">+112.66 (+0.58%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">Russell 2000</div>
+      <div class="value num">2,321.10</div>
+      <div class="delta num down">-7.50 (-0.32%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">VIX (Volatility)</div>
+      <div class="value num">14.21</div>
+      <div class="delta num down">-0.44 (-3.00%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">US Dollar Index</div>
+      <div class="value num">104.55</div>
+      <div class="delta num down">-0.12 (-0.11%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">10Y Treasury Yield</div>
+      <div class="value num">4.28</div>
+      <div class="delta num up">+0.03 (+0.71%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">Gold</div>
+      <div class="value num">3,442.10</div>
+      <div class="delta num up">+18.20 (+0.53%)</div>
+    </div>
+    
+    <div class="tile">
+      <div class="label">Crude Oil (WTI)</div>
+      <div class="value num">71.88</div>
+      <div class="delta num down">-0.92 (-1.26%)</div>
+    </div>
+    
+</div>
+
+
+    <div class="narr">
+      <div class="label">Market Narrative · Yesterday</div>
+      <p>Equities eked out a modest gain Wednesday, driven by a 6.8% surge in Nvidia after it unveiled its Blackwell Ultra chip with orders already exceeding capacity. Defensive sectors lagged as Meta's Q2 guide and Netflix's soft subscriber growth weighed on communication services. Treasury yields ticked up on firmer-than-expected jobs data, while crude slipped on larger US inventories.</p>
+    </div>
+    
+
+<h2>Stock Movers · Wednesday, April 22, 2026</h2>
+<div class="cols">
+  <div class="panel">
+    <div class="panel-head"><h3>Top Gainers</h3><div class="sub">Largest % moves up</div></div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">NVDA</div>
+      </div>
+      <div>
+        <div class="name">NVIDIA Corporation</div>
+        <div class="why">Blackwell Ultra chip launch with supply-constrained demand drew sell-side target hikes.</div>
+        <div class="news"><a href="https://example.com/1" target="_blank" rel="noopener">Nvidia launches new Blackwell Ultra chip, orders exceed capacity <span class="pub">· Reuters</span></a><a href="https://example.com/2" target="_blank" rel="noopener">Wall Street analysts raise Nvidia price targets after AI earnings beat <span class="pub">· Bloomberg</span></a></div>
+      </div>
+      <div class="right">
+        <div class="pct num up">+6.80%</div>
+        <div class="px num">$132.40</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">TSLA</div>
+      </div>
+      <div>
+        <div class="name">Tesla, Inc.</div>
+        <div class="why">Q1 delivery beat plus FSD progress lifted sentiment after a weak March.</div>
+        <div class="news"><a href="https://example.com/3" target="_blank" rel="noopener">Tesla reports Q1 deliveries above consensus, FSD progress cited <span class="pub">· CNBC</span></a></div>
+      </div>
+      <div class="right">
+        <div class="pct num up">+5.40%</div>
+        <div class="px num">$195.10</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">CRWD</div>
+      </div>
+      <div>
+        <div class="name">CrowdStrike Holdings</div>
+        <div class="why">Federal contract win renewed the secular cyber-security thesis.</div>
+        <div class="news"><a href="https://example.com/4" target="_blank" rel="noopener">CrowdStrike wins major federal contract <span class="pub">· WSJ</span></a></div>
+      </div>
+      <div class="right">
+        <div class="pct num up">+4.90%</div>
+        <div class="px num">$350.22</div>
+      </div>
+    </div>
+    
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>Top Losers</h3><div class="sub">Largest % moves down</div></div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">META</div>
+      </div>
+      <div>
+        <div class="name">Meta Platforms, Inc.</div>
+        <div class="why">Q2 revenue guide under consensus and widening Reality Labs loss spooked holders.</div>
+        <div class="news"><a href="https://example.com/5" target="_blank" rel="noopener">Meta guides Q2 revenue below Street, Reality Labs loss widens <span class="pub">· Reuters</span></a></div>
+      </div>
+      <div class="right">
+        <div class="pct num down">-4.10%</div>
+        <div class="px num">$558.00</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">NFLX</div>
+      </div>
+      <div>
+        <div class="name">Netflix, Inc.</div>
+        <div class="why">First subscriber miss in six quarters sparked questions about ad-tier saturation.</div>
+        <div class="news"><a href="https://example.com/6" target="_blank" rel="noopener">Netflix misses subscriber adds for first time in 6 quarters <span class="pub">· Variety</span></a></div>
+      </div>
+      <div class="right">
+        <div class="pct num down">-3.20%</div>
+        <div class="px num">$710.22</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">INTC</div>
+      </div>
+      <div>
+        <div class="name">Intel Corporation</div>
+        <div class="why">Foundry loss deepening fuels concern it will miss AI-chip server upgrade cycle.</div>
+        <div class="news"><a href="https://example.com/7" target="_blank" rel="noopener">Intel foundry division loss deepens amid AI chip competition <span class="pub">· Bloomberg</span></a></div>
+      </div>
+      <div class="right">
+        <div class="pct num down">-2.80%</div>
+        <div class="px num">$33.10</div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+<div class="cols" style="margin-top: 18px;">
+  <div class="panel">
+    <div class="panel-head"><h3>Most Active</h3><div class="sub">Sorted by volume</div></div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">AAPL</div>
+      </div>
+      <div>
+        <div class="name">Apple Inc.</div>
+        <div class="why">High baseline turnover; no standout catalyst.</div>
+        
+      </div>
+      <div class="right">
+        <div class="pct num up">+0.80%</div>
+        <div class="px num">$218.15</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">AMZN</div>
+      </div>
+      <div>
+        <div class="name">Amazon.com, Inc.</div>
+        <div class="why">Hovered ahead of next week's earnings.</div>
+        
+      </div>
+      <div class="right">
+        <div class="pct num up">+1.30%</div>
+        <div class="px num">$190.22</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">NVDA</div>
+      </div>
+      <div>
+        <div class="name">NVIDIA Corporation</div>
+        <div class="why">Same driver as gainers: Blackwell launch.</div>
+        
+      </div>
+      <div class="right">
+        <div class="pct num up">+6.80%</div>
+        <div class="px num">$132.40</div>
+      </div>
+    </div>
+    
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>Crypto · Top 20</h3><div class="sub">By market cap · 24h change</div></div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">BTC</div>
+      </div>
+      <div>
+        <div class="name">Bitcoin</div>
+        <div class="why">Slight bid on softer dollar and continued ETF inflows.</div>
+        
+      </div>
+      <div class="right">
+        <div class="pct num up">+2.10%</div>
+        <div class="px num">$88,231.44</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">ETH</div>
+      </div>
+      <div>
+        <div class="name">Ethereum</div>
+        <div class="why">Outperformed on renewed L2 usage data.</div>
+        
+      </div>
+      <div class="right">
+        <div class="pct num up">+3.40%</div>
+        <div class="px num">$3,210.55</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">XRP</div>
+      </div>
+      <div>
+        <div class="name">XRP</div>
+        
+        
+      </div>
+      <div class="right">
+        <div class="pct num down">-1.20%</div>
+        <div class="px num">$2.18</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">SOL</div>
+      </div>
+      <div>
+        <div class="name">Solana</div>
+        <div class="why">Memecoin volume and Firedancer timeline drove speculative bid.</div>
+        
+      </div>
+      <div class="right">
+        <div class="pct num up">+5.80%</div>
+        <div class="px num">$188.33</div>
+      </div>
+    </div>
+    
+    <div class="mover">
+      <div>
+        <div class="sym">DOGE</div>
+      </div>
+      <div>
+        <div class="name">Dogecoin</div>
+        
+        
+      </div>
+      <div class="right">
+        <div class="pct num down">-2.00%</div>
+        <div class="px num">$0.1940</div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+<h2>Today's Setup · Thursday, April 23, 2026</h2>
+
+    <div class="narr">
+      <div class="label">Today's Outlook</div>
+      <p>Focus is squarely on Alphabet's earnings after the close — the print will anchor sentiment for AI-capex names including Nvidia and Microsoft. Before the open, Boeing and AT&amp;T will color industrials and telco; weekly jobless claims at 8:30 ET set the macro tone. Fed Governor Waller at 1pm ET is a potential volatility catalyst given recent hawkish-lite commentary on the pace of cuts.</p>
+    </div>
+    
+
+<div class="cols">
+  <div class="panel">
+    <div class="panel-head"><h3>Earnings Today</h3><div class="sub">Reporting before/after open</div></div>
+    
+    <table>
+      <thead><tr><th>Time</th><th>Symbol / Region</th><th>Event</th><th>Details</th></tr></thead>
+      <tbody>
+        
+        <tr>
+          <td class="time">BMO</td>
+          <td class="sym">GOOGL</td>
+          <td>Alphabet Inc.</td>
+          <td style="color: var(--text-dim)">EPS est $1.95 · Mkt cap $2.1T</td>
+        </tr>
+        
+        <tr>
+          <td class="time">AMC</td>
+          <td class="sym">T</td>
+          <td>AT&amp;T</td>
+          <td style="color: var(--text-dim)">EPS est $0.53</td>
+        </tr>
+        
+        <tr>
+          <td class="time">BMO</td>
+          <td class="sym">BA</td>
+          <td>The Boeing Company</td>
+          <td style="color: var(--text-dim)">EPS est -$1.44</td>
+        </tr>
+        
+      </tbody>
+    </table>
+    
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>Economic Events</h3><div class="sub">Data releases & Fed speakers</div></div>
+    
+    <table>
+      <thead><tr><th>Time</th><th>Symbol / Region</th><th>Event</th><th>Details</th></tr></thead>
+      <tbody>
+        
+        <tr>
+          <td class="time">08:30 ET</td>
+          <td class="sym">US</td>
+          <td>Initial Jobless Claims</td>
+          <td style="color: var(--text-dim)">Cons. 219K · Prior 215K</td>
+        </tr>
+        
+        <tr>
+          <td class="time">10:00 ET</td>
+          <td class="sym">US</td>
+          <td>Existing Home Sales</td>
+          <td style="color: var(--text-dim)">Cons. 4.10M · Prior 4.00M</td>
+        </tr>
+        
+        <tr>
+          <td class="time">13:00 ET</td>
+          <td class="sym">US</td>
+          <td>Fed Governor Waller speaks</td>
+          <td style="color: var(--text-dim)"></td>
+        </tr>
+        
+      </tbody>
+    </table>
+    
+  </div>
+</div>
+
+
+    <h2>Tickers to Watch Today</h2>
+    <div class="watch-list">
+      <div class="watch-item"><div class="sym">GOOGL</div><div class="why">Q1 earnings after the close; Cloud growth and AI capex guide are the key tells.</div></div><div class="watch-item"><div class="sym">NVDA</div><div class="why">Trading near all-time highs; GOOGL capex commentary is a direct readthrough.</div></div><div class="watch-item"><div class="sym">BA</div><div class="why">Pre-market earnings with ongoing 737 MAX quality scrutiny.</div></div><div class="watch-item"><div class="sym">T</div><div class="why">Pre-market print; subscriber growth vs. VZ remains the key metric.</div></div><div class="watch-item"><div class="sym">META</div><div class="why">Following yesterday's 4%+ drop, watch for dip-buyers vs. technical breakdown.</div></div>
+    </div>
+    
+
+
+    <div class="narr">
+      <div class="label">Crypto Outlook</div>
+      <p>BTC is consolidating just below $90k with ETF flows steady but not accelerating. A clean break of $90k on elevated volume would open $95k; a rejection invites a retest of the $85k zone.</p>
+    </div>
+    
+
+
+    <div class="narr risk">
+      <div class="label">Risk Notes</div>
+      <p>A hot jobless claims print or hawkish Waller tone could steepen the curve and pressure growth names again. Alphabet's capex number is the single biggest earnings swing factor.</p>
+    </div>
+    
+
+<footer>
+  Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
+  <br/>Not investment advice. Figures may be delayed. Always verify before trading.
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Daily Market Report — runs at 6:00 AM, Monday–Friday.
+      Generates report.html and opens it in your default browser.
+
+      Install with:   ./install_schedule.sh
+      Uninstall with: ./uninstall_schedule.sh
+    -->
+    <key>Label</key>
+    <string>com.jack.daily-market-report</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-lc</string>
+        <string>cd "$HOME/Documents/Claude/Projects/Daily Report" &amp;&amp; ./venv/bin/python3 daily_market_report.py --no-open &amp;&amp; /usr/bin/open "$HOME/Documents/Claude/Projects/Daily Report/report.html"</string>
+    </array>
+
+    <!-- 6:00 AM, Mon (1) through Fri (5). One <dict> per day. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Weekday</key><integer>1</integer>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>2</integer>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>3</integer>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>4</integer>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>5</integer>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+
+    <!-- If your Mac was asleep at 6am, run as soon as it wakes. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/daily-market-report.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/daily-market-report.err.log</string>
+
+    <!-- Make sure $HOME and PATH are sane when launchd kicks this off. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
