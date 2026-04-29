@@ -1057,9 +1057,39 @@ a {{ color: #8ab4f8; }}
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
   <br/>Not investment advice. Figures may be delayed. Always verify before trading.
+  <br/><span id="refresh-status" style="color:var(--accent)"></span>
 </footer>
 
 </div>
+<script>
+(function(){{
+  // Auto-refresh every 60s during market hours (9:25 AM–4:10 PM ET Mon–Fri)
+  function isMarketHours() {{
+    var now = new Date();
+    var et = new Date(now.toLocaleString('en-US', {{timeZone:'America/New_York'}}));
+    var day = et.getDay(); // 0=Sun,6=Sat
+    if (day === 0 || day === 6) return false;
+    var h = et.getHours(), m = et.getMinutes();
+    var mins = h * 60 + m;
+    return mins >= 565 && mins <= 970; // 9:25–4:10
+  }}
+  function tick() {{
+    var el = document.getElementById('refresh-status');
+    if (isMarketHours()) {{
+      var next = 60;
+      if (el) el.textContent = 'Live · refreshing in ' + next + 's';
+      var countdown = setInterval(function() {{
+        next--;
+        if (el) el.textContent = 'Live · refreshing in ' + next + 's';
+        if (next <= 0) {{ clearInterval(countdown); location.reload(); }}
+      }}, 1000);
+    }} else {{
+      if (el) el.textContent = 'Market closed · no auto-refresh';
+    }}
+  }}
+  tick();
+}})();
+</script>
 </body>
 </html>
 """
