@@ -1158,6 +1158,10 @@ a {{ color: #8ab4f8; }}
 
 </div>
 <script>
+// If opened as a local file, go to the live hosted version instead
+if (window.location.protocol === 'file:') {{
+  window.location.replace('https://jackjensen0614.github.io/daily-market-report/');
+}}
 function doRefresh() {{
   var btn = document.getElementById('refresh-btn');
   if (btn) {{ btn.classList.add('spinning'); btn.disabled = true; }}
