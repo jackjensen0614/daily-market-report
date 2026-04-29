@@ -703,6 +703,73 @@ DATA:
 """
 
 
+BRIEFING_SYSTEM_PROMPT = """You are a professional markets strategist writing a concise morning briefing
+for a sophisticated individual investor. Be data-driven, cite specific numbers, avoid hype,
+never give personalized financial advice. Keep paragraphs tight — 3-5 sentences max each.
+Output strictly valid JSON with no markdown fences."""
+
+BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY these keys:
+
+{{
+  "exec_summary": ["one-line bullet 1", "one-line bullet 2", "one-line bullet 3", "one-line bullet 4", "one-line bullet 5"],
+  "session_recap": "3-4 paragraphs. Lead with index moves and VIX, then sector/macro (cite crude, yields, gold), then 2-3 biggest individual stock moves tied to their specific news headline.",
+  "crypto_recap": "1-2 paragraphs. BTC/ETH/XRP levels, top gainer and top loser in the top 20, notable volume or dominance shifts.",
+  "today_setup": "Walk through tonight's/today's earnings (highlight highest-impact names with EPS estimates) and any economic events. For each name give one line on how it could shape the tape.",
+  "tickers_to_watch": [{{"ticker": "XYZ", "rationale": "specific signal — e.g. RSI 28 oversold, earnings beat +8%, continuation from yesterday"}}, ...6-10 items],
+  "crypto_outlook": "1-2 paragraphs on crypto positioning for the next 24 hours.",
+  "risk_notes": ["concrete risk bullet 1", "concrete risk bullet 2", "concrete risk bullet 3"]
+}}
+
+Ground every claim in the data. Cite specific numbers. Do not invent tickers or events.
+
+DATA:
+{data}
+"""
+
+
+def generate_briefing(snap: Snapshot) -> dict | None:
+    """Generate the full morning briefing via Anthropic API."""
+    client = get_anthropic_client()
+    if client is None:
+        return None
+
+    ctx = build_ai_context(snap)
+    try:
+        resp = client.messages.create(
+            model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
+            max_tokens=6000,
+            system=BRIEFING_SYSTEM_PROMPT,
+            messages=[
+                {"role": "user", "content": BRIEFING_USER_PROMPT.format(data=json.dumps(ctx, indent=2))}
+            ],
+        )
+    except Exception as e:
+        log(f"Briefing generation failed (modal will be skipped): {e}")
+        return None
+
+    text = ""
+    for block in resp.content:
+        if getattr(block, "type", None) == "text":
+            text += block.text
+
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\n", "", text)
+        text = re.sub(r"\n```$", "", text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start != -1 and end != -1:
+            try:
+                return json.loads(text[start : end + 1])
+            except Exception:
+                pass
+        log("Briefing: unparseable JSON returned — modal will be skipped.")
+        return None
+
+
 def run_ai_synthesis(snap: Snapshot) -> dict:
     client = get_anthropic_client()
     if client is None:
@@ -1634,6 +1701,10 @@ def main():
         save_cache(snap)
 
     briefing = load_briefing_json(args.briefing_json, snap_date=snap.prior_session_date)
+
+    if briefing is None and not args.no_ai:
+        log("Generating morning briefing via Anthropic…")
+        briefing = generate_briefing(snap)
 
     log("Rendering HTML…")
     html = render_report(snap, briefing=briefing)
