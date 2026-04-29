@@ -1068,6 +1068,15 @@ footer {{
   color: var(--text-faint); font-size: 12px; text-align: center;
 }}
 a {{ color: #8ab4f8; }}
+.refresh-btn {{
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 6px; padding: 5px 13px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px; transition: border-color .15s, color .15s;
+  white-space: nowrap;
+}}
+.refresh-btn:hover {{ border-color: var(--accent); color: var(--accent); }}
+.refresh-btn.spinning .spin {{ display: inline-block; animation: spin .6s linear infinite; }}
+@keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 </style>
 </head>
 <body>
@@ -1080,8 +1089,12 @@ a {{ color: #8ab4f8; }}
     </h1>
     <div class="meta">Generated {generated_human} · Today is {today_human}</div>
   </div>
-  <div class="meta">
-    {warnings_html}
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div class="meta">{warnings_html}</div>
+    <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
+      <span class="spin">&#8635;</span> <span id="refresh-label">Refresh</span>
+    </button>
+    <span id="refresh-status" class="meta"></span>
   </div>
 </header>
 
@@ -1140,37 +1153,41 @@ a {{ color: #8ab4f8; }}
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
   <br/>Not investment advice. Figures may be delayed. Always verify before trading.
-  <br/><span id="refresh-status" style="color:var(--accent)"></span>
 </footer>
 
 </div>
 <script>
+function doRefresh() {{
+  var btn = document.getElementById('refresh-btn');
+  if (btn) {{ btn.classList.add('spinning'); btn.disabled = true; }}
+  location.reload();
+}}
 (function(){{
-  // Auto-refresh every 60s during market hours (9:25 AM–4:10 PM ET Mon–Fri)
   function isMarketHours() {{
     var now = new Date();
     var et = new Date(now.toLocaleString('en-US', {{timeZone:'America/New_York'}}));
-    var day = et.getDay(); // 0=Sun,6=Sat
+    var day = et.getDay();
     if (day === 0 || day === 6) return false;
     var h = et.getHours(), m = et.getMinutes();
     var mins = h * 60 + m;
-    return mins >= 565 && mins <= 970; // 9:25–4:10
+    return mins >= 565 && mins <= 970; // 9:25–4:10 ET
   }}
-  function tick() {{
-    var el = document.getElementById('refresh-status');
-    if (isMarketHours()) {{
-      var next = 60;
-      if (el) el.textContent = 'Live · refreshing in ' + next + 's';
-      var countdown = setInterval(function() {{
-        next--;
-        if (el) el.textContent = 'Live · refreshing in ' + next + 's';
-        if (next <= 0) {{ clearInterval(countdown); location.reload(); }}
-      }}, 1000);
-    }} else {{
-      if (el) el.textContent = 'Market closed · no auto-refresh';
-    }}
+  var statusEl = document.getElementById('refresh-status');
+  var labelEl  = document.getElementById('refresh-label');
+  if (isMarketHours()) {{
+    var next = 60;
+    function setStatus(s) {{ if (statusEl) statusEl.textContent = s; }}
+    function setLabel(s)  {{ if (labelEl)  labelEl.textContent  = s; }}
+    setStatus('Live · auto-refresh in ' + next + 's');
+    var timer = setInterval(function() {{
+      next--;
+      setStatus('Live · auto-refresh in ' + next + 's');
+      setLabel('Refresh (' + next + 's)');
+      if (next <= 0) {{ clearInterval(timer); location.reload(); }}
+    }}, 1000);
+  }} else {{
+    if (statusEl) statusEl.textContent = 'Market closed';
   }}
-  tick();
 }})();
 </script>
 </body>
