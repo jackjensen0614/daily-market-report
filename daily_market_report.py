@@ -1036,6 +1036,12 @@ h2 {{
 }}
 .b-watch-item .sym {{ font-weight: 700; font-size: 13px; }}
 .b-watch-item .why {{ color: var(--text-dim); font-size: 12px; margin-top: 4px; line-height: 1.45; }}
+.b-chip {{ display:inline-flex; gap:4px; padding:2px 8px; border-radius:6px;
+          font-weight:600; font-size:12.5px; margin:0 2px; vertical-align:middle; }}
+.b-chip.up   {{ background:rgba(34,197,94,.15);  color:var(--green); }}
+.b-chip.down {{ background:rgba(239,68,68,.15);  color:var(--red); }}
+.b-chip.flat {{ background:rgba(148,163,184,.12); color:#cbd5e1; }}
+.b-index-row {{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }}
 
 /* Watch list */
 .watch-list {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }}
@@ -1415,19 +1421,25 @@ def _pct_span(pct: float) -> str:
     return f'<span class="{cls} num">{sign}{pct:.2f}%</span>'
 
 
+def _index_chip(label: str, pct: float, price: float | None = None) -> str:
+    """Colored pill showing label, direction arrow, and % change."""
+    cls = "up" if pct > 0.05 else ("down" if pct < -0.05 else "flat")
+    arrow = "▲" if pct > 0.05 else ("▼" if pct < -0.05 else "—")
+    price_str = f" · {fmt_num(price)}" if price is not None else ""
+    return f'<span class="b-chip {cls}">{escape_html(label)} {arrow}{abs(pct):.2f}%{escape_html(price_str)}</span>'
+
+
 def _b_exec_summary(snap: Snapshot) -> list[str]:
     bullets: list[str] = []
     idx = {q.symbol: q for q in snap.indices}
     sp, dji, ixic, vix = idx.get("^GSPC"), idx.get("^DJI"), idx.get("^IXIC"), idx.get("^VIX")
-    parts = []
-    for q, label in [(sp, "S&P 500"), (dji, "Dow"), (ixic, "Nasdaq")]:
+    rut = idx.get("^RUT")
+    chips = []
+    for q, label in [(sp, "S&P"), (dji, "Dow"), (ixic, "Nasdaq"), (rut, "R2K"), (vix, "VIX")]:
         if q:
-            arrow = "▲" if q.change_pct > 0 else ("▼" if q.change_pct < 0 else "—")
-            parts.append(f"{label} {arrow}{abs(q.change_pct):.2f}%")
-    if vix:
-        parts.append(f"VIX {'+' if vix.change_pct >= 0 else ''}{vix.change_pct:.1f}% to {vix.price:.2f}")
-    if parts:
-        bullets.append(" · ".join(parts))
+            chips.append(_index_chip(label, q.change_pct, q.price))
+    if chips:
+        bullets.append("".join(chips))
 
     if snap.gainers and snap.losers:
         g, l = snap.gainers[0].quote, snap.losers[0].quote
@@ -1472,6 +1484,10 @@ def _b_exec_summary(snap: Snapshot) -> list[str]:
 
 
 def _b_us_markets(snap: Snapshot) -> str:
+    index_chips_html = ""
+    if snap.indices:
+        chips = "".join(_index_chip(q.name.split("(")[0].strip(), q.change_pct, q.price) for q in snap.indices)
+        index_chips_html = f'<div class="b-index-row">{chips}</div>'
     idx_rows = "".join(
         f'<tr><td style="font-weight:600">{escape_html(q.name)}</td>'
         f'<td class="num" style="text-align:right">{fmt_num(q.price)}</td>'
@@ -1526,7 +1542,7 @@ def _b_us_markets(snap: Snapshot) -> str:
     return (
         '<div class="briefing-section">'
         '<div class="bs-label">US Markets · Yesterday\'s Session</div>'
-        f'{idx_table}{movers_2col}'
+        f'{index_chips_html}{idx_table}{movers_2col}'
         '</div>'
     )
 
@@ -1766,7 +1782,11 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
 
         # Append global markets and live data tables from snap if available
         global_html = _b_global_markets(snap) if snap else ""
-        inner = exec_html + session_html + crypto_recap_html + global_html + setup_html + watch_html + crypto_out_html + risk_html
+        index_row_html = ""
+        if snap and snap.indices:
+            chips = "".join(_index_chip(q.name.split("(")[0].strip(), q.change_pct, q.price) for q in snap.indices)
+            index_row_html = f'<div class="b-index-row" style="padding:4px 20px 8px">{chips}</div>'
+        inner = exec_html + index_row_html + session_html + crypto_recap_html + global_html + setup_html + watch_html + crypto_out_html + risk_html
         source = "Claude AI"
 
     elif snap:
