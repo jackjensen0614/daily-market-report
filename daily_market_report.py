@@ -74,9 +74,23 @@ INDEX_TICKERS = {
 # Currencies, commodities, treasuries that contextualize the day
 EXTRA_MACRO_TICKERS = {
     "DX-Y.NYB": "US Dollar Index",
-    "^TNX": "10Y Treasury Yield",
-    "GC=F": "Gold",
-    "CL=F": "Crude Oil (WTI)",
+    "^TNX":     "10Y Treasury Yield",
+    "^TYX":     "30Y Treasury Yield",
+    "GC=F":     "Gold",
+    "CL=F":     "Crude Oil (WTI)",
+    "SI=F":     "Silver",
+    "NG=F":     "Natural Gas",
+}
+
+# Global equity indices
+GLOBAL_INDICES = {
+    "^GDAXI": "DAX (Germany)",
+    "^FTSE":  "FTSE 100 (UK)",
+    "^FCHI":  "CAC 40 (France)",
+    "^N225":  "Nikkei 225 (Japan)",
+    "^HSI":   "Hang Seng (HK)",
+    "^AXJO":  "ASX 200 (Australia)",
+    "^BSESN": "Sensex (India)",
 }
 
 CRYPTO_TOP_N = 20  # top coins by market cap on CoinGecko
@@ -191,6 +205,7 @@ class Snapshot:
     crypto: list[MoverWithNews] = field(default_factory=list)
     crypto_gainers: list[MoverWithNews] = field(default_factory=list)
     crypto_losers: list[MoverWithNews] = field(default_factory=list)
+    global_indices: list[Quote] = field(default_factory=list)
     earnings_today: list[CalendarEvent] = field(default_factory=list)
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
@@ -1043,6 +1058,7 @@ th {{
   color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
   font-weight: 600;
 }}
+.briefing-modal table th, .briefing-modal table td {{ padding: 5px 8px; }}
 tr:last-child td {{ border-bottom: none; }}
 td.sym {{ font-weight: 600; white-space: nowrap; }}
 td.time {{ color: var(--text-dim); white-space: nowrap; }}
@@ -1369,82 +1385,375 @@ def _paras(text: str) -> str:
     )
 
 
-def render_briefing_block(briefing: dict) -> str:
-    if not briefing:
-        return ""
+# ---- data-driven briefing helpers ----------------------------------------
 
-    exec_bullets = briefing.get("exec_summary", [])
+def _pct_span(pct: float) -> str:
+    cls = "up" if pct > 0.01 else ("down" if pct < -0.01 else "flat")
+    sign = "+" if pct > 0 else ""
+    return f'<span class="{cls} num">{sign}{pct:.2f}%</span>'
+
+
+def _b_exec_summary(snap: Snapshot) -> list[str]:
+    bullets: list[str] = []
+    idx = {q.symbol: q for q in snap.indices}
+    sp, dji, ixic, vix = idx.get("^GSPC"), idx.get("^DJI"), idx.get("^IXIC"), idx.get("^VIX")
+    parts = []
+    for q, label in [(sp, "S&P 500"), (dji, "Dow"), (ixic, "Nasdaq")]:
+        if q:
+            arrow = "▲" if q.change_pct > 0 else ("▼" if q.change_pct < 0 else "—")
+            parts.append(f"{label} {arrow}{abs(q.change_pct):.2f}%")
+    if vix:
+        parts.append(f"VIX {'+' if vix.change_pct >= 0 else ''}{vix.change_pct:.1f}% to {vix.price:.2f}")
+    if parts:
+        bullets.append(" · ".join(parts))
+
+    if snap.gainers and snap.losers:
+        g, l = snap.gainers[0].quote, snap.losers[0].quote
+        bullets.append(
+            f"Top gainer: {g.symbol} +{g.change_pct:.1f}% to {fmt_usd(g.price)} · "
+            f"Top loser: {l.symbol} {l.change_pct:.1f}% to {fmt_usd(l.price)}"
+        )
+
+    crude = next((q for q in snap.macro if "Crude" in q.name), None)
+    gold  = next((q for q in snap.macro if "Gold"  in q.name), None)
+    tnx   = next((q for q in snap.macro if "10Y"   in q.name), None)
+    macro_parts: list[str] = []
+    if crude: macro_parts.append(f"WTI {fmt_pct(crude.change_pct)} to {fmt_usd(crude.price)}")
+    if gold:  macro_parts.append(f"Gold {fmt_pct(gold.change_pct)} to {fmt_usd(gold.price)}")
+    if tnx:   macro_parts.append(f"10Y yield {tnx.price:.2f}%")
+    if macro_parts:
+        bullets.append(" · ".join(macro_parts))
+
+    btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
+    eth = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "ETH"), None)
+    cparts: list[str] = []
+    if btc: cparts.append(f"BTC {fmt_pct(btc.change_pct)} to {fmt_usd(btc.price)}")
+    if eth: cparts.append(f"ETH {fmt_pct(eth.change_pct)} to {fmt_usd(eth.price)}")
+    if snap.crypto_gainers:
+        cg = snap.crypto_gainers[0].quote
+        cparts.append(f"Top crypto: {cg.symbol} +{cg.change_pct:.1f}%")
+    if cparts:
+        bullets.append(" · ".join(cparts))
+
+    if snap.earnings_today:
+        tks = [e.symbol_or_event for e in snap.earnings_today[:6] if e.symbol_or_event]
+        n = len(snap.earnings_today)
+        suffix = f" +{n - 6} more" if n > 6 else ""
+        bullets.append(f"Earnings today ({n}): {', '.join(tks)}{suffix}")
+    elif snap.econ_events_today:
+        evts = [e.description for e in snap.econ_events_today[:3] if e.description]
+        bullets.append(f"Econ events today: {', '.join(evts)}")
+    else:
+        bullets.append("No major earnings or economic events scheduled today.")
+
+    return bullets[:5]
+
+
+def _b_us_markets(snap: Snapshot) -> str:
+    idx_rows = "".join(
+        f'<tr><td style="font-weight:600">{escape_html(q.name)}</td>'
+        f'<td class="num" style="text-align:right">{fmt_num(q.price)}</td>'
+        f'<td class="num" style="text-align:right">{("+" if q.change >= 0 else "")}{q.change:,.2f}</td>'
+        f'<td class="num" style="text-align:right">{_pct_span(q.change_pct)}</td></tr>'
+        for q in snap.indices
+    )
+    macro_rows = "".join(
+        f'<tr><td style="color:#8a92a6">{escape_html(q.name)}</td>'
+        f'<td class="num" style="text-align:right;color:#8a92a6">{fmt_num(q.price)}</td>'
+        f'<td class="num" style="text-align:right;color:#8a92a6">{("+" if q.change >= 0 else "")}{q.change:,.2f}</td>'
+        f'<td class="num" style="text-align:right">{_pct_span(q.change_pct)}</td></tr>'
+        for q in snap.macro
+    )
+    idx_table = (
+        '<table><thead><tr>'
+        '<th style="text-align:left">Index / Macro</th>'
+        '<th style="text-align:right">Price</th>'
+        '<th style="text-align:right">Change</th>'
+        '<th style="text-align:right">%</th>'
+        f'</tr></thead><tbody>{idx_rows}{macro_rows}</tbody></table>'
+    )
+
+    def mover_rows(movers: list) -> str:
+        out = ""
+        for m in movers[:5]:
+            q = m.quote
+            headline = (m.news[0].title[:65] + "…") if m.news and m.news[0].title else ""
+            out += (
+                f'<tr><td style="font-weight:700">{escape_html(q.symbol)}</td>'
+                f'<td style="color:#8a92a6;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">{escape_html(q.name)}</td>'
+                f'<td class="num" style="text-align:right">{_pct_span(q.change_pct)}</td>'
+                f'<td class="num" style="text-align:right;color:#8a92a6">{fmt_usd(q.price)}</td></tr>'
+            )
+            if headline:
+                out += f'<tr><td colspan="4" style="color:#6b7280;font-size:11px;padding-top:0;line-height:1.3">{escape_html(headline)}</td></tr>'
+        return out
+
+    movers_2col = (
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:12px">'
+        '<div>'
+        '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#22c55e;font-weight:600;margin-bottom:4px">Top Gainers</div>'
+        f'<table><tbody>{mover_rows(snap.gainers)}</tbody></table>'
+        '</div>'
+        '<div>'
+        '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#ef4444;font-weight:600;margin-bottom:4px">Top Losers</div>'
+        f'<table><tbody>{mover_rows(snap.losers)}</tbody></table>'
+        '</div>'
+        '</div>'
+    )
+
+    return (
+        '<div class="briefing-section">'
+        '<div class="bs-label">US Markets · Yesterday\'s Session</div>'
+        f'{idx_table}{movers_2col}'
+        '</div>'
+    )
+
+
+def _b_global_markets(snap: Snapshot) -> str:
+    if not snap.global_indices:
+        return ""
+    rows = "".join(
+        f'<tr><td>{escape_html(q.name)}</td>'
+        f'<td class="num" style="text-align:right">{fmt_num(q.price)}</td>'
+        f'<td class="num" style="text-align:right;color:#8a92a6">{("+" if q.change >= 0 else "")}{q.change:,.2f}</td>'
+        f'<td class="num" style="text-align:right">{_pct_span(q.change_pct)}</td></tr>'
+        for q in snap.global_indices
+    )
+    return (
+        '<div class="briefing-section">'
+        '<div class="bs-label">Global Markets</div>'
+        '<table><thead><tr>'
+        '<th style="text-align:left">Market</th>'
+        '<th style="text-align:right">Price</th>'
+        '<th style="text-align:right">Change</th>'
+        '<th style="text-align:right">%</th>'
+        f'</tr></thead><tbody>{rows}</tbody></table>'
+        '</div>'
+    )
+
+
+def _b_crypto(snap: Snapshot) -> str:
+    if not snap.crypto:
+        return ""
+    rows = "".join(
+        f'<tr><td style="font-weight:700">{escape_html(m.quote.symbol)}</td>'
+        f'<td style="color:#8a92a6;font-size:11px">{escape_html(m.quote.name)}</td>'
+        f'<td class="num" style="text-align:right">{fmt_usd(m.quote.price)}</td>'
+        f'<td class="num" style="text-align:right">{_pct_span(m.quote.change_pct)}</td>'
+        f'<td class="num" style="text-align:right;color:#8a92a6">{fmt_usd(m.quote.dollar_volume) if m.quote.dollar_volume else "—"}</td></tr>'
+        for m in snap.crypto[:10]
+    )
+    return (
+        '<div class="briefing-section crypto">'
+        '<div class="bs-label">Crypto Markets · Top 10 by Market Cap</div>'
+        '<table><thead><tr>'
+        '<th style="text-align:left">Symbol</th><th style="text-align:left">Name</th>'
+        '<th style="text-align:right">Price</th><th style="text-align:right">24h %</th>'
+        '<th style="text-align:right">Volume</th>'
+        f'</tr></thead><tbody>{rows}</tbody></table>'
+        '</div>'
+    )
+
+
+def _b_setup(snap: Snapshot) -> str:
+    parts: list[str] = []
+    if snap.earnings_today:
+        rows = "".join(
+            f'<tr><td class="time">{escape_html(e.time)}</td>'
+            f'<td style="font-weight:700">{escape_html(e.symbol_or_event)}</td>'
+            f'<td>{escape_html(e.description)}</td>'
+            f'<td style="color:var(--text-dim)">{escape_html(e.extra)}</td></tr>'
+            for e in snap.earnings_today[:20]
+        )
+        parts.append(
+            '<div style="margin-bottom:14px">'
+            '<div style="font-size:12px;font-weight:600;color:#60a5fa;margin-bottom:6px">Earnings Today</div>'
+            '<table><thead><tr><th>Time</th><th>Ticker</th><th>Company</th><th>Details</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></div>'
+        )
+    else:
+        parts.append('<p style="color:var(--text-faint)">No earnings reporting today.</p>')
+
+    if snap.econ_events_today:
+        rows = "".join(
+            f'<tr><td class="time">{escape_html(e.time)}</td>'
+            f'<td style="color:#8a92a6">{escape_html(e.symbol_or_event)}</td>'
+            f'<td>{escape_html(e.description)}</td>'
+            f'<td style="color:var(--text-dim)">{escape_html(e.extra)}</td></tr>'
+            for e in snap.econ_events_today[:15]
+        )
+        parts.append(
+            '<div>'
+            '<div style="font-size:12px;font-weight:600;color:#60a5fa;margin-bottom:6px">Economic Events</div>'
+            '<table><thead><tr><th>Time</th><th>Region</th><th>Event</th><th>Details</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></div>'
+        )
+    else:
+        parts.append('<p style="color:var(--text-faint)">No major economic events today.</p>')
+
+    return (
+        '<div class="briefing-section setup">'
+        '<div class="bs-label">Today\'s Setup — What to Watch</div>'
+        + "".join(parts) +
+        '</div>'
+    )
+
+
+def _b_risks(snap: Snapshot) -> str:
+    risks: list[str] = []
+    big_names = {"AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA", "JPM", "BAC", "NFLX"}
+    big_earnings = [e for e in snap.earnings_today if e.symbol_or_event in big_names]
+    if big_earnings:
+        tickers = ", ".join(e.symbol_or_event for e in big_earnings[:5])
+        risks.append(f"High-impact earnings today ({tickers}) — misses or cautious guidance can gap indices at open.")
+
+    vix = next((q for q in snap.indices if q.symbol == "^VIX"), None)
+    if vix and vix.price > 20:
+        risks.append(f"VIX elevated at {vix.price:.2f} — options market pricing above-average volatility.")
+
+    crude = next((q for q in snap.macro if "Crude" in q.name), None)
+    if crude and abs(crude.change_pct) > 3:
+        dir_ = "surge" if crude.change_pct > 0 else "drop"
+        risks.append(f"WTI crude {dir_} {crude.change_pct:+.1f}% to {fmt_usd(crude.price)} — watch macro read-through to consumer and transport names.")
+
+    tnx = next((q for q in snap.macro if "10Y" in q.name), None)
+    if tnx and tnx.price > 4.5:
+        risks.append(f"10Y yield at {tnx.price:.2f}% — elevated rates a headwind for growth and rate-sensitive equities.")
+
+    fed_evts = [e for e in snap.econ_events_today if any(
+        kw in (e.description or "").upper() for kw in ["FOMC", "FEDERAL RESERVE", "POWELL", "RATE DECISION"]
+    )]
+    if fed_evts:
+        risks.append("FOMC/Fed event today — any surprise on rates or tone could trigger outsized moves across asset classes.")
+
+    if snap.global_indices:
+        weak = [q for q in snap.global_indices if q.change_pct < -1.5]
+        if weak:
+            names = ", ".join(q.name.split("(")[0].strip() for q in weak[:3])
+            risks.append(f"Global market weakness ({names}) may weigh on pre-market sentiment.")
+
+    if not risks:
+        risks.append("No major elevated risk signals detected in today's data.")
+
+    lis = "".join(f"<li>{escape_html(r)}</li>" for r in risks[:4])
+    return (
+        '<div class="briefing-section risk">'
+        '<div class="bs-label">Risk Notes</div>'
+        f'<ul>{lis}</ul>'
+        '</div>'
+    )
+
+
+def _build_data_briefing(snap: Snapshot) -> str:
+    """Build complete briefing modal content from snapshot data — no AI API needed."""
+    exec_bullets = _b_exec_summary(snap)
     exec_html = ""
     if exec_bullets:
         lis = "".join(f"<li>{escape_html(b)}</li>" for b in exec_bullets)
-        exec_html = f"""
-  <div class="exec-bar">
-    <div class="exec-label">Executive Summary</div>
-    <ol>{lis}</ol>
-  </div>"""
-
-    session_text = briefing.get("session_recap", "")
-    session_html = (f"""
-  <div class="briefing-section">
-    <div class="bs-label">Yesterday's Session</div>
-    {_paras(session_text)}
-  </div>""") if session_text else ""
-
-    crypto_recap = briefing.get("crypto_recap", "")
-    crypto_recap_html = (f"""
-  <div class="briefing-section crypto">
-    <div class="bs-label">Crypto Recap</div>
-    {_paras(crypto_recap)}
-  </div>""") if crypto_recap else ""
-
-    setup_text = briefing.get("today_setup", "")
-    setup_html = (f"""
-  <div class="briefing-section setup">
-    <div class="bs-label">Today's Setup</div>
-    {_paras(setup_text)}
-  </div>""") if setup_text else ""
-
-    watch = briefing.get("tickers_to_watch", [])
-    watch_html = ""
-    if watch:
-        cards = "".join(
-            f'<div class="b-watch-item">'
-            f'<div class="sym">{escape_html(str(w.get("ticker", "")))}</div>'
-            f'<div class="why">{escape_html(str(w.get("rationale", "")))}</div>'
-            f'</div>'
-            for w in watch
+        exec_html = (
+            '<div class="exec-bar">'
+            '<div class="exec-label">Market Summary</div>'
+            f'<ol>{lis}</ol>'
+            '</div>'
         )
-        watch_html = f"""
-  <div class="briefing-watch">
-    <div class="bs-label">Tickers to Watch Today</div>
-    <div class="b-watch-grid">{cards}</div>
-  </div>"""
+    return exec_html + _b_us_markets(snap) + _b_global_markets(snap) + _b_crypto(snap) + _b_setup(snap) + _b_risks(snap)
 
-    crypto_out = briefing.get("crypto_outlook", "")
-    crypto_out_html = (f"""
-  <div class="briefing-section crypto">
-    <div class="bs-label">Crypto Outlook</div>
-    {_paras(crypto_out)}
-  </div>""") if crypto_out else ""
 
-    risk_items = briefing.get("risk_notes", [])
-    risk_html = ""
-    if risk_items:
-        if isinstance(risk_items, list):
-            lis = "".join(f"<li>{escape_html(r)}</li>" for r in risk_items)
-            risk_html = f"""
-  <div class="briefing-section risk">
-    <div class="bs-label">Risk Notes</div>
-    <ul>{lis}</ul>
-  </div>"""
-        else:
-            risk_html = f"""
-  <div class="briefing-section risk">
-    <div class="bs-label">Risk Notes</div>
-    {_paras(str(risk_items))}
-  </div>"""
+# --------------------------------------------------------------------------
 
-    inner = exec_html + session_html + crypto_recap_html + setup_html + watch_html + crypto_out_html + risk_html
+def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -> str:
+    """Render the Morning Briefing FAB + modal.
+
+    Uses AI-generated JSON if available; otherwise builds from snapshot data.
+    Always renders the modal as long as we have either source.
+    """
+    if briefing:
+        # --- AI-generated briefing ---
+        exec_bullets = briefing.get("exec_summary", [])
+        exec_html = ""
+        if exec_bullets:
+            lis = "".join(f"<li>{escape_html(b)}</li>" for b in exec_bullets)
+            exec_html = (
+                '<div class="exec-bar">'
+                '<div class="exec-label">Executive Summary</div>'
+                f'<ol>{lis}</ol>'
+                '</div>'
+            )
+
+        session_text = briefing.get("session_recap", "")
+        session_html = (
+            '<div class="briefing-section">'
+            '<div class="bs-label">Yesterday\'s Session</div>'
+            f'{_paras(session_text)}</div>'
+        ) if session_text else ""
+
+        crypto_recap = briefing.get("crypto_recap", "")
+        crypto_recap_html = (
+            '<div class="briefing-section crypto">'
+            '<div class="bs-label">Crypto Recap</div>'
+            f'{_paras(crypto_recap)}</div>'
+        ) if crypto_recap else ""
+
+        setup_text = briefing.get("today_setup", "")
+        setup_html = (
+            '<div class="briefing-section setup">'
+            '<div class="bs-label">Today\'s Setup</div>'
+            f'{_paras(setup_text)}</div>'
+        ) if setup_text else ""
+
+        watch = briefing.get("tickers_to_watch", [])
+        watch_html = ""
+        if watch:
+            cards = "".join(
+                f'<div class="b-watch-item">'
+                f'<div class="sym">{escape_html(str(w.get("ticker", "")))}</div>'
+                f'<div class="why">{escape_html(str(w.get("rationale", "")))}</div>'
+                f'</div>'
+                for w in watch
+            )
+            watch_html = (
+                '<div class="briefing-watch">'
+                '<div class="bs-label">Tickers to Watch Today</div>'
+                f'<div class="b-watch-grid">{cards}</div>'
+                '</div>'
+            )
+
+        crypto_out = briefing.get("crypto_outlook", "")
+        crypto_out_html = (
+            '<div class="briefing-section crypto">'
+            '<div class="bs-label">Crypto Outlook</div>'
+            f'{_paras(crypto_out)}</div>'
+        ) if crypto_out else ""
+
+        risk_items = briefing.get("risk_notes", [])
+        risk_html = ""
+        if risk_items:
+            if isinstance(risk_items, list):
+                lis = "".join(f"<li>{escape_html(r)}</li>" for r in risk_items)
+                risk_html = (
+                    '<div class="briefing-section risk">'
+                    '<div class="bs-label">Risk Notes</div>'
+                    f'<ul>{lis}</ul></div>'
+                )
+            else:
+                risk_html = (
+                    '<div class="briefing-section risk">'
+                    '<div class="bs-label">Risk Notes</div>'
+                    f'{_paras(str(risk_items))}</div>'
+                )
+
+        # Append global markets and live data tables from snap if available
+        global_html = _b_global_markets(snap) if snap else ""
+        inner = exec_html + session_html + crypto_recap_html + global_html + setup_html + watch_html + crypto_out_html + risk_html
+        source = "Claude AI"
+
+    elif snap:
+        # --- Data-driven fallback (no AI API needed) ---
+        inner = _build_data_briefing(snap)
+        source = "Live Data"
+    else:
+        return ""
+
     if not inner.strip():
         return ""
 
@@ -1455,7 +1764,7 @@ def render_briefing_block(briefing: dict) -> str:
   <div class="briefing-modal">
     <div class="briefing-modal-head">
       <h3>Morning Briefing</h3>
-      <span class="bdate">Claude · {gen_date}</span>
+      <span class="bdate">{source} · {gen_date}</span>
       <button class="briefing-close" id="briefing-close">&#x2715;</button>
     </div>
     {inner}
@@ -1508,7 +1817,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         today_human=today_dt.strftime("%A, %B %-d, %Y"),
         warnings_html=warnings_html,
         index_tiles=index_tiles,
-        briefing_block=render_briefing_block(briefing or {}),
+        briefing_block=render_briefing_block(briefing, snap),
         ai_narrative_block=render_narrative(ai),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
@@ -1546,6 +1855,12 @@ def build_snapshot(no_ai: bool = False) -> Snapshot:
         snap.macro = fetch_quotes(EXTRA_MACRO_TICKERS)
     except Exception as e:
         warn(f"macro fetch failed: {e}", snap)
+
+    log("Fetching global indices…")
+    try:
+        snap.global_indices = fetch_quotes(GLOBAL_INDICES)
+    except Exception as e:
+        warn(f"global indices fetch failed: {e}", snap)
 
     log("Fetching gainers / losers / most active (screener)…")
     gainers_q = fetch_screener("day_gainers", count=MOVERS_COUNT)
@@ -1642,6 +1957,7 @@ def load_cache() -> Snapshot | None:
             generated_at=raw["generated_at"],
             indices=[q_from(x) for x in raw.get("indices", [])],
             macro=[q_from(x) for x in raw.get("macro", [])],
+            global_indices=[q_from(x) for x in raw.get("global_indices", [])],
             gainers=[mw_from(x) for x in raw.get("gainers", [])],
             losers=[mw_from(x) for x in raw.get("losers", [])],
             most_active=[mw_from(x) for x in raw.get("most_active", [])],
