@@ -40,7 +40,7 @@ jobs:
 
       - name: Generate report
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPICAPIKEY }}
         run: |
           mkdir -p dist
           python3 daily_market_report.py --no-open --out dist/index.html
