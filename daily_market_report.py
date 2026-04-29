@@ -869,7 +869,7 @@ html, body {{
   max-width: 1400px; margin: 0 auto; padding: 28px 32px 72px;
 }}
 header {{
-  display: flex; align-items: baseline; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px;
   flex-wrap: wrap; gap: 12px;
 }}
@@ -1069,12 +1069,13 @@ footer {{
 }}
 a {{ color: #8ab4f8; }}
 .refresh-btn {{
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 6px; padding: 5px 13px; font-size: 12px; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 5px; transition: border-color .15s, color .15s;
-  white-space: nowrap;
+  background: #1e2535; border: 1px solid #3d4560; color: #c8cfdf;
+  border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
 }}
-.refresh-btn:hover {{ border-color: var(--accent); color: var(--accent); }}
+.refresh-btn:hover {{ background: #252d42; border-color: var(--accent); color: var(--accent); }}
+.refresh-btn .spin {{ font-size: 15px; line-height: 1; }}
 .refresh-btn.spinning .spin {{ display: inline-block; animation: spin .6s linear infinite; }}
 @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 </style>
