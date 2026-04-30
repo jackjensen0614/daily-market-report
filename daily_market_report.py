@@ -1451,52 +1451,44 @@ details.earnings-extra > .cols {{ margin-top: 12px; }}
 .econ-news-item a:hover {{ color: var(--text); }}
 .econ-news-src {{ color: var(--text-faint); font-size: 10px; white-space: nowrap; }}
 
+/* ── Page layout: main content + persistent sidebar ── */
+.page-layout {{
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}}
+.main-col {{
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}}
 /* ── Watchlist sidebar ── */
-.sb-toggle {{
-  position: fixed; right: 0; top: 50%;
-  transform: translateY(-50%);
-  z-index: 300;
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-right: none; border-radius: 8px 0 0 8px;
-  padding: 12px 8px; cursor: pointer; color: var(--text-dim);
-  font-size: 18px; line-height: 1; writing-mode: vertical-rl;
-  display: flex; align-items: center; gap: 6px;
-  transition: background .15s, color .15s;
-}}
-.sb-toggle:hover {{ background: var(--bg-panel-2); color: var(--text); }}
-.sb-toggle .sb-toggle-label {{
-  font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; margin-top: 6px;
-}}
-.sb-overlay {{
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,.45); z-index: 290;
-}}
-.sb-overlay.open {{ display: block; }}
 .sidebar {{
-  position: fixed; right: 0; top: 0; bottom: 0; width: 360px;
-  background: var(--bg-card); border-left: 1px solid var(--border);
-  z-index: 295; overflow-y: auto;
-  transform: translateX(100%);
-  transition: transform .28s cubic-bezier(.4,0,.2,1);
-  display: flex; flex-direction: column;
+  width: 300px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }}
-.sidebar.open {{ transform: translateX(0); }}
+.sidebar::-webkit-scrollbar {{ width: 4px; }}
+.sidebar::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 2px; }}
+@media (max-width: 920px) {{ .sidebar {{ display: none; }} }}
 .sb-head {{
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 16px 12px; border-bottom: 1px solid var(--border);
+  padding: 14px 14px 10px; border-bottom: 1px solid var(--border);
   position: sticky; top: 0; background: var(--bg-card); z-index: 1;
 }}
-.sb-title {{ font-size: 14px; font-weight: 700; color: var(--text); }}
+.sb-title {{ font-size: 13px; font-weight: 700; color: var(--text); }}
 .sb-subtitle {{ font-size: 10px; color: var(--text-faint); margin-top: 2px; }}
-.sb-close {{
-  background: none; border: none; color: var(--text-faint);
-  font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
-  transition: color .15s;
-}}
-.sb-close:hover {{ color: var(--text); }}
 .sb-add {{
-  display: flex; gap: 6px; padding: 12px 16px;
+  display: flex; gap: 6px; padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }}
 .sb-add input {{
@@ -1514,9 +1506,9 @@ details.earnings-extra > .cols {{ margin-top: 12px; }}
 .sb-section-label {{
   font-size: 9px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--text-faint);
-  padding: 10px 16px 4px;
+  padding: 10px 12px 4px;
 }}
-.sb-cards {{ padding: 8px 12px 80px; display: flex; flex-direction: column; gap: 10px; }}
+.sb-cards {{ padding: 6px 10px 40px; display: flex; flex-direction: column; gap: 8px; }}
 .sb-card {{
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: 9px; padding: 12px 13px;
@@ -1687,21 +1679,16 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 </head>
 <body>
 
-<!-- ── Watchlist sidebar ── -->
-<button class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()" title="My Watchlist">
-  ★<span class="sb-toggle-label">Watch&shy;list</span>
-</button>
-<div class="sb-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
+<div class="page-layout">
+
+<!-- ── Watchlist sidebar (always visible) ── -->
 <div class="sidebar" id="sidebar">
   <div class="sb-head">
-    <div>
-      <div class="sb-title">My Watchlist</div>
-      <div class="sb-subtitle">Prices from prior session · auto-updates every 5 min</div>
-    </div>
-    <button class="sb-close" onclick="closeSidebar()">✕</button>
+    <div class="sb-title">★ My Watchlist</div>
+    <div class="sb-subtitle">Prior session · refreshes every 5 min</div>
   </div>
   <div class="sb-add">
-    <input type="text" id="sb-input" placeholder="Add ticker (e.g. TSLA)" maxlength="10"
+    <input type="text" id="sb-input" placeholder="Add ticker…" maxlength="10"
            onkeydown="if(event.key==='Enter')addSbTicker()" />
     <button onclick="addSbTicker()">+</button>
   </div>
@@ -1712,6 +1699,8 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
   </div>
 </div>
 
+<!-- ── Main content ── -->
+<div class="main-col">
 <div class="wrap">
 
 <header>
@@ -1846,6 +1835,8 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 </footer>
 
 </div>
+</div><!-- /main-col -->
+</div><!-- /page-layout -->
 <script>
 // If opened as a local file, go to the live hosted version instead
 if (window.location.protocol === 'file:') {{
@@ -1854,17 +1845,6 @@ if (window.location.protocol === 'file:') {{
 
 // ── Watchlist sidebar ────────────────────────────────────────────────────
 var SB_KEY = 'mktSbTickers';
-function toggleSidebar() {{
-  var sb = document.getElementById('sidebar');
-  var ov = document.getElementById('sb-overlay');
-  var open = sb.classList.toggle('open');
-  ov.classList.toggle('open', open);
-  if (open) loadUserCards();
-}}
-function closeSidebar() {{
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sb-overlay').classList.remove('open');
-}}
 function getSbTickers() {{
   try {{ return JSON.parse(localStorage.getItem(SB_KEY) || '[]'); }} catch(e) {{ return []; }}
 }}
@@ -1917,6 +1897,7 @@ function loadUserCards() {{
     tvDiv.appendChild(s);
   }});
 }}
+loadUserCards(); // sidebar is always visible — populate on page load
 
 // ── Scroll-position preservation across reloads ──────────────────────────
 // Save current scroll before any programmatic reload so the page
