@@ -1240,6 +1240,73 @@ details.briefing-details > summary::-webkit-details-marker {{ display: none; }}
 details.briefing-details > summary:hover {{ color: var(--text); }}
 details.briefing-details > summary::before {{ content: '▶'; font-size: 8px; display:inline-block; transition: transform .2s; }}
 details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
+
+/* ── Live ticker banner ── */
+.live-ticker-section {{
+  margin: 0 0 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}}
+.live-ticker-label {{
+  padding: 6px 0 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}}
+.live-ticker-label::before {{
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  animation: pulse-dot 2s ease-in-out infinite;
+}}
+@keyframes pulse-dot {{
+  0%, 100% {{ opacity: 1; box-shadow: 0 0 6px #22c55e; }}
+  50%       {{ opacity: .5; box-shadow: 0 0 2px #22c55e; }}
+}}
+
+/* ── Collapsible earnings ── */
+details.earnings-details {{ margin: 24px 0 0; }}
+details.earnings-details > summary {{
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  transition: color .15s;
+}}
+details.earnings-details > summary::-webkit-details-marker {{ display: none; }}
+details.earnings-details > summary:hover {{ color: var(--text); }}
+details.earnings-details > summary::before {{
+  content: '▶';
+  font-size: 9px;
+  color: var(--accent);
+  display: inline-block;
+  transition: transform .2s;
+  flex-shrink: 0;
+}}
+details.earnings-details[open] > summary::before {{ transform: rotate(90deg); }}
+details.earnings-details > summary .expand-hint {{
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-faint);
+  margin-left: 4px;
+}}
+details.earnings-details[open] > summary .expand-hint {{ display: none; }}
+details.earnings-details > .cols {{ margin-top: 16px; }}
 </style>
 </head>
 <body>
@@ -1262,6 +1329,7 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
 </header>
 
 <nav class="sticky-nav">
+  <a href="#live-markets">Live</a>
   <a href="#briefing">Briefing</a>
   <a href="#us-markets">US Markets</a>
   <a href="#global-markets">Global</a>
@@ -1269,6 +1337,34 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
   <a href="#setup">Setup</a>
   <a href="#scorecard">Scorecard</a>
 </nav>
+
+<!-- ===== LIVE MARKETS TICKER ===== -->
+<div class="live-ticker-section" id="live-markets">
+  <div class="live-ticker-label">&#8203; Live Markets</div>
+  <div class="tradingview-widget-container">
+    <div class="tradingview-widget-container__widget"></div>
+    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+    {{
+      "symbols": [
+        {{"description": "S&P 500",      "proName": "SP:SPX"}},
+        {{"description": "Dow Jones",    "proName": "DJ:DJI"}},
+        {{"description": "Nasdaq",       "proName": "NASDAQ:IXIC"}},
+        {{"description": "Russell 2000", "proName": "TVC:RUT"}},
+        {{"description": "VIX",          "proName": "CBOE:VIX"}},
+        {{"description": "10Y Yield",    "proName": "TVC:US10Y"}},
+        {{"description": "Gold",         "proName": "TVC:GOLD"}},
+        {{"description": "Crude Oil",    "proName": "TVC:USOIL"}},
+        {{"description": "BTC/USD",      "proName": "COINBASE:BTCUSD"}}
+      ],
+      "showSymbolLogo": false,
+      "isTransparent": true,
+      "displayMode": "adaptive",
+      "colorTheme": "dark",
+      "locale": "en"
+    }}
+    </script>
+  </div>
+</div>
 
 {briefing_block}
 
@@ -1310,17 +1406,22 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
   {earnings_reactions_block}
 </div>
 
-<h2 id="earnings-cal">Earnings &amp; Events · {today_human}</h2>
-<div class="cols">
-  <div class="panel">
-    <div class="panel-head"><h3>Earnings Today</h3><div class="sub">Reporting before/after open</div></div>
-    {earnings_table}
+<details class="earnings-details" id="earnings-cal">
+  <summary>
+    Earnings &amp; Events · {today_human}
+    <span class="expand-hint">— click to expand</span>
+  </summary>
+  <div class="cols">
+    <div class="panel">
+      <div class="panel-head"><h3>Earnings Today</h3><div class="sub">Reporting before/after open</div></div>
+      {earnings_table}
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Economic Events</h3><div class="sub">Data releases &amp; Fed speakers</div></div>
+      {econ_table}
+    </div>
   </div>
-  <div class="panel">
-    <div class="panel-head"><h3>Economic Events</h3><div class="sub">Data releases &amp; Fed speakers</div></div>
-    {econ_table}
-  </div>
-</div>
+</details>
 
 </div><!-- /us-markets -->
 
