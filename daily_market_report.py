@@ -261,6 +261,7 @@ class Snapshot:
     watchlist: list[Quote] = field(default_factory=list)
     watchlist_news: list[MoverWithNews] = field(default_factory=list)
     earnings_reactions: list[MoverWithNews] = field(default_factory=list)
+    earnings_results: dict = field(default_factory=dict)   # sym → {eps_est, eps_act, surprise_pct, verdict}
 
 
 # ------------------------------------------------------------------------
@@ -1434,7 +1435,30 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
 }}
 .ef-card.bmo {{ border-left-color: #60a5fa; }}
 .ef-card.amc {{ border-left-color: #a78bfa; }}
+.ef-card.beat {{ border-left-color: var(--green); }}
+.ef-card.miss {{ border-left-color: var(--red); }}
+.ef-card.inline {{ border-left-color: #94a3b8; }}
+.ef-sym-row {{ display: flex; align-items: center; gap: 7px; margin-bottom: 2px; }}
 .ef-sym  {{ font-size: 14px; font-weight: 700; color: var(--text); }}
+.ef-verdict {{
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+}}
+.ef-verdict.BEAT    {{ background: rgba(34,197,94,.18);  color: var(--green); }}
+.ef-verdict.MISS    {{ background: rgba(239,68,68,.18);  color: var(--red); }}
+.ef-verdict.IN-LINE {{ background: rgba(148,163,184,.15); color: #94a3b8; }}
+.ef-result {{
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; margin: 5px 0 4px; flex-wrap: wrap;
+}}
+.ef-eps {{ font-size: 11px; color: var(--text-dim); }}
+.ef-move {{ font-size: 12px; font-weight: 700; }}
+.ef-summary {{
+  font-size: 11px; color: var(--text-dim); line-height: 1.5;
+  border-top: 1px solid var(--border); padding-top: 6px; margin-top: 6px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}}
 .ef-name {{ font-size: 11px; color: var(--text-dim); margin: 2px 0 5px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 .ef-name a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
@@ -2198,30 +2222,89 @@ def render_earnings_section(snap: Snapshot) -> str:
             return "After Close"
         return t.title() or "—"
 
+    # Build lookup maps from reactions and results for fast access
+    reaction_map: dict[str, MoverWithNews] = {
+        mw.quote.symbol: mw for mw in snap.earnings_reactions
+    }
+
     cards = []
     for e in featured:
+        sym = e.symbol_or_event
         tc = _time_class(e.time)
         tl = _time_label(e.time)
-        eps = ""
+        eps_est_str = ""
         for part in e.extra.split("·"):
             if "EPS" in part or "eps" in part:
-                eps = part.strip()
+                eps_est_str = part.strip()
                 break
+
         name_html = (
             f'<a href="{escape_html(e.url)}" target="_blank" rel="noopener">'
             f'{escape_html(e.description)}</a>'
             if e.url else escape_html(e.description)
         )
-        cards.append(
-            f'<div class="ef-card {tc}">'
-            f'  <div class="ef-sym">{escape_html(e.symbol_or_event)}</div>'
-            f'  <div class="ef-name">{name_html}</div>'
-            f'  <div class="ef-meta">'
-            f'    <span class="ef-badge {tc}">{escape_html(tl)}</span>'
-            + (f'    <span class="ef-badge">{escape_html(eps)}</span>' if eps else '')
-            + f'  </div>'
-            f'</div>'
-        )
+
+        result = snap.earnings_results.get(sym)
+        reaction = reaction_map.get(sym)
+
+        if result:
+            # Company has already reported — show enriched result card
+            verdict = result["verdict"]
+            card_cls = {"BEAT": "beat", "MISS": "miss", "IN-LINE": "inline"}.get(verdict, tc)
+            eps_line = (
+                f'EPS: ${result["eps_act"]:.2f} vs ${result["eps_est"]:.2f} est '
+                f'({"+":}{result["surprise_pct"]:.1f}%)'
+                if result["surprise_pct"] >= 0
+                else f'EPS: ${result["eps_act"]:.2f} vs ${result["eps_est"]:.2f} est '
+                     f'({result["surprise_pct"]:.1f}%)'
+            )
+            move_html = ""
+            if reaction:
+                pct = reaction.quote.change_pct
+                sign = "+" if pct >= 0 else ""
+                move_cls = "up" if pct > 0 else ("down" if pct < 0 else "flat")
+                move_html = f'<span class="ef-move {move_cls}">{sign}{pct:.2f}%</span>'
+
+            # News summary: top headline from reactions or world news
+            summary = ""
+            if reaction and reaction.news:
+                summary = reaction.news[0].title
+            elif not summary:
+                for item in snap.world_news_raw:
+                    if sym.upper() in item.get("headline", "").upper():
+                        summary = item.get("headline", "")
+                        break
+
+            summary_html = (
+                f'<div class="ef-summary">{escape_html(summary)}</div>' if summary else ""
+            )
+
+            cards.append(
+                f'<div class="ef-card {card_cls}">'
+                f'  <div class="ef-sym-row">'
+                f'    <span class="ef-sym">{escape_html(sym)}</span>'
+                f'    <span class="ef-verdict {verdict}">{verdict}</span>'
+                f'  </div>'
+                f'  <div class="ef-name">{name_html}</div>'
+                f'  <div class="ef-result">'
+                f'    <span class="ef-eps">{escape_html(eps_line)}</span>'
+                f'    {move_html}'
+                f'  </div>'
+                f'  {summary_html}'
+                f'</div>'
+            )
+        else:
+            # Not yet reported — show upcoming card with estimate
+            cards.append(
+                f'<div class="ef-card {tc}">'
+                f'  <div class="ef-sym-row"><span class="ef-sym">{escape_html(sym)}</span></div>'
+                f'  <div class="ef-name">{name_html}</div>'
+                f'  <div class="ef-meta">'
+                f'    <span class="ef-badge {tc}">{escape_html(tl)}</span>'
+                + (f'    <span class="ef-badge">{escape_html(eps_est_str)}</span>' if eps_est_str else '')
+                + f'  </div>'
+                f'</div>'
+            )
 
     featured_html = (
         f'<div class="earnings-featured">{"".join(cards)}</div>'
@@ -4139,6 +4222,42 @@ def render_sidebar_block(snap: Snapshot) -> str:
 # ------------------------------------------------------------------------
 # Earnings reactions
 # ------------------------------------------------------------------------
+def fetch_eps_results(symbols: list[str]) -> dict[str, dict]:
+    """Fetch most-recent actual EPS vs estimate for a list of symbols via yfinance."""
+    results: dict[str, dict] = {}
+
+    def _get(sym: str) -> None:
+        try:
+            df = yf.Ticker(sym).earnings_dates
+            if df is None or df.empty:
+                return
+            df = df.dropna(subset=["EPS Estimate", "Reported EPS"])
+            if df.empty:
+                return
+            row = df.iloc[0]
+            est = float(row["EPS Estimate"])
+            act = float(row["Reported EPS"])
+            surprise_pct = ((act - est) / abs(est) * 100) if est != 0 else 0.0
+            if surprise_pct > 3:
+                verdict = "BEAT"
+            elif surprise_pct < -3:
+                verdict = "MISS"
+            else:
+                verdict = "IN-LINE"
+            results[sym] = {
+                "eps_est": round(est, 2),
+                "eps_act": round(act, 2),
+                "surprise_pct": round(surprise_pct, 1),
+                "verdict": verdict,
+            }
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        list(ex.map(_get, symbols))
+    return results
+
+
 def fetch_earnings_reactions(prior_earnings: list[CalendarEvent]) -> list[MoverWithNews]:
     """Fetch today's % change for tickers that reported in the prior session."""
     symbols = [e.symbol_or_event for e in prior_earnings
@@ -4157,16 +4276,76 @@ def fetch_earnings_reactions(prior_earnings: list[CalendarEvent]) -> list[MoverW
 
 
 def render_earnings_reactions(snap: Snapshot) -> str:
-    """Render panel of last night's earnings gap moves."""
+    """Render enriched panel of prior session earnings reactions with EPS beat/miss."""
     if not snap.earnings_reactions:
         return ""
-    rows = render_movers_block(snap.earnings_reactions, None, "No reaction data.")
+
+    cards = []
+    for mw in snap.earnings_reactions:
+        q = mw.quote
+        sym = q.symbol
+        result = snap.earnings_results.get(sym)
+        verdict = result["verdict"] if result else None
+        card_cls = {"BEAT": "beat", "MISS": "miss", "IN-LINE": "inline"}.get(verdict or "", "")
+        verdict_html = (
+            f'<span class="ef-verdict {verdict}">{verdict}</span>' if verdict else ""
+        )
+
+        pct = q.change_pct
+        sign = "+" if pct >= 0 else ""
+        move_cls = "up" if pct > 0 else ("down" if pct < 0 else "flat")
+
+        eps_html = ""
+        if result:
+            sup = result["surprise_pct"]
+            sup_sign = "+" if sup >= 0 else ""
+            eps_html = (
+                f'<div class="ef-result">'
+                f'<span class="ef-eps">EPS: ${result["eps_act"]:.2f} vs '
+                f'${result["eps_est"]:.2f} est ({sup_sign}{sup:.1f}%)</span>'
+                f'<span class="ef-move {move_cls}">{sign}{pct:.2f}%</span>'
+                f'</div>'
+            )
+        else:
+            eps_html = (
+                f'<div class="ef-result">'
+                f'<span class="ef-eps" style="color:var(--text-faint)">EPS data unavailable</span>'
+                f'<span class="ef-move {move_cls}">{sign}{pct:.2f}%</span>'
+                f'</div>'
+            )
+
+        summary = ""
+        if mw.news:
+            summary = mw.news[0].title
+            if len(mw.news) > 1 and len(summary) < 60:
+                summary = mw.news[0].title + " · " + mw.news[1].title
+        summary_html = (
+            f'<div class="ef-summary">{escape_html(summary[:220])}</div>' if summary else ""
+        )
+
+        price_str = fmt_usd(q.price) if q.price else "—"
+        cards.append(
+            f'<div class="ef-card {card_cls}" style="margin-bottom:8px">'
+            f'  <div class="ef-sym-row">'
+            f'    <span class="ef-sym">{escape_html(sym)}</span>'
+            f'    {verdict_html}'
+            f'  </div>'
+            f'  <div class="ef-name" style="margin-bottom:4px">'
+            f'    {escape_html(q.name or sym)} &nbsp;'
+            f'    <span style="color:var(--text-faint);font-size:11px">{price_str}</span>'
+            f'  </div>'
+            f'  {eps_html}'
+            f'  {summary_html}'
+            f'</div>'
+        )
+
+    grid = f'<div class="earnings-featured" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">{"".join(cards)}</div>'
     return (
-        f'<div class="panel" id="earnings-reactions" style="margin-bottom:18px">'
-        f'<div class="panel-head">'
-        f'<h3>Last Night\'s Earnings Reactions</h3>'
-        f'<div class="sub">Sorted by absolute move · today\'s open vs yesterday\'s close</div>'
-        f'</div>{rows}</div>'
+        f'<div id="earnings-reactions" style="margin-bottom:18px">'
+        f'<div class="earnings-section-label" style="margin-top:0">'
+        f'Prior Session Earnings Results · sorted by absolute move</div>'
+        f'{grid}'
+        f'</div>'
     )
 
 
@@ -4285,6 +4464,19 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     except Exception as e:
         warn(f"earnings reactions failed: {e}", snap)
 
+    # Fetch actual EPS vs estimate for all reaction symbols + today's reporters
+    reaction_syms = [mw.quote.symbol for mw in snap.earnings_reactions]
+    today_syms = [e.symbol_or_event for e in snap.earnings_today
+                  if e.symbol_or_event and e.symbol_or_event.isalpha() and len(e.symbol_or_event) <= 5]
+    all_eps_syms = list(dict.fromkeys(reaction_syms + today_syms))  # deduplicated, order preserved
+    if all_eps_syms:
+        log(f"Fetching EPS results for {len(all_eps_syms)} symbols…")
+        try:
+            snap.earnings_results = fetch_eps_results(all_eps_syms)
+            log(f"EPS results: {len(snap.earnings_results)} symbols with data")
+        except Exception as e:
+            warn(f"EPS results fetch failed: {e}", snap)
+
     if not no_ai:
         log("Running AI synthesis via Anthropic…")
         snap.ai = run_ai_synthesis(snap)
@@ -4364,6 +4556,7 @@ def load_cache() -> Snapshot | None:
             watchlist=[q_from(x) for x in raw.get("watchlist", [])],
             watchlist_news=[mw_from(x) for x in raw.get("watchlist_news", [])],
             earnings_reactions=[mw_from(x) for x in raw.get("earnings_reactions", [])],
+            earnings_results=raw.get("earnings_results", {}),
             world_news_raw=raw.get("world_news_raw", []),
         )
         return snap
