@@ -1294,6 +1294,46 @@ html {{ scroll-padding-top: 64px; }}
 .verdict.MISS {{ background:rgba(239,68,68,.18);  color:var(--red); }}
 .verdict.FLAT {{ background:rgba(148,163,184,.15); color:#94a3b8; }}
 .verdict.NA   {{ background:rgba(148,163,184,.08); color:var(--text-faint); }}
+/* Collapsible scorecard details wrapper */
+details.scorecard-details {{ margin: 0 0 8px; }}
+details.scorecard-details > summary {{
+  cursor: pointer; list-style: none; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px;
+  padding: 14px 16px; border-radius: 10px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  user-select: none; transition: background .15s;
+}}
+details.scorecard-details[open] > summary {{
+  border-radius: 10px 10px 0 0; border-bottom: 1px solid var(--border);
+  background: var(--bg-panel-2);
+}}
+details.scorecard-details > summary::-webkit-details-marker {{ display: none; }}
+details.scorecard-details > summary:hover {{ background: var(--bg-panel-2); }}
+.sc-summary-left {{ display: flex; align-items: center; gap: 10px; }}
+.sc-summary-title {{ font-size: 14px; font-weight: 700; color: var(--text); }}
+.sc-summary-arrow {{
+  font-size: 9px; color: var(--accent);
+  display: inline-block; transition: transform .2s;
+}}
+details.scorecard-details[open] .sc-summary-arrow {{ transform: rotate(90deg); }}
+.sc-summary-stats {{ display: flex; gap: 10px; font-size: 11px; flex-wrap: wrap; }}
+.sc-summary-stats .hit {{ color: var(--green); font-weight: 700; }}
+.sc-summary-stats .miss {{ color: var(--red); font-weight: 700; }}
+details.scorecard-details > .scorecard-body {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-top: none; border-radius: 0 0 10px 10px; overflow: hidden;
+}}
+.sc-section-head {{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 8px; border-bottom: 1px solid var(--border);
+  background: var(--bg-panel-2);
+}}
+.sc-section-title {{
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--text-dim);
+}}
+.sc-section-sub {{ font-size: 11px; color: var(--text-faint); }}
+.sc-picks-wrap {{ padding: 14px 14px 6px; }}
 
 /* Colored left border on tiles for immediate direction signal */
 .tile-up   {{ border-left: 3px solid var(--green); }}
@@ -1765,7 +1805,6 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 <div class="market-group" id="predictions">
 <div class="market-group-header setup">Predictions · {today_human}</div>
 {outlook_block}
-{tickers_to_watch_block}
 {scorecard_block}
 {risk_block}
 </div><!-- /predictions -->
@@ -1930,6 +1969,22 @@ function restoreServerCards() {{
   }});
   var btn = document.getElementById('sb-restore-btn');
   if (btn) btn.style.display = hidden.length ? 'block' : 'none';
+}})();
+
+// ── Scorecard predictions label (after-hours shift) ──────────────────────
+(function updateScPredLabel() {{
+  var el = document.getElementById('sc-preds-label');
+  if (!el) return;
+  var now = new Date();
+  var etStr = now.toLocaleString('en-US', {{timeZone: 'America/New_York'}});
+  var et = new Date(etStr);
+  var h = et.getHours();
+  // After 8 PM ET or before 4 AM ET = after-hours ended, pivot to next session
+  if (h >= 20 || h < 4) {{
+    el.textContent = 'Next Trading Day · Picks';
+    var sub = document.getElementById('sc-preds-sub');
+    if (sub) sub.textContent = 'After-hours complete — forward outlook';
+  }}
 }})();
 
 // ── Scroll-position preservation across reloads ──────────────────────────
@@ -3643,7 +3698,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
-        scorecard_block=render_scorecard(snap),
+        scorecard_block=render_scorecard(snap, briefing),
         earnings_reactions_block=render_earnings_reactions(snap),
         analysis_block=render_analysis_block(snap, briefing),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
@@ -3653,7 +3708,6 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         crypto_top_n=CRYPTO_TOP_N,
         outlook_block=render_outlook_block(snap, briefing),
         earnings_section_block=render_earnings_section(snap),
-        tickers_to_watch_block=render_tickers_to_watch(ai) or render_data_tickers_block(snap),
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
         global_block=render_global_block(snap),
@@ -3780,52 +3834,99 @@ def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEnt
     return entries
 
 
-def render_scorecard(snap: Snapshot) -> str:
-    """Render the prediction scorecard table."""
-    if not snap.scorecard:
-        return (
-            '<h2 id="scorecard">Yesterday\'s Calls — Scorecard</h2>'
-            '<div class="scorecard-wrap">'
-            '<div class="scorecard-head">'
-            '<h3>Tickers to Watch · Graded</h3>'
-            '<div class="scorecard-stats" style="color:var(--text-faint);font-size:12px">'
-            'No prior predictions to grade — scorecard populates after the first full trading day.</div>'
-            '</div></div>'
-        )
+def render_scorecard(snap: Snapshot, briefing: dict | None = None) -> str:
+    """Collapsible scorecard: today's predictions on top, yesterday's graded calls below."""
+    # ── Today's picks ─────────────────────────────────────────────────────
+    ai = briefing or snap.ai or {}
+    watch_picks = ai.get("tickers_to_watch") or []
+    if watch_picks:
+        picks_html = _ticker_cards_html(watch_picks)
+    else:
+        picks_html = _ticker_cards_html(_b_tickers_prediction(snap))
+
+    picks_section = (
+        f'<div class="sc-section-head">'
+        f'<span class="sc-section-title" id="sc-preds-label">Today\'s Predictions</span>'
+        f'<span class="sc-section-sub" id="sc-preds-sub">Next session watchlist</span>'
+        f'</div>'
+        f'<div class="sc-picks-wrap">{picks_html}</div>'
+    )
+
+    # ── Graded scorecard ───────────────────────────────────────────────────
     hits   = sum(1 for e in snap.scorecard if e.verdict == "HIT")
     misses = sum(1 for e in snap.scorecard if e.verdict == "MISS")
     flats  = sum(1 for e in snap.scorecard if e.verdict == "FLAT")
     total  = len(snap.scorecard)
-    rows = []
-    for e in snap.scorecard:
-        vcls = {"HIT": "HIT", "MISS": "MISS", "FLAT": "FLAT", "N/A": "NA"}.get(e.verdict, "NA")
-        pct_str = fmt_pct(e.actual_pct) if e.actual_pct is not None else "—"
-        pcls = cls_for(e.actual_pct or 0.0)
-        rows.append(
-            f'<tr>'
-            f'<td style="font-weight:700">{escape_html(e.ticker)}</td>'
-            f'<td style="font-size:11px;color:#8a92a6;text-transform:capitalize">{escape_html(e.bias)}</td>'
-            f'<td style="font-size:12px;color:var(--text-dim)">'
-            f'{escape_html(e.rationale[:80])}{"…" if len(e.rationale) > 80 else ""}</td>'
-            f'<td class="num {pcls}">{escape_html(pct_str)}</td>'
-            f'<td><span class="verdict {vcls}">{escape_html(e.verdict)}</span></td>'
-            f'</tr>'
+
+    if snap.scorecard:
+        rows = []
+        for e in snap.scorecard:
+            vcls = {"HIT": "HIT", "MISS": "MISS", "FLAT": "FLAT", "N/A": "NA"}.get(e.verdict, "NA")
+            pct_str = fmt_pct(e.actual_pct) if e.actual_pct is not None else "—"
+            pcls = cls_for(e.actual_pct or 0.0)
+            rows.append(
+                f'<tr>'
+                f'<td style="font-weight:700">{escape_html(e.ticker)}</td>'
+                f'<td style="font-size:11px;color:#8a92a6;text-transform:capitalize">{escape_html(e.bias)}</td>'
+                f'<td style="font-size:12px;color:var(--text-dim)">'
+                f'{escape_html(e.rationale[:80])}{"…" if len(e.rationale) > 80 else ""}</td>'
+                f'<td class="num {pcls}">{escape_html(pct_str)}</td>'
+                f'<td><span class="verdict {vcls}">{escape_html(e.verdict)}</span></td>'
+                f'</tr>'
+            )
+        graded_section = (
+            f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
+            f'<span class="sc-section-title">Yesterday\'s Calls · Graded</span>'
+            f'<div class="scorecard-stats">'
+            f'<span class="hit">{hits} HIT</span>'
+            f'<span class="miss">{misses} MISS</span>'
+            f'<span>{flats} FLAT</span>'
+            f'<span style="color:var(--text-faint)">{total} total</span>'
+            f'</div></div>'
+            f'<table class="sc-table"><thead><tr>'
+            f'<th>Ticker</th><th>Bias</th><th>Rationale</th><th>Actual %</th><th>Verdict</th>'
+            f'</tr></thead><tbody>{"".join(rows)}</tbody></table>'
         )
+    else:
+        graded_section = (
+            f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
+            f'<span class="sc-section-title">Yesterday\'s Calls · Graded</span>'
+            f'<span class="sc-section-sub" style="color:var(--text-faint)">'
+            f'Populates after the first full trading day with briefing data</span>'
+            f'</div>'
+        )
+
+    # ── Summary badge for the closed <summary> line ───────────────────────
+    if snap.scorecard:
+        stats_html = (
+            f'<span class="sc-summary-stats">'
+            f'<span class="hit">{hits} HIT</span>'
+            f'<span class="miss">{misses} MISS</span>'
+            f'<span style="color:var(--text-faint)">{flats} FLAT · {total} graded</span>'
+            f'</span>'
+        )
+    else:
+        n_picks = len(watch_picks) or len(_b_tickers_prediction(snap))
+        stats_html = (
+            f'<span class="sc-summary-stats">'
+            f'<span style="color:var(--text-faint)">{n_picks} picks · no prior grades yet</span>'
+            f'</span>'
+        )
+
     return (
-        f'<h2 id="scorecard">Yesterday\'s Calls — Scorecard</h2>'
-        f'<div class="scorecard-wrap">'
-        f'<div class="scorecard-head">'
-        f'<h3>Tickers to Watch · Graded</h3>'
-        f'<div class="scorecard-stats">'
-        f'<span class="hit">{hits} HIT</span>'
-        f'<span class="miss">{misses} MISS</span>'
-        f'<span>{flats} FLAT</span>'
-        f'<span style="color:var(--text-faint)">{total} total</span>'
-        f'</div></div>'
-        f'<table class="sc-table"><thead><tr>'
-        f'<th>Ticker</th><th>Bias</th><th>Rationale</th><th>Actual %</th><th>Verdict</th>'
-        f'</tr></thead><tbody>{"".join(rows)}</tbody></table>'
+        f'<details class="scorecard-details" id="scorecard" open>'
+        f'<summary>'
+        f'<span class="sc-summary-left">'
+        f'<span class="sc-summary-arrow">▶</span>'
+        f'<span class="sc-summary-title">Scorecard</span>'
+        f'</span>'
+        f'{stats_html}'
+        f'</summary>'
+        f'<div class="scorecard-body">'
+        f'{picks_section}'
+        f'{graded_section}'
         f'</div>'
+        f'</details>'
     )
 
 
