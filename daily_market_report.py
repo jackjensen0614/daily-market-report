@@ -105,6 +105,12 @@ CRYPTO_TOP_N = 20  # top coins by market cap on CoinGecko
 MOVERS_COUNT = 10  # gainers/losers/active per category
 NEWS_PER_TICKER = 3
 
+# Macro-proxy tickers used to harvest broad economic news headlines
+WORLD_NEWS_TICKERS = [
+    "^GSPC", "^TNX", "GLD", "USO", "TLT", "^VIX",
+    "DX-Y.NYB", "EEM", "FXI", "EFA", "SPY", "QQQ",
+]
+
 # 11 SPDR sector ETFs — used for sector-rotation analysis.
 SECTOR_ETFS: dict[str, str] = {
     "XLK":  "Technology",
@@ -238,6 +244,7 @@ class Snapshot:
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    world_news_raw: list[dict] = field(default_factory=list)
     premarket_us: list[Quote] = field(default_factory=list)
     premarket_macro: list[Quote] = field(default_factory=list)
     premarket_crypto: list[Quote] = field(default_factory=list)
@@ -506,6 +513,40 @@ def attach_news(movers: list[Quote], concurrency: int = 6) -> list[MoverWithNews
     return [out[q.symbol] for q in movers]
 
 
+def fetch_world_news(limit_per_ticker: int = 5) -> list[dict]:
+    """Harvest recent macro/economic news headlines from market-proxy tickers."""
+    seen: set[str] = set()
+    items: list[dict] = []
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(fetch_ticker_news, t, limit_per_ticker): t
+                   for t in WORLD_NEWS_TICKERS}
+        for fut in as_completed(futures):
+            try:
+                for n in fut.result():
+                    if not n.title:
+                        continue
+                    key = n.title.lower()[:80]
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    items.append({
+                        "headline": n.title,
+                        "source": n.publisher,
+                        "url": n.link,
+                        "published": n.published,
+                        "impact_summary": "",
+                        "affected_tickers": [],
+                        "affected_markets": [],
+                        "direction": "mixed",
+                    })
+            except Exception as e:
+                log(f"  world news fetch failed: {e}")
+
+    items.sort(key=lambda x: x.get("published", ""), reverse=True)
+    return items[:35]
+
+
 # ------------------------------------------------------------------------
 # CoinGecko
 # ------------------------------------------------------------------------
@@ -724,6 +765,10 @@ def build_ai_context(snap: Snapshot) -> dict:
             {"event": e.description, "time": e.time, "extra": e.extra}
             for e in snap.econ_events_today[:20]
         ],
+        "raw_world_news": [
+            {"headline": n["headline"], "source": n["source"], "published": n["published"]}
+            for n in snap.world_news_raw[:25]
+        ],
     }
 
 
@@ -770,8 +815,24 @@ BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY 
   "today_setup": "Walk through tonight's/today's earnings (highlight highest-impact names with EPS estimates) and any economic events. For each name give one line on how it could shape the tape.",
   "tickers_to_watch": [{{"ticker": "XYZ", "rationale": "specific signal — e.g. RSI 28 oversold, earnings beat +8%, continuation from yesterday"}}, ...6-10 items],
   "crypto_outlook": "1-2 paragraphs on crypto positioning for the next 24 hours.",
-  "risk_notes": ["concrete risk bullet 1", "concrete risk bullet 2", "concrete risk bullet 3"]
+  "risk_notes": ["concrete risk bullet 1", "concrete risk bullet 2", "concrete risk bullet 3"],
+  "world_news": [
+    {{
+      "headline": "verbatim headline from raw_world_news",
+      "source": "publisher name",
+      "impact_summary": "One sentence: specific market consequence — what instrument moves, which direction, why",
+      "affected_tickers": ["TICK1", "TICK2"],
+      "affected_markets": ["equities" | "bonds" | "crude oil" | "gold" | "crypto" | "forex" | "rates"],
+      "direction": "bullish" | "bearish" | "mixed"
+    }},
+    ... select the 7-9 most market-moving items from raw_world_news; cover a range of themes (Fed/rates, geopolitical, sector-specific, commodity, crypto)
+  ]
 }}
+
+Rules for world_news: only use headlines from raw_world_news. Prioritize macro-movers (Fed, war, tariffs,
+inflation data, central bank decisions) over company-specific stories. For each, name the most directly
+affected tickers or market (e.g. "XOM, CVX" for an oil story; "TLT, ^TNX" for a rates story).
+Direction = bullish means good for risk assets overall or for the named tickers; bearish means the opposite.
 
 Ground every claim in the data. Cite specific numbers. Do not invent tickers or events.
 
@@ -1307,6 +1368,72 @@ details.earnings-details > summary .expand-hint {{
 }}
 details.earnings-details[open] > summary .expand-hint {{ display: none; }}
 details.earnings-details > .cols {{ margin-top: 16px; }}
+
+/* ── World news section ── */
+details.world-news-details {{ margin: 28px 0 0; }}
+details.world-news-details > summary {{
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  transition: color .15s;
+}}
+details.world-news-details > summary::-webkit-details-marker {{ display: none; }}
+details.world-news-details > summary:hover {{ color: var(--text); }}
+details.world-news-details > summary::before {{
+  content: '▶';
+  font-size: 9px;
+  color: var(--accent);
+  display: inline-block;
+  transition: transform .2s;
+  flex-shrink: 0;
+}}
+details.world-news-details[open] > summary::before {{ transform: rotate(90deg); }}
+details.world-news-details > summary .expand-hint {{
+  font-size: 11px; font-weight: 400; color: var(--text-faint); margin-left: 4px;
+}}
+details.world-news-details[open] > summary .expand-hint {{ display: none; }}
+
+.wn-grid {{ display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }}
+.wn-item {{
+  display: flex; gap: 14px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+  border-left-width: 3px;
+}}
+.wn-item.wn-bullish {{ border-left-color: var(--up); }}
+.wn-item.wn-bearish {{ border-left-color: var(--down); }}
+.wn-item.wn-mixed   {{ border-left-color: var(--text-faint); }}
+.wn-dir {{
+  font-size: 16px; font-weight: 700; flex-shrink: 0;
+  width: 20px; text-align: center; padding-top: 1px;
+}}
+.wn-dir.up   {{ color: var(--up); }}
+.wn-dir.down {{ color: var(--down); }}
+.wn-dir.flat {{ color: var(--text-faint); }}
+.wn-body {{ flex: 1; min-width: 0; }}
+.wn-headline {{
+  font-size: 14px; font-weight: 600; color: var(--text);
+  line-height: 1.4; margin-bottom: 4px;
+}}
+.wn-headline a {{ color: inherit; text-decoration: none; }}
+.wn-headline a:hover {{ text-decoration: underline; color: var(--accent); }}
+.wn-meta {{ font-size: 11px; color: var(--text-faint); margin-bottom: 6px; }}
+.wn-impact {{ font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; }}
+.wn-chips {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+.wn-chip {{
+  font-size: 11px; font-weight: 600; padding: 2px 7px;
+  border-radius: 4px; background: var(--bg-panel-2);
+  color: var(--text-dim); border: 1px solid var(--border);
+}}
+.wn-chip.market {{ color: var(--text-faint); font-weight: 400; }}
 </style>
 </head>
 <body>
@@ -1406,10 +1533,12 @@ details.earnings-details > .cols {{ margin-top: 16px; }}
   {earnings_reactions_block}
 </div>
 
+{world_news_block}
+
 <details class="earnings-details" id="earnings-cal">
   <summary>
     Earnings &amp; Events · {today_human}
-    <span class="expand-hint">— click to expand</span>
+    <span class="expand-hint"> — click to expand</span>
   </summary>
   <div class="cols">
     <div class="panel">
@@ -2449,6 +2578,114 @@ def _build_outlook_text(snap: Snapshot) -> str:
     return "\n\n".join(parts)
 
 
+def render_world_news_block(snap: Snapshot, briefing: dict | None = None) -> str:
+    """
+    Collapsible section: economically relevant world news with per-item market impact.
+    Prefers AI-annotated items from briefing["world_news"]; falls back to raw headlines.
+    """
+    items: list[dict] = []
+
+    if briefing and isinstance(briefing.get("world_news"), list):
+        items = briefing["world_news"]
+
+    # Data-driven fallback: use raw headlines with keyword-based direction
+    if not items and snap.world_news_raw:
+        _bull = {"rally", "surge", "jump", "rise", "gain", "beat", "strong", "record",
+                 "growth", "approved", "deal", "ceasefire", "peace", "cut rates", "stimulus"}
+        _bear = {"fall", "drop", "plunge", "decline", "miss", "weak", "recession", "tariff",
+                 "sanction", "war", "conflict", "default", "layoff", "cut", "hawkish", "hike"}
+        for n in snap.world_news_raw[:10]:
+            low = n["headline"].lower()
+            if any(w in low for w in _bull):
+                direction = "bullish"
+            elif any(w in low for w in _bear):
+                direction = "bearish"
+            else:
+                direction = "mixed"
+            items.append({
+                "headline": n["headline"],
+                "source": n["source"],
+                "url": n.get("url", ""),
+                "published": n.get("published", ""),
+                "impact_summary": "",
+                "affected_tickers": [],
+                "affected_markets": [],
+                "direction": direction,
+            })
+
+    if not items:
+        return ""
+
+    def _age(pub: str) -> str:
+        if not pub:
+            return ""
+        try:
+            from datetime import timezone as _tz
+            dt = datetime.fromisoformat(pub.replace("Z", "+00:00"))
+            delta = datetime.now(_tz.utc) - dt.astimezone(_tz.utc)
+            mins = int(delta.total_seconds() / 60)
+            if mins < 60:
+                return f"{mins}m ago"
+            elif mins < 1440:
+                return f"{mins // 60}h ago"
+            else:
+                return f"{mins // 1440}d ago"
+        except Exception:
+            return ""
+
+    cards = []
+    for item in items[:10]:
+        direction = item.get("direction", "mixed")
+        dir_class = {"bullish": "up", "bearish": "down"}.get(direction, "flat")
+        dir_arrow = {"bullish": "↑", "bearish": "↓"}.get(direction, "↔")
+        wn_class  = {"bullish": "wn-bullish", "bearish": "wn-bearish"}.get(direction, "wn-mixed")
+
+        headline = escape_html(item.get("headline", ""))
+        url = item.get("url", "")
+        hl_html = (f'<a href="{escape_html(url)}" target="_blank" rel="noopener">{headline}</a>'
+                   if url else headline)
+
+        source = escape_html(item.get("source", ""))
+        age    = _age(item.get("published", ""))
+        meta   = " · ".join(filter(None, [source, age]))
+
+        impact = escape_html(item.get("impact_summary", ""))
+        impact_html = f'<div class="wn-impact">{impact}</div>' if impact else ""
+
+        ticker_chips = "".join(
+            f'<span class="wn-chip">{escape_html(t)}</span>'
+            for t in item.get("affected_tickers", [])[:5]
+        )
+        market_chips = "".join(
+            f'<span class="wn-chip market">{escape_html(m)}</span>'
+            for m in item.get("affected_markets", [])[:4]
+        )
+        chips_html = (f'<div class="wn-chips">{ticker_chips}{market_chips}</div>'
+                      if ticker_chips or market_chips else "")
+
+        cards.append(
+            f'<div class="wn-item {wn_class}">'
+            f'  <div class="wn-dir {dir_class}">{dir_arrow}</div>'
+            f'  <div class="wn-body">'
+            f'    <div class="wn-headline">{hl_html}</div>'
+            f'    <div class="wn-meta">{meta}</div>'
+            f'    {impact_html}'
+            f'    {chips_html}'
+            f'  </div>'
+            f'</div>'
+        )
+
+    grid = '<div class="wn-grid">' + "\n".join(cards) + '</div>'
+    return (
+        '<details class="world-news-details" id="world-news">'
+        '<summary>Global News &amp; Market Impact'
+        '<span class="expand-hint"> — click to expand</span>'
+        '</summary>'
+        + grid +
+        '</details>'
+    )
+
+
 def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
     """
     Always-visible section with 3 narrative cards:
@@ -2793,6 +3030,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
         global_block=render_global_block(snap),
+        world_news_block=render_world_news_block(snap, briefing),
     )
     return html
 
@@ -3201,6 +3439,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     snap.losers = attach_news(losers_q)
     snap.most_active = attach_news(active_q)
 
+    log("Fetching world / macro news headlines…")
+    try:
+        snap.world_news_raw = fetch_world_news()
+    except Exception as e:
+        warn(f"world news fetch failed: {e}", snap)
+
     log("Fetching crypto markets from CoinGecko…")
     crypto_q = fetch_crypto_markets(CRYPTO_TOP_N)
     if not crypto_q:
@@ -3311,6 +3555,7 @@ def load_cache() -> Snapshot | None:
             sentiment=raw.get("sentiment", {}),
             watchlist=[q_from(x) for x in raw.get("watchlist", [])],
             earnings_reactions=[mw_from(x) for x in raw.get("earnings_reactions", [])],
+            world_news_raw=raw.get("world_news_raw", []),
         )
         return snap
     except Exception as e:
