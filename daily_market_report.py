@@ -1352,39 +1352,47 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
 }}
 
 /* ── Collapsible earnings ── */
-details.earnings-details {{ margin: 24px 0 0; }}
+details.earnings-details {{ margin: 32px 0 0; }}
 details.earnings-details > summary {{
   cursor: pointer;
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 18px;
+  gap: 10px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--text-dim);
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #60a5fa;
+  padding: 10px 14px;
+  border-bottom: 2px solid #3b82f6;
+  background: var(--bg-panel);
+  border-radius: 6px 6px 0 0;
   user-select: none;
-  transition: color .15s;
+  transition: background .15s, color .15s;
 }}
 details.earnings-details > summary::-webkit-details-marker {{ display: none; }}
-details.earnings-details > summary:hover {{ color: var(--text); }}
+details.earnings-details > summary:hover {{ background: var(--bg-panel-2); color: #93c5fd; }}
 details.earnings-details > summary::before {{
   content: '▶';
-  font-size: 9px;
-  color: var(--accent);
+  font-size: 8px;
+  color: #60a5fa;
   display: inline-block;
   transition: transform .2s;
   flex-shrink: 0;
 }}
 details.earnings-details[open] > summary::before {{ transform: rotate(90deg); }}
-details.earnings-details > summary .expand-hint {{
-  font-size: 11px;
+details.earnings-details > summary::after {{
+  content: 'click to expand';
+  margin-left: auto;
+  font-size: 10px;
   font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--text-faint);
-  margin-left: 4px;
+  opacity: .7;
 }}
-details.earnings-details[open] > summary .expand-hint {{ display: none; }}
+details.earnings-details[open] > summary::after {{ content: 'click to collapse'; }}
 details.earnings-details > .cols {{ margin-top: 16px; }}
 
 /* ── World news section ── */
@@ -1615,10 +1623,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 {world_news_block}
 
 <details class="earnings-details" id="earnings-cal">
-  <summary>
-    Earnings &amp; Events · {today_human}
-    <span class="expand-hint"> — click to expand</span>
-  </summary>
+  <summary>Earnings &amp; Events · {today_human}</summary>
   <div class="cols">
     <div class="panel">
       <div class="panel-head"><h3>Earnings Today</h3><div class="sub">Reporting before/after open</div></div>
