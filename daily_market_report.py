@@ -105,6 +105,9 @@ CRYPTO_TOP_N = 20  # top coins by market cap on CoinGecko
 MOVERS_COUNT = 10  # gainers/losers/active per category
 NEWS_PER_TICKER = 3
 
+# Default sidebar watchlist — used when WATCHLIST env var is not set
+DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "JPM"]
+
 # Macro-proxy tickers used to harvest broad economic news headlines
 WORLD_NEWS_TICKERS = [
     "^GSPC", "^TNX", "GLD", "USO", "TLT", "^VIX",
@@ -256,6 +259,7 @@ class Snapshot:
     scorecard: list[ScorecardEntry] = field(default_factory=list)
     sentiment: dict = field(default_factory=dict)
     watchlist: list[Quote] = field(default_factory=list)
+    watchlist_news: list[MoverWithNews] = field(default_factory=list)
     earnings_reactions: list[MoverWithNews] = field(default_factory=list)
 
 
@@ -1447,6 +1451,121 @@ details.earnings-extra > .cols {{ margin-top: 12px; }}
 .econ-news-item a:hover {{ color: var(--text); }}
 .econ-news-src {{ color: var(--text-faint); font-size: 10px; white-space: nowrap; }}
 
+/* ── Watchlist sidebar ── */
+.sb-toggle {{
+  position: fixed; right: 0; top: 50%;
+  transform: translateY(-50%);
+  z-index: 300;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-right: none; border-radius: 8px 0 0 8px;
+  padding: 12px 8px; cursor: pointer; color: var(--text-dim);
+  font-size: 18px; line-height: 1; writing-mode: vertical-rl;
+  display: flex; align-items: center; gap: 6px;
+  transition: background .15s, color .15s;
+}}
+.sb-toggle:hover {{ background: var(--bg-panel-2); color: var(--text); }}
+.sb-toggle .sb-toggle-label {{
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; margin-top: 6px;
+}}
+.sb-overlay {{
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.45); z-index: 290;
+}}
+.sb-overlay.open {{ display: block; }}
+.sidebar {{
+  position: fixed; right: 0; top: 0; bottom: 0; width: 360px;
+  background: var(--bg-card); border-left: 1px solid var(--border);
+  z-index: 295; overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  display: flex; flex-direction: column;
+}}
+.sidebar.open {{ transform: translateX(0); }}
+.sb-head {{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 16px 12px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg-card); z-index: 1;
+}}
+.sb-title {{ font-size: 14px; font-weight: 700; color: var(--text); }}
+.sb-subtitle {{ font-size: 10px; color: var(--text-faint); margin-top: 2px; }}
+.sb-close {{
+  background: none; border: none; color: var(--text-faint);
+  font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+  transition: color .15s;
+}}
+.sb-close:hover {{ color: var(--text); }}
+.sb-add {{
+  display: flex; gap: 6px; padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}}
+.sb-add input {{
+  flex: 1; background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 10px; color: var(--text);
+  font-size: 12px; font-family: inherit; outline: none;
+}}
+.sb-add input:focus {{ border-color: var(--accent); }}
+.sb-add button {{
+  background: var(--accent); border: none; border-radius: 6px;
+  color: #fff; font-size: 14px; font-weight: 700;
+  padding: 7px 12px; cursor: pointer; transition: opacity .15s;
+}}
+.sb-add button:hover {{ opacity: .85; }}
+.sb-section-label {{
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-faint);
+  padding: 10px 16px 4px;
+}}
+.sb-cards {{ padding: 8px 12px 80px; display: flex; flex-direction: column; gap: 10px; }}
+.sb-card {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 9px; padding: 12px 13px;
+  border-left: 3px solid var(--border);
+}}
+.sb-card.up   {{ border-left-color: var(--up); }}
+.sb-card.down {{ border-left-color: var(--down); }}
+.sb-card.flat {{ border-left-color: var(--text-faint); }}
+.sb-card-top {{
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 6px; margin-bottom: 3px;
+}}
+.sb-sym {{ font-size: 15px; font-weight: 700; color: var(--text); }}
+.sb-pct {{ font-size: 13px; font-weight: 700; }}
+.sb-name {{ font-size: 11px; color: var(--text-faint); margin-bottom: 6px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.sb-price {{ font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }}
+.sb-badges {{ display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }}
+.sb-badge {{
+  font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px;
+  background: var(--bg-panel-2); color: var(--text-faint);
+}}
+.sb-badge.earnings {{ color: #fbbf24; background: #78350f33; }}
+.sb-badge.bull {{ color: var(--up); background: #16a34a22; }}
+.sb-badge.bear {{ color: var(--down); background: #dc262622; }}
+.sb-pred {{ font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 6px; }}
+.sb-news {{
+  font-size: 11px; color: var(--text-faint); line-height: 1.4;
+  border-top: 1px solid var(--border); padding-top: 6px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}}
+.sb-news a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
+/* user-added TV charts */
+.sb-user-card {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 9px; overflow: hidden; margin: 0;
+}}
+.sb-user-card-head {{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 4px;
+}}
+.sb-user-sym {{ font-size: 13px; font-weight: 700; color: var(--text); }}
+.sb-user-rm {{
+  background: none; border: none; color: var(--text-faint);
+  cursor: pointer; font-size: 14px; padding: 0 2px;
+}}
+.sb-user-rm:hover {{ color: var(--down); }}
+
 /* ── World news section ── */
 details.world-news-details {{ margin: 28px 0 0; }}
 details.world-news-details > summary {{
@@ -1567,6 +1686,32 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 </style>
 </head>
 <body>
+
+<!-- ── Watchlist sidebar ── -->
+<button class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()" title="My Watchlist">
+  ★<span class="sb-toggle-label">Watch&shy;list</span>
+</button>
+<div class="sb-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
+<div class="sidebar" id="sidebar">
+  <div class="sb-head">
+    <div>
+      <div class="sb-title">My Watchlist</div>
+      <div class="sb-subtitle">Prices from prior session · auto-updates every 5 min</div>
+    </div>
+    <button class="sb-close" onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="sb-add">
+    <input type="text" id="sb-input" placeholder="Add ticker (e.g. TSLA)" maxlength="10"
+           onkeydown="if(event.key==='Enter')addSbTicker()" />
+    <button onclick="addSbTicker()">+</button>
+  </div>
+  <div id="sb-user-cards"></div>
+  <div class="sb-section-label">Tracked</div>
+  <div class="sb-cards" id="sb-server-cards">
+    {sidebar_block}
+  </div>
+</div>
+
 <div class="wrap">
 
 <header>
@@ -1607,8 +1752,8 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
         {{"description": "S&P 500",      "proName": "FOREXCOM:SPXUSD"}},
         {{"description": "Nasdaq 100",   "proName": "FOREXCOM:NSXUSD"}},
         {{"description": "Dow Jones",    "proName": "FOREXCOM:DJI"}},
-        {{"description": "Russell 2000", "proName": "TVC:RUT"}},
-        {{"description": "10Y Yield",    "proName": "TVC:US10Y"}},
+        {{"description": "Russell 2000", "proName": "TVC:US2000"}},
+        {{"description": "10Y Yield",    "proName": "INDEX:TNX"}},
         {{"description": "Gold",         "proName": "TVC:GOLD"}},
         {{"description": "Crude Oil",    "proName": "TVC:USOIL"}},
         {{"description": "Bitcoin",      "proName": "COINBASE:BTCUSD"}},
@@ -1705,6 +1850,72 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 // If opened as a local file, go to the live hosted version instead
 if (window.location.protocol === 'file:') {{
   window.location.replace('https://jackjensen0614.github.io/daily-market-report/');
+}}
+
+// ── Watchlist sidebar ────────────────────────────────────────────────────
+var SB_KEY = 'mktSbTickers';
+function toggleSidebar() {{
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sb-overlay');
+  var open = sb.classList.toggle('open');
+  ov.classList.toggle('open', open);
+  if (open) loadUserCards();
+}}
+function closeSidebar() {{
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sb-overlay').classList.remove('open');
+}}
+function getSbTickers() {{
+  try {{ return JSON.parse(localStorage.getItem(SB_KEY) || '[]'); }} catch(e) {{ return []; }}
+}}
+function saveSbTickers(arr) {{
+  try {{ localStorage.setItem(SB_KEY, JSON.stringify(arr)); }} catch(e) {{}}
+}}
+function addSbTicker() {{
+  var inp = document.getElementById('sb-input');
+  var sym = (inp.value || '').trim().toUpperCase().replace(/[^A-Z0-9.\-^]/g,'');
+  if (!sym) return;
+  var arr = getSbTickers();
+  if (!arr.includes(sym)) {{ arr.unshift(sym); saveSbTickers(arr); }}
+  inp.value = '';
+  loadUserCards();
+}}
+function removeSbTicker(sym) {{
+  saveSbTickers(getSbTickers().filter(function(s){{ return s !== sym; }}));
+  loadUserCards();
+}}
+function loadUserCards() {{
+  var container = document.getElementById('sb-user-cards');
+  if (!container) return;
+  var tickers = getSbTickers();
+  if (!tickers.length) {{ container.innerHTML = ''; return; }}
+  container.innerHTML = '<div class="sb-section-label">My Picks</div>';
+  tickers.forEach(function(sym) {{
+    var card = document.createElement('div');
+    card.className = 'sb-user-card';
+    card.style.margin = '0 12px 10px';
+    var tvSym = sym.includes(':') ? sym : 'NASDAQ:' + sym;
+    card.innerHTML =
+      '<div class="sb-user-card-head">' +
+      '  <span class="sb-user-sym">' + sym + '</span>' +
+      '  <button class="sb-user-rm" title="Remove" onclick="removeSbTicker(\'' + sym.replace(/'/g,"\\'") + '\')">✕</button>' +
+      '</div>' +
+      '<div class="tradingview-widget-container" style="height:130px">' +
+      '  <div class="tradingview-widget-container__widget"></div>' +
+      '</div>';
+    container.appendChild(card);
+    // Inject TradingView mini chart
+    var tvDiv = card.querySelector('.tradingview-widget-container');
+    var s = document.createElement('script');
+    s.type = 'text/javascript';
+    s.async = true;
+    s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
+    s.textContent = JSON.stringify({{
+      symbol: tvSym, width: '100%', height: 130, locale: 'en',
+      dateRange: '1D', colorTheme: 'dark', isTransparent: true, autosize: false
+    }});
+    tvDiv.appendChild(s);
+  }});
 }}
 
 // ── Scroll-position preservation across reloads ──────────────────────────
@@ -3433,6 +3644,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         risk_block=render_risk_block(ai),
         global_block=render_global_block(snap),
         world_news_block=render_world_news_block(snap, briefing),
+        sidebar_block=render_sidebar_block(snap),
     )
     return html
 
@@ -3714,12 +3926,12 @@ def fetch_watchlist_quotes() -> list[Quote]:
                     _, _, v = line.partition("=")
                     raw_wl = v.strip().strip('"').strip("'")
                     break
-    tickers = [t.strip().upper() for t in raw_wl.split(",") if t.strip()] if raw_wl else []
+    tickers = [t.strip().upper() for t in raw_wl.split(",") if t.strip()] if raw_wl else DEFAULT_WATCHLIST
     return fetch_quotes({t: t for t in tickers}) if tickers else []
 
 
 def render_watchlist(snap: Snapshot) -> str:
-    """Render personal watchlist row of compact price/change tiles."""
+    """Compact tile row — kept for any legacy callers."""
     if not snap.watchlist:
         return ""
     tiles = []
@@ -3733,6 +3945,78 @@ def render_watchlist(snap: Snapshot) -> str:
             f'</div>'
         )
     return f'<div class="wl-row" id="watchlist">{"".join(tiles)}</div>'
+
+
+def render_sidebar_block(snap: Snapshot) -> str:
+    """Rich watchlist sidebar cards — server-rendered with price, prediction, news, earnings."""
+    source = snap.watchlist_news or [MoverWithNews(quote=q) for q in snap.watchlist]
+    if not source:
+        return '<p style="color:var(--text-faint);font-size:12px;padding:8px 16px">No watchlist configured. Add tickers above or set the WATCHLIST environment variable.</p>'
+
+    earnings_syms = {e.symbol_or_event for e in snap.earnings_today}
+
+    def _prediction(q: Quote) -> tuple[str, str, str]:
+        """Returns (bias_class, label, one-line analysis)."""
+        pct = q.change_pct
+        if pct > 3:
+            return "bull", f"▲ Strong Momentum +{pct:.1f}%", \
+                "Significant prior-session gain. Momentum plays often see continuation in the opening hour — watch for volume confirmation above yesterday's close."
+        if pct > 1:
+            return "bull", f"▲ Bullish +{pct:.1f}%", \
+                f"Mild upside last session. Near-term bias positive while price holds above prior close of {fmt_usd(q.price / (1 + pct/100))}."
+        if pct < -3:
+            return "bear", f"▼ Selling Pressure {pct:.1f}%", \
+                "Sharp prior-session decline. Path of least resistance lower until a catalyst or support level holds. Risk elevated — position sizing matters."
+        if pct < -1:
+            return "bear", f"▼ Bearish {pct:.1f}%", \
+                f"Modest prior-session loss. Watch for bounce off {fmt_usd(q.price * 0.98)} or continuation below prior low."
+        return "flat", "— Neutral", \
+            "Tight prior-session range. Likely to follow the broader tape direction today. Catalyst-driven — monitor news flow."
+
+    cards_html = ""
+    for mw in source:
+        q   = mw.quote
+        cls = cls_for(q.change_pct)
+        pct_sign = "+" if q.change_pct >= 0 else ""
+        pct_color = "var(--up)" if q.change_pct > 0 else ("var(--down)" if q.change_pct < 0 else "var(--text-faint)")
+
+        bias_cls, bias_label, analysis = _prediction(q)
+        name = escape_html(q.name or q.symbol)
+
+        # Earnings badge
+        earn_badge = (
+            '<span class="sb-badge earnings">⚡ Earnings Today</span>'
+            if q.symbol in earnings_syms else ""
+        )
+        bias_badge = f'<span class="sb-badge {bias_cls}">{escape_html(bias_label)}</span>'
+
+        # Top news headline
+        news_html = ""
+        if mw.news:
+            n   = mw.news[0]
+            url = n.link or ""
+            hl  = escape_html(n.title)
+            news_html = (
+                f'<div class="sb-news">'
+                + (f'<a href="{escape_html(url)}" target="_blank" rel="noopener">{hl}</a>' if url else hl)
+                + '</div>'
+            )
+
+        cards_html += (
+            f'<div class="sb-card {cls}">'
+            f'  <div class="sb-card-top">'
+            f'    <span class="sb-sym">{escape_html(q.symbol)}</span>'
+            f'    <span class="sb-pct {cls}">{pct_sign}{q.change_pct:.2f}%</span>'
+            f'  </div>'
+            f'  <div class="sb-name">{name}</div>'
+            f'  <div class="sb-price">{fmt_usd(q.price)}</div>'
+            f'  <div class="sb-badges">{earn_badge}{bias_badge}</div>'
+            f'  <div class="sb-pred">{escape_html(analysis)}</div>'
+            f'  {news_html}'
+            f'</div>'
+        )
+
+    return cards_html
 
 
 # ------------------------------------------------------------------------
@@ -3806,6 +4090,7 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     log("Fetching watchlist…")
     try:
         snap.watchlist = fetch_watchlist_quotes()
+        snap.watchlist_news = attach_news(snap.watchlist[:12])
     except Exception as e:
         warn(f"watchlist fetch failed: {e}", snap)
 
@@ -3960,6 +4245,7 @@ def load_cache() -> Snapshot | None:
             scorecard=[sc_from(x) for x in raw.get("scorecard", [])],
             sentiment=raw.get("sentiment", {}),
             watchlist=[q_from(x) for x in raw.get("watchlist", [])],
+            watchlist_news=[mw_from(x) for x in raw.get("watchlist_news", [])],
             earnings_reactions=[mw_from(x) for x in raw.get("earnings_reactions", [])],
             world_news_raw=raw.get("world_news_raw", []),
         )
