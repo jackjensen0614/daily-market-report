@@ -225,6 +225,7 @@ class CalendarEvent:
     symbol_or_event: str
     description: str
     extra: str = ""  # e.g. EPS estimate, prior value
+    url: str = ""   # company website (earnings only)
 
 
 @dataclass
@@ -660,6 +661,20 @@ def fetch_earnings_calendar(date_str: str) -> list[CalendarEvent]:
             )
         except Exception as e:
             log(f"  skipping earnings row: {e}")
+
+    def _get_url(sym: str) -> str:
+        try:
+            return yf.Ticker(sym).info.get("website", "") or ""
+        except Exception:
+            return ""
+
+    syms = [e.symbol_or_event for e in out if e.symbol_or_event]
+    if syms:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            url_map = dict(zip(syms, pool.map(_get_url, syms)))
+        for e in out:
+            e.url = url_map.get(e.symbol_or_event, "")
+
     return out
 
 
@@ -1807,11 +1822,14 @@ def render_calendar_table(events: list[CalendarEvent], empty_msg: str) -> str:
         return f'<div style="padding: 16px; color: var(--text-faint);">{empty_msg}</div>'
     rows = []
     for e in events:
+        name = escape_html(e.description)
+        if e.url:
+            name = f'<a href="{escape_html(e.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:3px;">{name}</a>'
         rows.append(f"""
         <tr>
           <td class="time">{escape_html(e.time)}</td>
           <td class="sym">{escape_html(e.symbol_or_event)}</td>
-          <td>{escape_html(e.description)}</td>
+          <td>{name}</td>
           <td style="color: var(--text-dim)">{escape_html(e.extra)}</td>
         </tr>
         """)
@@ -3645,7 +3663,11 @@ def load_cache() -> Snapshot | None:
                 news=[n_from(x) for x in d.get("news", [])],
                 ai_why=d.get("ai_why", ""),
             )
-        def ev_from(d): return CalendarEvent(**d)
+        def ev_from(d): return CalendarEvent(
+            time=d.get("time",""), symbol_or_event=d.get("symbol_or_event",""),
+            description=d.get("description",""), extra=d.get("extra",""),
+            url=d.get("url",""),
+        )
         def sp_from(d): return SectorPerf(**d)
         def sc_from(d): return ScorecardEntry(
             ticker=d.get("ticker", ""), rationale=d.get("rationale", ""),
