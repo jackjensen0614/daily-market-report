@@ -1197,6 +1197,49 @@ a {{ color: #8ab4f8; }}
 .verdict.MISS {{ background:rgba(239,68,68,.18);  color:var(--red); }}
 .verdict.FLAT {{ background:rgba(148,163,184,.15); color:#94a3b8; }}
 .verdict.NA   {{ background:rgba(148,163,184,.08); color:var(--text-faint); }}
+
+/* Colored left border on tiles for immediate direction signal */
+.tile-up   {{ border-left: 3px solid var(--green); }}
+.tile-down {{ border-left: 3px solid var(--red); }}
+.tile-flat {{ border-left: 3px solid var(--border); }}
+
+/* Market group section wrappers */
+.market-group {{ margin: 40px 0 0; }}
+.market-group-header {{
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 0 0 10px; margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}}
+.market-group-header.us     {{ border-bottom-color: #3b82f6; color: #60a5fa; }}
+.market-group-header.global {{ border-bottom-color: #a78bfa; color: #c4b5fd; }}
+.market-group-header.crypto {{ border-bottom-color: #f59e0b; color: #fbbf24; }}
+.market-group-header.setup  {{ border-bottom-color: var(--accent); color: var(--accent); }}
+
+/* Inline Morning Briefing card (replaces FAB + modal) */
+.briefing-inline {{
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; margin-bottom: 28px;
+}}
+.briefing-inline-head {{
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg, #081a10, #0b0d12);
+}}
+.bi-title {{ font-weight: 700; color: var(--accent); font-size: 14px; letter-spacing: .01em; }}
+.bi-source {{ color: var(--text-faint); font-size: 11px; }}
+details.briefing-details {{ }}
+details.briefing-details > summary {{
+  padding: 10px 20px; cursor: pointer; color: var(--text-dim);
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
+  list-style: none; display: flex; align-items: center; gap: 6px;
+  border-top: 1px solid var(--border); user-select: none;
+  transition: color .15s; background: var(--bg-panel-2);
+}}
+details.briefing-details > summary::-webkit-details-marker {{ display: none; }}
+details.briefing-details > summary:hover {{ color: var(--text); }}
+details.briefing-details > summary::before {{ content: '▶'; font-size: 8px; display:inline-block; transition: transform .2s; }}
+details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
 </style>
 </head>
 <body>
@@ -1219,20 +1262,21 @@ a {{ color: #8ab4f8; }}
 </header>
 
 <nav class="sticky-nav">
-  <a href="#premarket">Pre-Market</a>
-  <a href="#indices">Indices</a>
-  <a href="#sectors">Sectors</a>
-  <a href="#sentiment">Sentiment</a>
-  <a href="#movers">Movers</a>
-  <a href="#crypto-panel">Crypto</a>
+  <a href="#briefing">Briefing</a>
+  <a href="#us-markets">US Markets</a>
+  <a href="#global-markets">Global</a>
+  <a href="#crypto-section">Crypto</a>
   <a href="#setup">Setup</a>
   <a href="#scorecard">Scorecard</a>
-  <a href="#briefing-fab">Briefing ↑</a>
 </nav>
 
-{watchlist_block}
-
 {briefing_block}
+
+<!-- ===== US MARKETS ===== -->
+<div class="market-group" id="us-markets">
+<div class="market-group-header us">US Markets</div>
+
+{watchlist_block}
 
 {premarket_block}
 
@@ -1258,41 +1302,52 @@ a {{ color: #8ab4f8; }}
     {losers_rows}
   </div>
 </div>
-
 <div class="cols" style="margin-top: 18px;">
   <div class="panel">
     <div class="panel-head"><h3>Most Active</h3><div class="sub">Sorted by volume</div></div>
     {active_rows}
   </div>
-  <div class="panel" id="crypto-panel">
-    <div class="panel-head"><h3>Crypto · Top {crypto_top_n}</h3><div class="sub">By market cap · 24h change</div></div>
-    {crypto_rows}
-  </div>
+  {earnings_reactions_block}
 </div>
 
-<h2 id="setup">Today&#39;s Setup · {today_human}</h2>
-{today_outlook_block}
-
-{earnings_reactions_block}
-
+<h2 id="earnings-cal">Earnings &amp; Events · {today_human}</h2>
 <div class="cols">
   <div class="panel">
     <div class="panel-head"><h3>Earnings Today</h3><div class="sub">Reporting before/after open</div></div>
     {earnings_table}
   </div>
   <div class="panel">
-    <div class="panel-head"><h3>Economic Events</h3><div class="sub">Data releases & Fed speakers</div></div>
+    <div class="panel-head"><h3>Economic Events</h3><div class="sub">Data releases &amp; Fed speakers</div></div>
     {econ_table}
   </div>
 </div>
 
-{tickers_to_watch_block}
+</div><!-- /us-markets -->
 
-{scorecard_block}
+<!-- ===== GLOBAL MARKETS ===== -->
+<div class="market-group" id="global-markets">
+<div class="market-group-header global">Global Markets</div>
+{global_block}
+</div><!-- /global-markets -->
 
+<!-- ===== CRYPTO ===== -->
+<div class="market-group" id="crypto-section">
+<div class="market-group-header crypto">Crypto</div>
+<div class="panel" id="crypto-panel">
+  <div class="panel-head"><h3>Crypto · Top {crypto_top_n}</h3><div class="sub">By market cap · 24h change</div></div>
+  {crypto_rows}
+</div>
 {crypto_outlook_block}
+</div><!-- /crypto-section -->
 
+<!-- ===== TODAY'S SETUP ===== -->
+<div class="market-group" id="setup">
+<div class="market-group-header setup">Today&#39;s Setup · {today_human}</div>
+{today_outlook_block}
+{tickers_to_watch_block}
+{scorecard_block}
 {risk_block}
+</div><!-- /setup -->
 
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
@@ -1381,7 +1436,7 @@ def render_index_tile(q: Quote) -> str:
     price = fmt_num(q.price)
     delta = f"{'+' if q.change >= 0 else ''}{q.change:,.2f} ({fmt_pct(q.change_pct)})"
     return f"""
-    <div class="tile">
+    <div class="tile tile-{cls}">
       <div class="label">{q.name}</div>
       <div class="value num">{price}</div>
       <div class="delta num {cls}">{delta}</div>
@@ -1837,24 +1892,47 @@ def _build_data_briefing(snap: Snapshot) -> str:
 # --------------------------------------------------------------------------
 
 def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -> str:
-    """Render the Morning Briefing FAB + modal.
+    """Render the Morning Briefing as an inline card at the top of the page.
 
     Uses AI-generated JSON if available; otherwise builds from snapshot data.
-    Always renders the modal as long as we have either source.
+    Executive summary + index chips always visible; full text in a <details> expander.
     """
-    if briefing:
-        # --- AI-generated briefing ---
-        exec_bullets = briefing.get("exec_summary", [])
-        exec_html = ""
-        if exec_bullets:
-            lis = "".join(f"<li>{escape_html(b)}</li>" for b in exec_bullets)
+    if not briefing and not snap:
+        return ""
+
+    gen_date = datetime.now(ET).strftime("%b %-d, %Y · %-I:%M %p %Z")
+
+    # Index chips row — always visible
+    index_row_html = ""
+    if snap and snap.indices:
+        chips = "".join(
+            _index_chip(q.name.split("(")[0].strip(), q.change_pct, q.price)
+            for q in snap.indices
+        )
+        index_row_html = f'<div class="b-index-row" style="padding:12px 20px 4px">{chips}</div>'
+
+    # Executive summary — always visible
+    exec_html = ""
+    if briefing and briefing.get("exec_summary"):
+        lis = "".join(f"<li>{escape_html(b)}</li>" for b in briefing["exec_summary"])
+        exec_html = (
+            '<div class="exec-bar">'
+            '<div class="exec-label">Executive Summary</div>'
+            f'<ol>{lis}</ol></div>'
+        )
+    elif snap:
+        bullets = _b_exec_summary(snap)
+        if bullets:
+            lis = "".join(f"<li>{escape_html(b)}</li>" for b in bullets)
             exec_html = (
                 '<div class="exec-bar">'
-                '<div class="exec-label">Executive Summary</div>'
-                f'<ol>{lis}</ol>'
-                '</div>'
+                '<div class="exec-label">Market Summary</div>'
+                f'<ol>{lis}</ol></div>'
             )
 
+    # Detailed sections — inside <details> expander
+    if briefing:
+        source = "Claude AI"
         session_text = briefing.get("session_recap", "")
         session_html = (
             '<div class="briefing-section">'
@@ -1917,52 +1995,35 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
                     f'{_paras(str(risk_items))}</div>'
                 )
 
-        # Append global markets and live data tables from snap if available
         global_html = _b_global_markets(snap) if snap else ""
-        index_row_html = ""
-        if snap and snap.indices:
-            chips = "".join(_index_chip(q.name.split("(")[0].strip(), q.change_pct, q.price) for q in snap.indices)
-            index_row_html = f'<div class="b-index-row" style="padding:4px 20px 8px">{chips}</div>'
-        inner = exec_html + index_row_html + session_html + crypto_recap_html + global_html + setup_html + watch_html + crypto_out_html + risk_html
-        source = "Claude AI"
-
-    elif snap:
-        # --- Data-driven fallback (no AI API needed) ---
-        inner = _build_data_briefing(snap)
-        source = "Live Data"
+        detailed_html = session_html + crypto_recap_html + global_html + setup_html + watch_html + crypto_out_html + risk_html
     else:
-        return ""
+        source = "Live Data"
+        detailed_html = (
+            _b_us_markets(snap) + _b_global_markets(snap) +
+            _b_crypto(snap) + _b_setup(snap) + _b_risks(snap)
+        )
 
-    if not inner.strip():
-        return ""
+    details_block = ""
+    if detailed_html.strip():
+        details_block = (
+            f'<details class="briefing-details">'
+            f'<summary>Full Briefing</summary>'
+            f'{detailed_html}'
+            f'</details>'
+        )
 
-    gen_date = datetime.now(ET).strftime("%B %-d, %Y · %I:%M %p %Z")
-    return f"""
-<button class="briefing-fab" id="briefing-fab">Morning Briefing</button>
-<div class="briefing-backdrop" id="briefing-backdrop">
-  <div class="briefing-modal">
-    <div class="briefing-modal-head">
-      <h3>Morning Briefing</h3>
-      <span class="bdate">{source} · {gen_date}</span>
-      <button class="briefing-close" id="briefing-close">&#x2715;</button>
-    </div>
-    {inner}
-  </div>
-</div>
-<script>
-(function(){{
-  var fab=document.getElementById('briefing-fab');
-  var bd=document.getElementById('briefing-backdrop');
-  var cl=document.getElementById('briefing-close');
-  if(!fab)return;
-  function open(){{ bd.classList.add('open'); document.body.style.overflow='hidden'; }}
-  function close(){{ bd.classList.remove('open'); document.body.style.overflow=''; }}
-  fab.addEventListener('click',open);
-  cl.addEventListener('click',close);
-  bd.addEventListener('click',function(e){{ if(e.target===bd)close(); }});
-  document.addEventListener('keydown',function(e){{ if(e.key==='Escape')close(); }});
-}})();
-</script>"""
+    return (
+        f'<div class="briefing-inline" id="briefing">'
+        f'<div class="briefing-inline-head">'
+        f'<span class="bi-title">Morning Briefing</span>'
+        f'<span class="bi-source">{source} · {gen_date}</span>'
+        f'</div>'
+        f'{index_row_html}'
+        f'{exec_html}'
+        f'{details_block}'
+        f'</div>'
+    )
 
 
 def _bell_countdown(now_et: datetime) -> str:
@@ -2016,18 +2077,24 @@ def render_premarket_strips(snap: Snapshot) -> str:
         + group("Crypto", snap.premarket_crypto)
         + '</div>'
     )
-    strip_b = ""
-    if snap.overnight_global:
-        tiles = "".join(_pm_tile(q) for q in snap.overnight_global)
-        strip_b = (
-            f'<div class="premarket-bar" id="overnight">'
-            f'<h2>Overnight Global'
-            f'<span style="font-weight:400;text-transform:none;font-size:11px;color:var(--text-faint);margin-left:10px">'
-            f'Asia &amp; Europe</span></h2>'
-            f'<div class="pm-grid">{tiles}</div>'
-            f'</div>'
-        )
-    return strip_a + strip_b
+    return strip_a
+
+
+def render_global_block(snap: Snapshot) -> str:
+    """Render global equity indices as a compact tile grid for the Global Markets section.
+
+    Prefers overnight_global (fetched at pre-market time, most recent) and falls back
+    to global_indices (prior-session close).
+    """
+    quotes = snap.overnight_global or snap.global_indices
+    if not quotes:
+        return '<p class="meta" style="color:var(--text-faint);padding:8px 0">No global market data available.</p>'
+    ts = ""
+    if snap.premarket_fetched_at:
+        ts = datetime.fromisoformat(snap.premarket_fetched_at).strftime("%-I:%M %p ET")
+    sub = f'<div class="pm-section-label" style="margin-top:0">Asia &amp; Europe' + (f' · {ts}' if ts else '') + '</div>'
+    tiles = "".join(_pm_tile(q) for q in quotes)
+    return f'{sub}<div class="pm-grid">{tiles}</div>'
 
 
 def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
@@ -2080,6 +2147,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         tickers_to_watch_block=render_tickers_to_watch(ai),
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
+        global_block=render_global_block(snap),
     )
     return html
 
