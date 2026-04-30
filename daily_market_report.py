@@ -1053,14 +1053,14 @@ h2 {{
 .briefing-close:hover {{ color: var(--text); border-color: var(--text-dim); }}
 .exec-bar {{
   padding: 14px 20px; border-bottom: 1px solid var(--border);
-  background: #0a1a10;
+  background: var(--bg-panel-2);
 }}
 .exec-bar .exec-label {{
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--accent); font-weight: 600; margin-bottom: 8px;
+  color: var(--text-dim); font-weight: 600; margin-bottom: 8px;
 }}
 .exec-bar ol {{ margin: 0; padding-left: 18px; }}
-.exec-bar li {{ color: #b8e8cc; font-size: 13px; line-height: 1.55; margin: 5px 0; }}
+.exec-bar li {{ color: var(--text); font-size: 13px; line-height: 1.55; margin: 5px 0; }}
 .briefing-section {{ padding: 16px 20px; border-bottom: 1px solid var(--border); }}
 .briefing-section:last-child {{ border-bottom: none; }}
 .briefing-section .bs-label {{
@@ -1224,7 +1224,7 @@ a {{ color: #8ab4f8; }}
 .briefing-inline-head {{
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   padding: 12px 20px; border-bottom: 1px solid var(--border);
-  background: linear-gradient(90deg, #081a10, #0b0d12);
+  background: var(--bg-panel-2);
 }}
 .bi-title {{ font-weight: 700; color: var(--accent); font-size: 14px; letter-spacing: .01em; }}
 .bi-source {{ color: var(--text-faint); font-size: 11px; }}
@@ -1626,12 +1626,18 @@ def _b_exec_summary(snap: Snapshot) -> list[str]:
     idx = {q.symbol: q for q in snap.indices}
     sp, dji, ixic, vix = idx.get("^GSPC"), idx.get("^DJI"), idx.get("^IXIC"), idx.get("^VIX")
     rut = idx.get("^RUT")
-    chips = []
-    for q, label in [(sp, "S&P"), (dji, "Dow"), (ixic, "Nasdaq"), (rut, "R2K"), (vix, "VIX")]:
+
+    # Plain-text index summary (chips are rendered separately above the bullet list)
+    idx_parts = []
+    for q, label in [(sp, "S&P 500"), (dji, "Dow"), (ixic, "Nasdaq"), (rut, "Russell 2K")]:
         if q:
-            chips.append(_index_chip(label, q.change_pct, q.price))
-    if chips:
-        bullets.append("".join(chips))
+            sign = "+" if q.change_pct >= 0 else ""
+            idx_parts.append(f"{label} {sign}{q.change_pct:.2f}%")
+    if vix:
+        sign = "+" if vix.change_pct >= 0 else ""
+        idx_parts.append(f"VIX {sign}{vix.change_pct:.2f}% to {vix.price:.2f}")
+    if idx_parts:
+        bullets.append(" · ".join(idx_parts))
 
     if snap.gainers and snap.losers:
         g, l = snap.gainers[0].quote, snap.losers[0].quote
@@ -1874,8 +1880,155 @@ def _b_risks(snap: Snapshot) -> str:
     )
 
 
+def _b_session_narrative(snap: Snapshot) -> str:
+    """2-3 sentence plain-English summary of yesterday's session."""
+    idx = {q.symbol: q for q in snap.indices}
+    sp  = idx.get("^GSPC")
+    dji = idx.get("^DJI")
+    ixic = idx.get("^IXIC")
+    vix = idx.get("^VIX")
+    sentences: list[str] = []
+    if sp:
+        dir_ = "gained" if sp.change_pct > 0 else ("lost" if sp.change_pct < 0 else "closed flat at")
+        if sp.change_pct != 0:
+            sentences.append(
+                f"The S&P 500 {dir_} {abs(sp.change_pct):.2f}% to {sp.price:,.2f}"
+                + (f", while the Nasdaq {'+' if (ixic and ixic.change_pct >= 0) else ''}{ixic.change_pct:.2f}% and Dow {'+' if (dji and dji.change_pct >= 0) else ''}{dji.change_pct:.2f}%." if ixic and dji else ".")
+            )
+    if snap.gainers and snap.losers:
+        g, l = snap.gainers[0].quote, snap.losers[0].quote
+        news_g = snap.gainers[0].news[0].title[:60] if snap.gainers[0].news else ""
+        sentences.append(
+            f"Top mover: {g.symbol} +{g.change_pct:.1f}% to {fmt_usd(g.price)}"
+            + (f" ({news_g})" if news_g else "")
+            + f". Largest decline: {l.symbol} {l.change_pct:.1f}% to {fmt_usd(l.price)}."
+        )
+    crude = next((q for q in snap.macro if "Crude" in q.name), None)
+    tnx   = next((q for q in snap.macro if "10Y"   in q.name), None)
+    if crude or tnx:
+        parts = []
+        if crude: parts.append(f"WTI crude {'+' if crude.change_pct >= 0 else ''}{crude.change_pct:.2f}% to {fmt_usd(crude.price)}")
+        if tnx:   parts.append(f"10Y yield {tnx.price:.2f}%")
+        if vix:   parts.append(f"VIX {'+' if vix.change_pct >= 0 else ''}{vix.change_pct:.2f}% to {vix.price:.2f}")
+        sentences.append(" · ".join(parts) + ".")
+    if not sentences:
+        return ""
+    return (
+        '<div class="briefing-section">'
+        '<div class="bs-label">Yesterday\'s Session</div>'
+        f'<p>{escape_html(" ".join(sentences))}</p>'
+        '</div>'
+    )
+
+
+def _b_tickers_prediction(snap: Snapshot) -> str:
+    """Data-driven tickers to watch with directional predictions for today."""
+    picks: list[dict] = []
+    seen: set[str] = set()
+
+    def add(ticker: str, bias: str, rationale: str) -> None:
+        if ticker and ticker not in seen and len(picks) < 8:
+            seen.add(ticker)
+            picks.append({"ticker": ticker, "bias": bias, "rationale": rationale})
+
+    # 1. Earnings reporters today — highest-priority catalysts
+    for e in snap.earnings_today[:4]:
+        sym = e.symbol_or_event
+        if sym and sym.isalpha() and len(sym) <= 5:
+            detail = f" (EPS est: {e.extra})" if e.extra else ""
+            add(sym, "neutral",
+                f"Reporting {e.time or 'today'}{detail}. Earnings gap risk in both directions — watch for a beat or miss at open.")
+
+    # 2. Yesterday's biggest gainer — continuation or fade watch
+    if snap.gainers:
+        g = snap.gainers[0].quote
+        if abs(g.change_pct) > 4:
+            add(g.symbol, "bullish",
+                f"Led gainers yesterday at +{g.change_pct:.1f}% to {fmt_usd(g.price)}. Watch for momentum continuation above yesterday's close.")
+
+    # 3. Yesterday's biggest loser — dead-cat bounce or continued selling
+    if snap.losers:
+        l = snap.losers[0].quote
+        if abs(l.change_pct) > 4:
+            add(l.symbol, "bearish",
+                f"Led losers yesterday at {l.change_pct:.1f}% to {fmt_usd(l.price)}. High-volume selloffs often see follow-through — watch for bounce or continuation.")
+
+    # 4. Crypto proxy if BTC moved significantly
+    btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
+    if btc and abs(btc.change_pct) > 3:
+        bias = "bullish" if btc.change_pct > 0 else "bearish"
+        proxy = next((m for m in snap.most_active if m.quote.symbol in ("COIN","MSTR","MARA","RIOT","HOOD")), None)
+        if proxy:
+            add(proxy.quote.symbol, bias,
+                f"BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.1f}% overnight — crypto equities likely to follow. {proxy.quote.symbol} is the highest-volume proxy.")
+
+    # 5. Fill remaining slots from most-active (high interest = high intraday range)
+    for m in snap.most_active:
+        bias = "bullish" if m.quote.change_pct > 0.5 else ("bearish" if m.quote.change_pct < -0.5 else "neutral")
+        vol_str = fmt_usd(m.quote.dollar_volume) if m.quote.dollar_volume else "high volume"
+        add(m.quote.symbol, bias,
+            f"Most active yesterday ({vol_str}) — elevated institutional interest typically carries into the next session.")
+
+    if not picks:
+        return ""
+
+    bias_color = {"bullish": "var(--green)", "bearish": "var(--red)", "neutral": "var(--text-dim)"}
+    bias_arrow = {"bullish": "▲", "bearish": "▼", "neutral": "—"}
+    cards = []
+    for p in picks:
+        bc = bias_color.get(p["bias"], "var(--text-dim)")
+        ba = bias_arrow.get(p["bias"], "—")
+        cards.append(
+            f'<div class="b-watch-item">'
+            f'<div class="sym">{escape_html(p["ticker"])} '
+            f'<span style="color:{bc};font-size:11px;font-weight:600">{ba} {p["bias"].title()}</span></div>'
+            f'<div class="why">{escape_html(p["rationale"])}</div>'
+            f'</div>'
+        )
+    return (
+        '<div class="briefing-watch">'
+        '<div class="bs-label">Tickers to Watch · Today\'s Predictions</div>'
+        f'<div class="b-watch-grid">{"".join(cards)}</div>'
+        '</div>'
+    )
+
+
+def _b_coming_day(snap: Snapshot) -> str:
+    """Brief synopsis of what to watch in the coming trading session."""
+    lines: list[str] = []
+
+    sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name or "Fut" in q.name), None)
+    if sp_fut:
+        dir_ = "pointing higher" if sp_fut.change_pct > 0.1 else ("pointing lower" if sp_fut.change_pct < -0.1 else "flat")
+        lines.append(f"S&P futures are {dir_} pre-market ({sp_fut.change_pct:+.2f}%), setting the early directional bias.")
+
+    if snap.earnings_today:
+        tickers = [e.symbol_or_event for e in snap.earnings_today[:6] if e.symbol_or_event]
+        n = len(snap.earnings_today)
+        lines.append(f"{n} companies report today — key names: {', '.join(tickers[:5])}{'…' if n > 5 else ''}. Expect elevated volatility around open and post-market.")
+
+    if snap.econ_events_today:
+        evts = [e.description for e in snap.econ_events_today[:3] if e.description]
+        if evts:
+            lines.append(f"Economic events to watch: {'; '.join(evts)}.")
+
+    btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
+    if btc and abs(btc.change_pct) > 2:
+        lines.append(f"Crypto: BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.2f}% — monitor for crypto-equity spillover into COIN, MSTR, and related names.")
+
+    if not lines:
+        lines.append("No major pre-market catalysts identified. Monitor the open for directional clues and watch for news flow around major sector movers.")
+
+    return (
+        '<div class="briefing-section setup">'
+        '<div class="bs-label">Coming Trading Day</div>'
+        f'<p>{escape_html(" ".join(lines))}</p>'
+        '</div>'
+    )
+
+
 def _build_data_briefing(snap: Snapshot) -> str:
-    """Build complete briefing modal content from snapshot data — no AI API needed."""
+    """Build complete briefing expander content from snapshot data — no AI API needed."""
     exec_bullets = _b_exec_summary(snap)
     exec_html = ""
     if exec_bullets:
@@ -1886,7 +2039,17 @@ def _build_data_briefing(snap: Snapshot) -> str:
             f'<ol>{lis}</ol>'
             '</div>'
         )
-    return exec_html + _b_us_markets(snap) + _b_global_markets(snap) + _b_crypto(snap) + _b_setup(snap) + _b_risks(snap)
+    return (
+        exec_html
+        + _b_session_narrative(snap)
+        + _b_us_markets(snap)
+        + _b_global_markets(snap)
+        + _b_crypto(snap)
+        + _b_tickers_prediction(snap)
+        + _b_coming_day(snap)
+        + _b_setup(snap)
+        + _b_risks(snap)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -2080,6 +2243,19 @@ def render_premarket_strips(snap: Snapshot) -> str:
     return strip_a
 
 
+def render_data_tickers_block(snap: Snapshot) -> str:
+    """Standalone tickers-to-watch section for the main page (data-driven, no AI needed)."""
+    inner = _b_tickers_prediction(snap)
+    if not inner:
+        return ""
+    coming = _b_coming_day(snap)
+    return (
+        f'<h2>Tickers to Watch &amp; Predictions</h2>'
+        + coming
+        + inner
+    )
+
+
 def render_global_block(snap: Snapshot) -> str:
     """Render global equity indices as a compact tile grid for the Global Markets section.
 
@@ -2144,7 +2320,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         today_outlook_block=render_today_outlook(ai),
         earnings_table=render_calendar_table(snap.earnings_today, "No earnings reporting today."),
         econ_table=render_calendar_table(snap.econ_events_today, "No major economic events today."),
-        tickers_to_watch_block=render_tickers_to_watch(ai),
+        tickers_to_watch_block=render_tickers_to_watch(ai) or render_data_tickers_block(snap),
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
         global_block=render_global_block(snap),
@@ -2272,7 +2448,15 @@ def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEnt
 def render_scorecard(snap: Snapshot) -> str:
     """Render the prediction scorecard table."""
     if not snap.scorecard:
-        return ""
+        return (
+            '<h2 id="scorecard">Yesterday\'s Calls — Scorecard</h2>'
+            '<div class="scorecard-wrap">'
+            '<div class="scorecard-head">'
+            '<h3>Tickers to Watch · Graded</h3>'
+            '<div class="scorecard-stats" style="color:var(--text-faint);font-size:12px">'
+            'No prior predictions to grade — scorecard populates after the first full trading day.</div>'
+            '</div></div>'
+        )
     hits   = sum(1 for e in snap.scorecard if e.verdict == "HIT")
     misses = sum(1 for e in snap.scorecard if e.verdict == "MISS")
     flats  = sum(1 for e in snap.scorecard if e.verdict == "FLAT")
