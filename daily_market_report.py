@@ -93,6 +93,14 @@ GLOBAL_INDICES = {
     "^BSESN": "Sensex (India)",
 }
 
+PREMARKET_US     = {"ES=F": "S&P Fut", "NQ=F": "Nasdaq Fut", "YM=F": "Dow Fut", "RTY=F": "Russell Fut"}
+PREMARKET_MACRO  = {"DX-Y.NYB": "DXY", "^TNX": "10Y Yield", "GC=F": "Gold", "CL=F": "WTI"}
+PREMARKET_CRYPTO = {"BTC-USD": "Bitcoin", "ETH-USD": "Ethereum", "SOL-USD": "Solana", "XRP-USD": "XRP"}
+OVERNIGHT_GLOBAL = {
+    "^N225": "Nikkei", "^HSI": "Hang Seng", "^KS11": "KOSPI",
+    "^FTSE": "FTSE 100", "^GDAXI": "DAX", "^STOXX50E": "STOXX 50",
+}
+
 CRYPTO_TOP_N = 20  # top coins by market cap on CoinGecko
 MOVERS_COUNT = 10  # gainers/losers/active per category
 NEWS_PER_TICKER = 3
@@ -210,6 +218,11 @@ class Snapshot:
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    premarket_us: list[Quote] = field(default_factory=list)
+    premarket_macro: list[Quote] = field(default_factory=list)
+    premarket_crypto: list[Quote] = field(default_factory=list)
+    overnight_global: list[Quote] = field(default_factory=list)
+    premarket_fetched_at: str = ""
 
 
 # ------------------------------------------------------------------------
@@ -832,6 +845,21 @@ def run_ai_synthesis(snap: Snapshot) -> dict:
         return {"_raw": text}
 
 
+def fetch_premarket(snap: Snapshot) -> None:
+    """Fetch live pre-market / overnight quotes and populate snap premarket fields."""
+    snap.premarket_fetched_at = datetime.now(ET).isoformat(timespec="seconds")
+    for attr, symbols in [
+        ("premarket_us",     PREMARKET_US),
+        ("premarket_macro",  PREMARKET_MACRO),
+        ("premarket_crypto", PREMARKET_CRYPTO),
+        ("overnight_global", OVERNIGHT_GLOBAL),
+    ]:
+        try:
+            setattr(snap, attr, fetch_quotes(symbols))
+        except Exception as e:
+            warn(f"fetch_premarket {attr}: {e}", snap)
+
+
 # ------------------------------------------------------------------------
 # HTML rendering
 # ------------------------------------------------------------------------
@@ -1084,6 +1112,13 @@ a {{ color: #8ab4f8; }}
 .refresh-btn .spin {{ font-size: 15px; line-height: 1; }}
 .refresh-btn.spinning .spin {{ display: inline-block; animation: spin .6s linear infinite; }}
 @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+.premarket-bar {{ margin-bottom:18px; }}
+.tile.compact {{ padding:10px 12px; }}
+.tile.compact .value {{ font-size:16px; }}
+.tile.compact .label {{ font-size:11px; }}
+.tile.compact .delta {{ font-size:12px; }}
+.pm-grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-bottom:10px; }}
+.pm-section-label {{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin:8px 0 4px; }}
 </style>
 </head>
 <body>
@@ -1106,6 +1141,8 @@ a {{ color: #8ab4f8; }}
 </header>
 
 {briefing_block}
+
+{premarket_block}
 
 <h2>Indices & Macro</h2>
 <div class="index-grid">
@@ -1828,6 +1865,71 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
 </script>"""
 
 
+def _bell_countdown(now_et: datetime) -> str:
+    """Return human string: 'Bell in Xh Ym', 'Market open', or 'After hours'."""
+    open_t = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    close_t = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    if now_et < open_t:
+        delta = open_t - now_et
+        h, rem = divmod(int(delta.total_seconds()), 3600)
+        m = rem // 60
+        return f"Bell in {h}h {m}m" if h else f"Bell in {m}m"
+    if now_et < close_t:
+        return "Market open"
+    return "After hours"
+
+
+def _pm_tile(q: Quote) -> str:
+    cls = cls_for(q.change_pct)
+    val = fmt_num(q.price) if q.price and q.price >= 10 else fmt_usd(q.price)
+    return (
+        f'<div class="tile compact">'
+        f'<div class="label">{escape_html(q.name)}</div>'
+        f'<div class="value num">{val}</div>'
+        f'<div class="delta num {cls}">{fmt_pct(q.change_pct)}</div>'
+        f'</div>'
+    )
+
+
+def render_premarket_strips(snap: Snapshot) -> str:
+    """Render the pre-market futures + overnight global strips."""
+    if not (snap.premarket_us or snap.overnight_global):
+        return ""
+    now_et = datetime.now(ET)
+    bell = _bell_countdown(now_et)
+    ts = (datetime.fromisoformat(snap.premarket_fetched_at).strftime("%I:%M %p ET")
+          if snap.premarket_fetched_at else "—")
+
+    def group(label: str, quotes: list[Quote]) -> str:
+        if not quotes:
+            return ""
+        return (f'<div class="pm-section-label">{escape_html(label)}</div>'
+                f'<div class="pm-grid">{"".join(_pm_tile(q) for q in quotes)}</div>')
+
+    strip_a = (
+        f'<div class="premarket-bar" id="premarket">'
+        f'<h2>Pre-Market'
+        f'<span style="font-weight:400;text-transform:none;font-size:11px;color:var(--text-faint);margin-left:10px">'
+        f'{ts} · {bell}</span></h2>'
+        + group("US Futures", snap.premarket_us)
+        + group("Macro", snap.premarket_macro)
+        + group("Crypto", snap.premarket_crypto)
+        + '</div>'
+    )
+    strip_b = ""
+    if snap.overnight_global:
+        tiles = "".join(_pm_tile(q) for q in snap.overnight_global)
+        strip_b = (
+            f'<div class="premarket-bar" id="overnight">'
+            f'<h2>Overnight Global'
+            f'<span style="font-weight:400;text-transform:none;font-size:11px;color:var(--text-faint);margin-left:10px">'
+            f'Asia &amp; Europe</span></h2>'
+            f'<div class="pm-grid">{tiles}</div>'
+            f'</div>'
+        )
+    return strip_a + strip_b
+
+
 def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
     prior_date = snap.prior_session_date
     prior_dt = datetime.fromisoformat(snap.prior_session_date)
@@ -1860,6 +1962,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         warnings_html=warnings_html,
         index_tiles=index_tiles,
         briefing_block=render_briefing_block(briefing, snap),
+        premarket_block=render_premarket_strips(snap),
         ai_narrative_block=render_narrative(ai),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
@@ -1879,7 +1982,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
 # ------------------------------------------------------------------------
 # Main orchestration
 # ------------------------------------------------------------------------
-def build_snapshot(no_ai: bool = False) -> Snapshot:
+def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     snap = Snapshot(
         prior_session_date=get_prior_trading_day(),
         generated_at=datetime.now(ET).isoformat(timespec="seconds"),
@@ -1946,6 +2049,13 @@ def build_snapshot(no_ai: bool = False) -> Snapshot:
     snap.crypto_gainers = [MoverWithNews(quote=q) for q in sorted_c[:5]]
     snap.crypto_losers = [MoverWithNews(quote=q) for q in sorted_c[-5:][::-1]]
 
+    if not no_premarket:
+        log("Fetching pre-market & overnight data…")
+        try:
+            fetch_premarket(snap)
+        except Exception as e:
+            warn(f"pre-market fetch failed: {e}", snap)
+
     today_iso = datetime.now(ET).date().isoformat()
     log(f"Fetching earnings calendar for {today_iso}…")
     snap.earnings_today = fetch_earnings_calendar(today_iso)
@@ -2010,6 +2120,11 @@ def load_cache() -> Snapshot | None:
             econ_events_today=[ev_from(x) for x in raw.get("econ_events_today", [])],
             ai=raw.get("ai", {}),
             warnings=raw.get("warnings", []),
+            premarket_us=[q_from(x) for x in raw.get("premarket_us", [])],
+            premarket_macro=[q_from(x) for x in raw.get("premarket_macro", [])],
+            premarket_crypto=[q_from(x) for x in raw.get("premarket_crypto", [])],
+            overnight_global=[q_from(x) for x in raw.get("overnight_global", [])],
+            premarket_fetched_at=raw.get("premarket_fetched_at", ""),
         )
         return snap
     except Exception as e:
@@ -2027,6 +2142,7 @@ def parse_args():
         "--briefing-json", type=str, default=None, metavar="PATH",
         help="Path to a briefing JSON file to embed in the report.",
     )
+    p.add_argument("--no-premarket", action="store_true", help="Skip pre-market / overnight fetch.")
     return p.parse_args()
 
 
@@ -2055,7 +2171,7 @@ def main():
             print("No cached snapshot found. Run without --offline first.", file=sys.stderr)
             sys.exit(2)
     else:
-        snap = build_snapshot(no_ai=args.no_ai)
+        snap = build_snapshot(no_ai=args.no_ai, no_premarket=args.no_premarket)
         save_cache(snap)
 
     briefing = load_briefing_json(args.briefing_json, snap_date=snap.prior_session_date)
