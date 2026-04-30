@@ -1,6 +1,8 @@
 name: Daily Market Report
 
 on:
+  push:
+    branches: [main]   # deploy immediately on every push to main
   schedule:
     # Every 5 min during trading hours 9:25 AM–4:05 PM ET (13:25–20:05 UTC) Mon–Fri
     # GitHub minimum cron interval is 5 minutes
