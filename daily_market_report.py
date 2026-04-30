@@ -1285,7 +1285,7 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
   {index_tiles}
 </div>
 
-{ai_narrative_block}
+{analysis_block}
 
 {sector_heatmap_block}
 
@@ -1343,7 +1343,7 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
 <!-- ===== TODAY'S SETUP ===== -->
 <div class="market-group" id="setup">
 <div class="market-group-header setup">Today&#39;s Setup · {today_human}</div>
-{today_outlook_block}
+{outlook_block}
 {tickers_to_watch_block}
 {scorecard_block}
 {risk_block}
@@ -2053,6 +2053,374 @@ def _build_data_briefing(snap: Snapshot) -> str:
 
 
 # --------------------------------------------------------------------------
+# Standalone analysis & outlook blocks (always visible, no AI required)
+# --------------------------------------------------------------------------
+
+_MACRO_KEYWORDS = {
+    "tariff", "trade war", "trade deal", "sanction", "fed ", "federal reserve",
+    "fomc", "rate hike", "rate cut", "interest rate", "inflation", "cpi", "pce",
+    "gdp", "recession", "war", "conflict", "geopolit", "china", "russia",
+    "ukraine", "iran", "opec", "oil supply", "oil price", "congress", "debt ceiling",
+    "treasury", "powell", "yellen", "jobs report", "nonfarm", "unemployment",
+    "election", "earnings miss", "guidance cut", "layoff", "bankruptcy",
+}
+
+
+def _build_session_text(snap: Snapshot) -> str:
+    """Multi-sentence session narrative built from index + sector + mover data."""
+    idx = {q.symbol: q for q in snap.indices}
+    sp   = idx.get("^GSPC")
+    dji  = idx.get("^DJI")
+    ixic = idx.get("^IXIC")
+    rut  = idx.get("^RUT")
+    vix  = idx.get("^VIX")
+    if not sp:
+        return ""
+
+    sentences: list[str] = []
+
+    # Overall market tone
+    dir_  = "advanced" if sp.change_pct > 0 else "declined"
+    adv   = "sharply" if abs(sp.change_pct) > 1.5 else ("modestly" if abs(sp.change_pct) > 0.5 else "marginally")
+    s = f"Equities {adv} {dir_} in the prior session."
+    pieces = []
+    if sp:   pieces.append(f"S&P 500 {'gained' if sp.change_pct > 0 else 'lost'} {abs(sp.change_pct):.2f}% to {sp.price:,.2f}")
+    if dji:  pieces.append(f"Dow {'+' if dji.change_pct >= 0 else ''}{dji.change_pct:.2f}%")
+    if ixic: pieces.append(f"Nasdaq {'+'  if ixic.change_pct >= 0 else ''}{ixic.change_pct:.2f}%")
+    if rut:  pieces.append(f"Russell 2000 {'+' if rut.change_pct >= 0 else ''}{rut.change_pct:.2f}%")
+    if pieces:
+        s += f" {', '.join(pieces)}."
+    sentences.append(s)
+
+    # VIX
+    if vix:
+        if vix.change_pct > 5:
+            sentences.append(
+                f"The VIX surged {vix.change_pct:.1f}% to {vix.price:.2f}, signaling elevated anxiety in options markets "
+                f"and increased hedging demand — a level above 20 typically indicates investor unease about near-term tail risk."
+            )
+        elif vix.change_pct < -5:
+            sentences.append(
+                f"The VIX compressed {abs(vix.change_pct):.1f}% to {vix.price:.2f}, reflecting growing calm and reduced demand "
+                f"for protective options — a constructive backdrop for risk assets."
+            )
+
+    # Sector leadership
+    if snap.sectors:
+        leader = snap.sectors[0]
+        lagger = snap.sectors[-1]
+        sentences.append(
+            f"Sector leadership was concentrated in {leader.name} ({fmt_pct(leader.pct_1d)}), "
+            f"while {lagger.name} lagged at {fmt_pct(lagger.pct_1d)}. "
+            f"This rotation "
+            + ("signals risk-on appetite and growth preference." if leader.name in ("Technology","Consumer Discretionary","Communication Services") else
+               "reflects defensive positioning." if leader.name in ("Utilities","Consumer Staples","Real Estate") else
+               "reflects sector-specific catalysts rather than a broad macro theme.")
+        )
+
+    return " ".join(sentences)
+
+
+def _build_movers_reasoning(snap: Snapshot) -> str:
+    """Paragraph explaining why the biggest gainers and losers moved, using news headlines."""
+    parts: list[str] = []
+
+    # Gainers
+    gain_parts: list[str] = []
+    for m in snap.gainers[:3]:
+        q = m.quote
+        headline = m.news[0].title if m.news else None
+        s = f"{q.symbol} surged {q.change_pct:+.1f}% to {fmt_usd(q.price)}"
+        s += f" — {headline}" if headline else " on heavy volume"
+        gain_parts.append(s + ".")
+    if gain_parts:
+        parts.append("Top gainers: " + " ".join(gain_parts))
+
+    # Losers
+    loss_parts: list[str] = []
+    for m in snap.losers[:3]:
+        q = m.quote
+        headline = m.news[0].title if m.news else None
+        s = f"{q.symbol} fell {q.change_pct:.1f}% to {fmt_usd(q.price)}"
+        s += f" — {headline}" if headline else " on elevated volume"
+        loss_parts.append(s + ".")
+    if loss_parts:
+        parts.append("Key declines: " + " ".join(loss_parts))
+
+    # Most active (where move > 2%)
+    active_notable = [m for m in snap.most_active if abs(m.quote.change_pct) > 2][:2]
+    if active_notable:
+        act_parts = []
+        for m in active_notable:
+            q = m.quote
+            headline = m.news[0].title if m.news else None
+            s = f"{q.symbol} was among the most active ({fmt_usd(q.dollar_volume) if q.dollar_volume else 'high vol'}) " \
+                f"with a {q.change_pct:+.1f}% move"
+            s += f" — {headline}" if headline else ""
+            act_parts.append(s + ".")
+        parts.append(" ".join(act_parts))
+
+    return "\n\n".join(parts)
+
+
+def _build_macro_world_text(snap: Snapshot) -> str:
+    """Paragraph on macro moves and world news inferred from data and news headlines."""
+    sentences: list[str] = []
+
+    crude  = next((q for q in snap.macro if "Crude"   in q.name), None)
+    gold   = next((q for q in snap.macro if "Gold"    in q.name), None)
+    tnx    = next((q for q in snap.macro if "10Y"     in q.name), None)
+    dxy    = next((q for q in snap.macro if "Dollar"  in q.name), None)
+    silver = next((q for q in snap.macro if "Silver"  in q.name), None)
+    ng     = next((q for q in snap.macro if "Natural" in q.name), None)
+
+    if crude:
+        if abs(crude.change_pct) > 3:
+            context = ("suggesting significant geopolitical disruption, supply concerns, or OPEC action"
+                       if crude.change_pct > 0 else
+                       "reflecting demand concerns, a supply glut, or easing geopolitical risk")
+            sentences.append(
+                f"WTI crude oil moved sharply {crude.change_pct:+.2f}% to {fmt_usd(crude.price)}, {context}. "
+                f"A move of this magnitude in oil typically has read-through effects on energy companies, "
+                f"airlines, consumer staples, and the broader inflation narrative."
+            )
+        elif abs(crude.change_pct) > 1:
+            sentences.append(f"Oil prices shifted {crude.change_pct:+.2f}% to {fmt_usd(crude.price)}.")
+
+    if gold and abs(gold.change_pct) > 0.5:
+        if gold.change_pct > 1.5:
+            sentences.append(
+                f"Gold rose {gold.change_pct:+.2f}% to {fmt_usd(gold.price)}, a classic safe-haven signal indicating "
+                f"investors are seeking protection from geopolitical risk, inflation, or currency instability. "
+                + ("The simultaneous crude surge reinforces a geopolitical read." if crude and crude.change_pct > 3 else "")
+            )
+        elif gold.change_pct < -1:
+            sentences.append(
+                f"Gold fell {gold.change_pct:.2f}% to {fmt_usd(gold.price)}, suggesting a risk-on shift "
+                f"with capital rotating away from defensive stores of value."
+            )
+        else:
+            sentences.append(f"Gold moved {gold.change_pct:+.2f}% to {fmt_usd(gold.price)}.")
+
+    if tnx:
+        if tnx.price > 4.5:
+            sentences.append(
+                f"The 10-year Treasury yield sits at {tnx.price:.2f}% — an elevated level that continues to compress "
+                f"valuations on growth stocks, widen mortgage spreads, and squeeze bank net interest margins. "
+                f"Any Fed commentary today on the rate path will be closely watched."
+            )
+        elif abs(tnx.change_pct) > 2:
+            dir_ = "rose" if tnx.change_pct > 0 else "fell"
+            implication = ("adding pressure to rate-sensitive equities such as REITs, utilities, and long-duration tech"
+                           if tnx.change_pct > 0 else
+                           "offering some relief to rate-sensitive names and growth stocks")
+            sentences.append(f"The 10-year yield {dir_} {tnx.change_pct:+.2f}% to {tnx.price:.2f}%, {implication}.")
+
+    if dxy and abs(dxy.change_pct) > 0.5:
+        dir_ = "strengthened" if dxy.change_pct > 0 else "weakened"
+        sentences.append(
+            f"The US Dollar Index {dir_} {dxy.change_pct:+.2f}% to {dxy.price:.2f} — "
+            + ("a stronger dollar puts pressure on multinationals' overseas earnings and commodities priced in USD."
+               if dxy.change_pct > 0 else
+               "a weaker dollar typically boosts commodity prices and benefits large-cap exporters.")
+        )
+
+    # Fed / FOMC events
+    fed_evts = [e for e in snap.econ_events_today if any(
+        kw in (e.description or "").upper()
+        for kw in ["FOMC", "FEDERAL RESERVE", "POWELL", "RATE DECISION", "FED MEETING"]
+    )]
+    if fed_evts:
+        sentences.append(
+            f"The Federal Reserve is on today's calendar ({fed_evts[0].description}). "
+            f"FOMC decisions and Powell press conferences are among the highest-volatility macro events — "
+            f"watch for language on the pace of rate cuts, inflation tolerance, and any mentions of employment conditions."
+        )
+
+    # Global weakness / strength as geopolitical proxy
+    if snap.global_indices:
+        weak   = [q for q in snap.global_indices if q.change_pct < -1.5]
+        strong = [q for q in snap.global_indices if q.change_pct >  1.5]
+        if weak:
+            names = ", ".join(q.name.split("(")[0].strip() for q in weak[:3])
+            sentences.append(
+                f"Notable weakness in global markets ({names}) may reflect risk-off sentiment, "
+                f"regional geopolitical concerns, or spillover from currency moves. "
+                f"Broad international declines often set a cautious tone for US pre-market futures."
+            )
+        elif strong:
+            names = ", ".join(q.name.split("(")[0].strip() for q in strong[:2])
+            sentences.append(
+                f"International markets posted gains ({names}), supporting a constructive global backdrop "
+                f"heading into the US session."
+            )
+
+    # World news extracted from mover headlines
+    world_headlines: list[str] = []
+    seen_keys: set[str] = set()
+    for mover_list in [snap.gainers, snap.losers, snap.most_active]:
+        for m in mover_list[:6]:
+            for n in m.news:
+                tl = n.title.lower()
+                if any(kw in tl for kw in _MACRO_KEYWORDS):
+                    key = tl[:45]
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        world_headlines.append(n.title)
+    if world_headlines:
+        sentences.append(
+            "Market-relevant headlines: "
+            + " | ".join(f'"{h}"' for h in world_headlines[:3])
+            + "."
+        )
+
+    return "\n\n".join(sentences)
+
+
+def _build_outlook_text(snap: Snapshot) -> str:
+    """Data-driven predictions paragraph for the coming session."""
+    parts: list[str] = []
+
+    sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name), None)
+    if sp_fut:
+        dir_  = "higher" if sp_fut.change_pct > 0.1 else ("lower" if sp_fut.change_pct < -0.1 else "flat")
+        conf  = ("signaling early buying interest from institutional participants"
+                 if sp_fut.change_pct > 0.4 else
+                 "suggesting caution ahead of the open" if sp_fut.change_pct < -0.4 else
+                 "offering no clear directional bias — watch the first 30 minutes for tone-setting")
+        parts.append(f"S&P 500 futures point {dir_} pre-market ({sp_fut.change_pct:+.2f}%), {conf}.")
+
+    if snap.earnings_today:
+        mega = [e for e in snap.earnings_today
+                if e.symbol_or_event in {"AAPL","MSFT","GOOGL","GOOG","AMZN","META","NVDA","TSLA","JPM","NFLX","AMD"}]
+        if mega:
+            names = ", ".join(e.symbol_or_event for e in mega[:5])
+            parts.append(
+                f"Mega-cap earnings from {names} will dominate today's tape. "
+                f"At the current market cap concentration, a collective miss or cautious guidance "
+                f"from these names can gap the S&P 500 down 1–2% at the open; a beat could do the opposite. "
+                f"Pay particular attention to forward guidance and AI capital expenditure commentary."
+            )
+        else:
+            n = len(snap.earnings_today)
+            tks = ", ".join(e.symbol_or_event for e in snap.earnings_today[:5] if e.symbol_or_event)
+            suffix = f" (+{n-5} more)" if n > 5 else ""
+            parts.append(
+                f"{n} companies report today — notable names: {tks}{suffix}. "
+                f"In the current market, guidance language and forward outlooks are moving stocks more "
+                f"than headline EPS beats or misses."
+            )
+
+    # Sector momentum prediction
+    if snap.sectors and len(snap.sectors) >= 2:
+        leader = snap.sectors[0]
+        lagger = snap.sectors[-1]
+        if abs(leader.pct_1d) > 0.8:
+            parts.append(
+                f"Sector momentum favors {leader.name} to continue leading "
+                f"(1D: {fmt_pct(leader.pct_1d)}, 1W: {fmt_pct(leader.pct_1w)}). "
+                f"Watch for potential rotation out of {lagger.name} ({fmt_pct(lagger.pct_1d)}) "
+                f"if risk sentiment improves intraday."
+            )
+
+    # Crypto read-through
+    btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
+    if btc:
+        if btc.change_pct > 3:
+            parts.append(
+                f"Bitcoin is up {btc.change_pct:.1f}%, adding a tailwind for crypto-adjacent equities "
+                f"(COIN, MSTR, MARA, RIOT) at today's open."
+            )
+        elif btc.change_pct < -3:
+            parts.append(
+                f"Bitcoin is down {abs(btc.change_pct):.1f}%, which typically carries headwinds for crypto equities. "
+                f"Watch COIN and MARA for gap-down risk at the open."
+            )
+
+    # Key risk to watch
+    vix = next((q for q in snap.indices if q.symbol == "^VIX"), None)
+    if vix and vix.price > 20:
+        parts.append(
+            f"With VIX at {vix.price:.2f}, options markets are pricing above-average volatility — "
+            f"keep position sizing in check and watch for intraday reversals."
+        )
+
+    return "\n\n".join(parts)
+
+
+def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
+    """
+    Always-visible section with 3 narrative cards:
+    1. Session recap (AI text if available, otherwise data-driven)
+    2. Key movers + reasoning from news headlines
+    3. Macro, world news & geopolitical context
+    """
+    cards: list[tuple[str, str]] = []
+
+    # Card 1 — Session recap
+    session_text = (briefing or {}).get("session_recap") or _build_session_text(snap)
+    if session_text:
+        cards.append(("Yesterday's Session — What Happened & Why", session_text))
+
+    # Card 2 — Mover reasoning (always data-driven for freshness)
+    movers_text = _build_movers_reasoning(snap)
+    if movers_text:
+        cards.append(("Key Movers — Gainers, Losers & the Reasons Behind the Moves", movers_text))
+
+    # Card 3 — Macro & world news
+    macro_text = _build_macro_world_text(snap)
+    if macro_text:
+        cards.append(("Macro & Global Context — World Events Affecting Markets", macro_text))
+
+    if not cards:
+        return ""
+
+    html = '<h2 id="analysis">Market Analysis</h2>'
+    for title, text in cards:
+        paragraphs = "".join(
+            f"<p>{escape_html(s.strip())}</p>"
+            for s in text.split("\n\n") if s.strip()
+        )
+        html += f'<div class="narr"><div class="label">{escape_html(title)}</div>{paragraphs}</div>'
+    return html
+
+
+def render_outlook_block(snap: Snapshot, briefing: dict | None = None) -> str:
+    """
+    Always-visible predictions section: today's setup + directional predictions.
+    Uses AI today_setup text when available; falls back to data-driven.
+    """
+    # Main outlook text
+    outlook_text = (briefing or {}).get("today_setup") or _build_outlook_text(snap)
+
+    # Risk notes (AI if available, otherwise data-driven)
+    risk_items = (briefing or {}).get("risk_notes", [])
+    if risk_items and isinstance(risk_items, list):
+        risk_text = "\n\n".join(risk_items)
+    elif risk_items:
+        risk_text = str(risk_items)
+    else:
+        risk_text = ""
+
+    html = ""
+    if outlook_text:
+        paragraphs = "".join(
+            f"<p>{escape_html(s.strip())}</p>"
+            for s in outlook_text.split("\n\n") if s.strip()
+        )
+        html += f'<div class="narr"><div class="label">Today&#39;s Outlook &amp; Predictions</div>{paragraphs}</div>'
+
+    if risk_text:
+        paragraphs = "".join(
+            f"<p>{escape_html(s.strip())}</p>"
+            for s in risk_text.split("\n\n") if s.strip()
+        )
+        html += f'<div class="narr risk"><div class="label">Key Risks to Watch</div>{paragraphs}</div>'
+
+    return html
+
+
+# --------------------------------------------------------------------------
 
 def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -> str:
     """Render the Morning Briefing as an inline card at the top of the page.
@@ -2311,13 +2679,13 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         sentiment_block=render_sentiment_strip(snap),
         scorecard_block=render_scorecard(snap),
         earnings_reactions_block=render_earnings_reactions(snap),
-        ai_narrative_block=render_narrative(ai),
+        analysis_block=render_analysis_block(snap, briefing),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
         active_rows=render_movers_block(snap.most_active, why_a, "No active data."),
         crypto_rows=render_movers_block(crypto_list, why_c, "No crypto data."),
         crypto_top_n=CRYPTO_TOP_N,
-        today_outlook_block=render_today_outlook(ai),
+        outlook_block=render_outlook_block(snap, briefing),
         earnings_table=render_calendar_table(snap.earnings_today, "No earnings reporting today."),
         econ_table=render_calendar_table(snap.econ_events_today, "No major economic events today."),
         tickers_to_watch_block=render_tickers_to_watch(ai) or render_data_tickers_block(snap),
