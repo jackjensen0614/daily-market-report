@@ -224,8 +224,9 @@ class CalendarEvent:
     time: str
     symbol_or_event: str
     description: str
-    extra: str = ""  # e.g. EPS estimate, prior value
-    url: str = ""   # company website (earnings only)
+    extra: str = ""        # e.g. EPS estimate, prior value
+    url: str = ""          # company website (earnings only)
+    market_cap: float = 0.0  # numeric market cap for sorting (earnings only)
 
 
 @dataclass
@@ -662,18 +663,21 @@ def fetch_earnings_calendar(date_str: str) -> list[CalendarEvent]:
         except Exception as e:
             log(f"  skipping earnings row: {e}")
 
-    def _get_url(sym: str) -> str:
+    def _get_info(sym: str) -> tuple[str, float]:
         try:
-            return yf.Ticker(sym).info.get("website", "") or ""
+            info = yf.Ticker(sym).info
+            website = info.get("website", "") or ""
+            mcap = float(info.get("marketCap", 0) or 0)
+            return website, mcap
         except Exception:
-            return ""
+            return "", 0.0
 
     syms = [e.symbol_or_event for e in out if e.symbol_or_event]
     if syms:
         with ThreadPoolExecutor(max_workers=8) as pool:
-            url_map = dict(zip(syms, pool.map(_get_url, syms)))
+            info_map = dict(zip(syms, pool.map(_get_info, syms)))
         for e in out:
-            e.url = url_map.get(e.symbol_or_event, "")
+            e.url, e.market_cap = info_map.get(e.symbol_or_event, ("", 0.0))
 
     return out
 
@@ -1366,49 +1370,52 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
   50%       {{ opacity: .5; box-shadow: 0 0 2px #22c55e; }}
 }}
 
-/* ── Collapsible earnings ── */
-details.earnings-details {{ margin: 32px 0 0; }}
-details.earnings-details > summary {{
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #60a5fa;
-  padding: 10px 14px;
-  border-bottom: 2px solid #3b82f6;
-  background: var(--bg-panel);
-  border-radius: 6px 6px 0 0;
-  user-select: none;
-  transition: background .15s, color .15s;
+/* ── Earnings section ── */
+.earnings-section {{ margin: 28px 0 0; }}
+.earnings-section-label {{
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-dim);
+  padding: 0 0 10px; border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
 }}
-details.earnings-details > summary::-webkit-details-marker {{ display: none; }}
-details.earnings-details > summary:hover {{ background: var(--bg-panel-2); color: #93c5fd; }}
-details.earnings-details > summary::before {{
-  content: '▶';
-  font-size: 8px;
-  color: #60a5fa;
-  display: inline-block;
-  transition: transform .2s;
-  flex-shrink: 0;
+.earnings-featured {{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px; margin-bottom: 14px;
 }}
-details.earnings-details[open] > summary::before {{ transform: rotate(90deg); }}
-details.earnings-details > summary::after {{
-  content: 'click to expand';
-  margin-left: auto;
-  font-size: 10px;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--text-faint);
-  opacity: .7;
+.ef-card {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 13px;
+  border-left: 3px solid var(--border);
 }}
-details.earnings-details[open] > summary::after {{ content: 'click to collapse'; }}
-details.earnings-details > .cols {{ margin-top: 16px; }}
+.ef-card.bmo {{ border-left-color: #60a5fa; }}
+.ef-card.amc {{ border-left-color: #a78bfa; }}
+.ef-sym  {{ font-size: 14px; font-weight: 700; color: var(--text); }}
+.ef-name {{ font-size: 11px; color: var(--text-dim); margin: 2px 0 5px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.ef-name a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
+.ef-meta {{ display: flex; gap: 6px; flex-wrap: wrap; }}
+.ef-badge {{
+  font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+  background: var(--bg-panel-2); color: var(--text-faint);
+}}
+.ef-badge.bmo {{ color: #60a5fa; background: #1e3a5f44; }}
+.ef-badge.amc {{ color: #a78bfa; background: #3b1f6044; }}
+
+details.earnings-extra {{ margin-top: 4px; }}
+details.earnings-extra > summary {{
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--text-faint);
+  padding: 8px 0; user-select: none; transition: color .15s;
+}}
+details.earnings-extra > summary::-webkit-details-marker {{ display: none; }}
+details.earnings-extra > summary:hover {{ color: var(--text-dim); }}
+details.earnings-extra > summary::before {{
+  content: '▶'; font-size: 8px; display: inline-block; transition: transform .2s;
+}}
+details.earnings-extra[open] > summary::before {{ transform: rotate(90deg); }}
+details.earnings-extra > .cols {{ margin-top: 12px; }}
 
 /* ── World news section ── */
 details.world-news-details {{ margin: 28px 0 0; }}
@@ -1553,6 +1560,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
   <a href="#briefing">Briefing</a>
   <a href="#predictions">Predictions</a>
   <a href="#us-markets">US Markets</a>
+  <a href="#earnings-cal">Earnings</a>
   <a href="#global-markets">Global</a>
   <a href="#crypto-section">Crypto</a>
   <a href="#scorecard">Scorecard</a>
@@ -1637,19 +1645,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 
 {world_news_block}
 
-<details class="earnings-details" id="earnings-cal">
-  <summary>Earnings &amp; Events · {today_human}</summary>
-  <div class="cols">
-    <div class="panel">
-      <div class="panel-head"><h3>Earnings Today</h3><div class="sub">Reporting before/after open</div></div>
-      {earnings_table}
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3>Economic Events</h3><div class="sub">Data releases &amp; Fed speakers</div></div>
-      {econ_table}
-    </div>
-  </div>
-</details>
+{earnings_section_block}
 
 </div><!-- /us-markets -->
 
@@ -1841,6 +1837,91 @@ def render_calendar_table(events: list[CalendarEvent], empty_msg: str) -> str:
       </tbody>
     </table>
     """
+
+
+def render_earnings_section(snap: Snapshot) -> str:
+    """
+    Earnings & Events section:
+    - Top 5-6 companies by market cap as always-visible featured cards
+    - Remaining earnings + all economic events inside a <details> expander
+    """
+    earnings = sorted(snap.earnings_today, key=lambda e: e.market_cap, reverse=True)
+    featured = earnings[:6]
+    rest     = earnings[6:]
+
+    def _time_class(t: str) -> str:
+        t = (t or "").lower()
+        if any(x in t for x in ("before", "bmo", "pre")):
+            return "bmo"
+        if any(x in t for x in ("after", "amc", "post")):
+            return "amc"
+        return ""
+
+    def _time_label(t: str) -> str:
+        t = (t or "").lower()
+        if any(x in t for x in ("before", "bmo", "pre")):
+            return "Before Open"
+        if any(x in t for x in ("after", "amc", "post")):
+            return "After Close"
+        return t.title() or "—"
+
+    cards = []
+    for e in featured:
+        tc = _time_class(e.time)
+        tl = _time_label(e.time)
+        eps = ""
+        for part in e.extra.split("·"):
+            if "EPS" in part or "eps" in part:
+                eps = part.strip()
+                break
+        name_html = (
+            f'<a href="{escape_html(e.url)}" target="_blank" rel="noopener">'
+            f'{escape_html(e.description)}</a>'
+            if e.url else escape_html(e.description)
+        )
+        cards.append(
+            f'<div class="ef-card {tc}">'
+            f'  <div class="ef-sym">{escape_html(e.symbol_or_event)}</div>'
+            f'  <div class="ef-name">{name_html}</div>'
+            f'  <div class="ef-meta">'
+            f'    <span class="ef-badge {tc}">{escape_html(tl)}</span>'
+            + (f'    <span class="ef-badge">{escape_html(eps)}</span>' if eps else '')
+            + f'  </div>'
+            f'</div>'
+        )
+
+    featured_html = (
+        f'<div class="earnings-featured">{"".join(cards)}</div>'
+        if cards else ""
+    )
+
+    rest_table = render_calendar_table(rest, "") if rest else ""
+    econ_table = render_calendar_table(snap.econ_events_today, "No major economic events today.")
+
+    rest_label = f"All earnings ({len(earnings)} companies)" if rest else "Economic events"
+    extra_html = (
+        f'<details class="earnings-extra">'
+        f'<summary>{rest_label} &amp; economic events</summary>'
+        f'<div class="cols">'
+        + (f'<div class="panel"><div class="panel-head"><h3>All Earnings</h3>'
+           f'<div class="sub">Full list</div></div>{rest_table}</div>' if rest else "")
+        + f'<div class="panel"><div class="panel-head"><h3>Economic Events</h3>'
+          f'<div class="sub">Data releases &amp; Fed speakers</div></div>{econ_table}</div>'
+        f'</div></details>'
+    )
+
+    if not earnings and not snap.econ_events_today:
+        return ""
+
+    return (
+        f'<div class="earnings-section" id="earnings-cal">'
+        f'<div class="earnings-section-label">Earnings &amp; Events · '
+        f'{datetime.fromisoformat(snap.generated_at[:10]).strftime("%B %-d, %Y")}'
+        f'</div>'
+        + featured_html
+        + extra_html
+        + '</div>'
+    )
 
 
 def render_narrative(ai: dict) -> str:
@@ -3166,8 +3247,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         crypto_rows=render_movers_block(crypto_list, why_c, "No crypto data."),
         crypto_top_n=CRYPTO_TOP_N,
         outlook_block=render_outlook_block(snap, briefing),
-        earnings_table=render_calendar_table(snap.earnings_today, "No earnings reporting today."),
-        econ_table=render_calendar_table(snap.econ_events_today, "No major economic events today."),
+        earnings_section_block=render_earnings_section(snap),
         tickers_to_watch_block=render_tickers_to_watch(ai) or render_data_tickers_block(snap),
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
@@ -3666,7 +3746,7 @@ def load_cache() -> Snapshot | None:
         def ev_from(d): return CalendarEvent(
             time=d.get("time",""), symbol_or_event=d.get("symbol_or_event",""),
             description=d.get("description",""), extra=d.get("extra",""),
-            url=d.get("url",""),
+            url=d.get("url",""), market_cap=float(d.get("market_cap",0) or 0),
         )
         def sp_from(d): return SectorPerf(**d)
         def sc_from(d): return ScorecardEntry(
