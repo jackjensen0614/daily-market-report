@@ -813,7 +813,17 @@ BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY 
   "session_recap": "3-4 paragraphs. Lead with index moves and VIX, then sector/macro (cite crude, yields, gold), then 2-3 biggest individual stock moves tied to their specific news headline.",
   "crypto_recap": "1-2 paragraphs. BTC/ETH/XRP levels, top gainer and top loser in the top 20, notable volume or dominance shifts.",
   "today_setup": "Walk through tonight's/today's earnings (highlight highest-impact names with EPS estimates) and any economic events. For each name give one line on how it could shape the tape.",
-  "tickers_to_watch": [{{"ticker": "XYZ", "rationale": "specific signal — e.g. RSI 28 oversold, earnings beat +8%, continuation from yesterday"}}, ...6-10 items],
+  "tickers_to_watch": [
+    {{
+      "ticker": "XYZ",
+      "bias": "bullish | bearish | neutral",
+      "risk_level": "low | medium | high",
+      "return_estimate": "+3-6% (swing) or -5-10% (short)",
+      "rationale": "one-line signal — specific catalyst, level, or technical setup",
+      "analysis": "2-3 sentences: trade thesis, key catalyst or level, primary risk to the thesis"
+    }},
+    ... 6-10 items across all three risk tiers
+  ],
   "crypto_outlook": "1-2 paragraphs on crypto positioning for the next 24 hours.",
   "risk_notes": ["concrete risk bullet 1", "concrete risk bullet 2", "concrete risk bullet 3"],
   "world_news": [
@@ -1206,6 +1216,9 @@ a {{ color: #8ab4f8; }}
 .pm-grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-bottom:10px; }}
 .pm-section-label {{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin:8px 0 4px; }}
 
+/* ── Scroll offset so sticky nav doesn't hide section headers ── */
+html {{ scroll-padding-top: 64px; }}
+
 /* Sticky nav */
 .sticky-nav {{ position:sticky; top:0; z-index:150;
   background:rgba(11,13,18,.93); backdrop-filter:blur(8px);
@@ -1304,12 +1317,14 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
 
 /* ── Live ticker banner ── */
 .live-ticker-section {{
-  margin: 0 0 0;
-  border-bottom: 1px solid var(--border);
+  margin: 0 0 24px;
   background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
 }}
 .live-ticker-label {{
-  padding: 6px 0 2px;
+  padding: 8px 14px 4px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -1327,6 +1342,9 @@ details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
   background: #22c55e;
   box-shadow: 0 0 6px #22c55e;
   animation: pulse-dot 2s ease-in-out infinite;
+}}
+.live-ticker-section .tradingview-widget-container {{
+  margin: 0; padding: 0;
 }}
 @keyframes pulse-dot {{
   0%, 100% {{ opacity: 1; box-shadow: 0 0 6px #22c55e; }}
@@ -1434,6 +1452,58 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
   color: var(--text-dim); border: 1px solid var(--border);
 }}
 .wn-chip.market {{ color: var(--text-faint); font-weight: 400; }}
+
+/* ── Risk-tier ticker cards ── */
+.risk-tier {{ margin: 20px 0 0; }}
+.risk-tier-header {{
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-faint);
+  padding: 8px 0 8px; border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}}
+.risk-dot {{
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}}
+.risk-dot.low    {{ background: #22c55e; box-shadow: 0 0 6px #22c55e55; }}
+.risk-dot.medium {{ background: #f59e0b; box-shadow: 0 0 6px #f59e0b55; }}
+.risk-dot.high   {{ background: #ef4444; box-shadow: 0 0 6px #ef444455; }}
+.risk-tier-header.low    {{ color: #4ade80; }}
+.risk-tier-header.medium {{ color: #fbbf24; }}
+.risk-tier-header.high   {{ color: #f87171; }}
+.ticker-cards {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }}
+.ticker-card {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 9px; padding: 14px 16px;
+  border-left-width: 3px;
+}}
+.ticker-card.low    {{ border-left-color: #22c55e; }}
+.ticker-card.medium {{ border-left-color: #f59e0b; }}
+.ticker-card.high   {{ border-left-color: #ef4444; }}
+.tc-top {{
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 4px;
+}}
+.tc-symbol {{ font-size: 16px; font-weight: 700; color: var(--text); }}
+.tc-bias {{
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 4px;
+}}
+.tc-bias.bullish {{ color: var(--up);   background: #16a34a22; }}
+.tc-bias.bearish {{ color: var(--down); background: #dc262622; }}
+.tc-bias.neutral {{ color: var(--text-faint); background: var(--bg-panel-2); }}
+.tc-return {{
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  margin-bottom: 6px;
+}}
+.tc-rationale {{
+  font-size: 12px; color: var(--text-dim); margin-bottom: 8px;
+  line-height: 1.5;
+}}
+.tc-analysis {{
+  font-size: 12px; color: var(--text-faint); line-height: 1.6;
+  border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;
+}}
 </style>
 </head>
 <body>
@@ -1458,10 +1528,10 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 <nav class="sticky-nav">
   <a href="#live-markets">Live</a>
   <a href="#briefing">Briefing</a>
+  <a href="#predictions">Predictions</a>
   <a href="#us-markets">US Markets</a>
   <a href="#global-markets">Global</a>
   <a href="#crypto-section">Crypto</a>
-  <a href="#setup">Setup</a>
   <a href="#scorecard">Scorecard</a>
 </nav>
 
@@ -1473,15 +1543,15 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
     <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
     {{
       "symbols": [
-        {{"description": "S&P 500",      "proName": "SP:SPX"}},
-        {{"description": "Dow Jones",    "proName": "DJ:DJI"}},
-        {{"description": "Nasdaq",       "proName": "NASDAQ:IXIC"}},
+        {{"description": "S&P 500",      "proName": "FOREXCOM:SPXUSD"}},
+        {{"description": "Nasdaq 100",   "proName": "FOREXCOM:NSXUSD"}},
+        {{"description": "Dow Jones",    "proName": "FOREXCOM:DJI"}},
         {{"description": "Russell 2000", "proName": "TVC:RUT"}},
-        {{"description": "VIX",          "proName": "CBOE:VIX"}},
         {{"description": "10Y Yield",    "proName": "TVC:US10Y"}},
         {{"description": "Gold",         "proName": "TVC:GOLD"}},
         {{"description": "Crude Oil",    "proName": "TVC:USOIL"}},
-        {{"description": "BTC/USD",      "proName": "COINBASE:BTCUSD"}}
+        {{"description": "Bitcoin",      "proName": "COINBASE:BTCUSD"}},
+        {{"description": "Ethereum",     "proName": "COINBASE:ETHUSD"}}
       ],
       "showSymbolLogo": false,
       "isTransparent": true,
@@ -1494,6 +1564,15 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 </div>
 
 {briefing_block}
+
+<!-- ===== PREDICTIONS ===== -->
+<div class="market-group" id="predictions">
+<div class="market-group-header setup">Predictions · {today_human}</div>
+{outlook_block}
+{tickers_to_watch_block}
+{scorecard_block}
+{risk_block}
+</div><!-- /predictions -->
 
 <!-- ===== US MARKETS ===== -->
 <div class="market-group" id="us-markets">
@@ -1569,15 +1648,6 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 </div>
 {crypto_outlook_block}
 </div><!-- /crypto-section -->
-
-<!-- ===== TODAY'S SETUP ===== -->
-<div class="market-group" id="setup">
-<div class="market-group-header setup">Today&#39;s Setup · {today_human}</div>
-{outlook_block}
-{tickers_to_watch_block}
-{scorecard_block}
-{risk_block}
-</div><!-- /setup -->
 
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
@@ -1809,23 +1879,62 @@ def render_risk_block(ai: dict) -> str:
     """
 
 
+def _ticker_cards_html(picks: list[dict]) -> str:
+    """Render a risk-tiered grid of ticker prediction cards."""
+    tiers = [
+        ("low",    "Low Risk"),
+        ("medium", "Medium Risk"),
+        ("high",   "High Risk"),
+    ]
+    bias_arrow = {"bullish": "▲", "bearish": "▼", "neutral": "—"}
+    out = []
+    for tier_key, tier_label in tiers:
+        tier_picks = [p for p in picks if p.get("risk_level", "medium") == tier_key]
+        if not tier_picks:
+            continue
+        cards = []
+        for p in tier_picks:
+            bias = p.get("bias", "neutral")
+            arrow = bias_arrow.get(bias, "—")
+            ret   = escape_html(p.get("return_estimate", ""))
+            rat   = escape_html(p.get("rationale", ""))
+            ana   = escape_html(p.get("analysis", ""))
+            sym   = escape_html(str(p.get("ticker", "")))
+            ret_html = f'<div class="tc-return">Est. return: {ret}</div>' if ret else ""
+            ana_html = f'<div class="tc-analysis">{ana}</div>' if ana else ""
+            cards.append(
+                f'<div class="ticker-card {tier_key}">'
+                f'  <div class="tc-top">'
+                f'    <span class="tc-symbol">{sym}</span>'
+                f'    <span class="tc-bias {bias}">{arrow} {bias.title()}</span>'
+                f'  </div>'
+                f'  {ret_html}'
+                f'  <div class="tc-rationale">{rat}</div>'
+                f'  {ana_html}'
+                f'</div>'
+            )
+        out.append(
+            f'<div class="risk-tier">'
+            f'<div class="risk-tier-header {tier_key}">'
+            f'<span class="risk-dot {tier_key}"></span>{tier_label}'
+            f'</div>'
+            f'<div class="ticker-cards">{"".join(cards)}</div>'
+            f'</div>'
+        )
+    return "".join(out)
+
+
 def render_tickers_to_watch(ai: dict) -> str:
     if not ai or "_skipped" in ai or "_error" in ai:
         return ""
     watch = ai.get("tickers_to_watch") or []
     if not watch:
         return ""
-    items = []
-    for w in watch:
-        sym = escape_html(str(w.get("ticker", "")))
-        why = escape_html(str(w.get("rationale", "")))
-        items.append(f'<div class="watch-item"><div class="sym">{sym}</div><div class="why">{why}</div></div>')
-    return f"""
-    <h2>Tickers to Watch Today</h2>
-    <div class="watch-list">
-      {''.join(items)}
-    </div>
-    """
+    cards_html = _ticker_cards_html(watch)
+    return (
+        '<h2>Tickers to Watch &amp; Predictions</h2>'
+        + cards_html
+    )
 
 
 def _paras(text: str) -> str:
@@ -2151,76 +2260,85 @@ def _b_session_narrative(snap: Snapshot) -> str:
     )
 
 
-def _b_tickers_prediction(snap: Snapshot) -> str:
-    """Data-driven tickers to watch with directional predictions for today."""
+def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
+    """Data-driven tickers to watch. Returns list of pick dicts for risk-tiered rendering."""
     picks: list[dict] = []
     seen: set[str] = set()
 
-    def add(ticker: str, bias: str, rationale: str) -> None:
-        if ticker and ticker not in seen and len(picks) < 8:
+    def add(ticker: str, bias: str, risk: str, ret: str, rationale: str, analysis: str) -> None:
+        if ticker and ticker not in seen and len(picks) < 10:
             seen.add(ticker)
-            picks.append({"ticker": ticker, "bias": bias, "rationale": rationale})
+            picks.append({
+                "ticker": ticker, "bias": bias, "risk_level": risk,
+                "return_estimate": ret, "rationale": rationale, "analysis": analysis,
+            })
 
-    # 1. Earnings reporters today — highest-priority catalysts
-    for e in snap.earnings_today[:4]:
+    # 1. Earnings reporters — binary gap risk = HIGH
+    for e in snap.earnings_today[:3]:
         sym = e.symbol_or_event
         if sym and sym.isalpha() and len(sym) <= 5:
             detail = f" (EPS est: {e.extra})" if e.extra else ""
-            add(sym, "neutral",
-                f"Reporting {e.time or 'today'}{detail}. Earnings gap risk in both directions — watch for a beat or miss at open.")
+            add(sym, "neutral", "high", "±5-15% (gap risk)",
+                f"Reporting {e.time or 'today'}{detail}.",
+                f"Earnings prints create binary gap risk — a beat typically gaps +5-15% at open while a miss or guidance cut can produce the reverse. "
+                f"Enter only with defined risk via options or tight stops. "
+                f"Monitor pre-market tape for whisper numbers and institutional flow before committing size.")
 
-    # 2. Yesterday's biggest gainer — continuation or fade watch
+    # 2. Biggest gainer — continuation
     if snap.gainers:
         g = snap.gainers[0].quote
         if abs(g.change_pct) > 4:
-            add(g.symbol, "bullish",
-                f"Led gainers yesterday at +{g.change_pct:.1f}% to {fmt_usd(g.price)}. Watch for momentum continuation above yesterday's close.")
+            mag = g.change_pct
+            ret_lo = round(mag * 0.2, 1)
+            ret_hi = round(mag * 0.5, 1)
+            add(g.symbol, "bullish", "medium", f"+{ret_lo}-{ret_hi}%",
+                f"Led gainers at +{mag:.1f}% to {fmt_usd(g.price)} yesterday.",
+                f"Large single-session moves in high-volume names often see partial continuation into the following session as momentum traders add and short-sellers cover. "
+                f"The primary risk is a mean-reversion fade if yesterday's move was news-driven without a fundamental repricing. "
+                f"Watch for volume confirmation in the first 30 minutes — low open volume is an early fade signal.")
 
-    # 3. Yesterday's biggest loser — dead-cat bounce or continued selling
+    # 3. Biggest loser — bounce or continuation
     if snap.losers:
         l = snap.losers[0].quote
-        if abs(l.change_pct) > 4:
-            add(l.symbol, "bearish",
-                f"Led losers yesterday at {l.change_pct:.1f}% to {fmt_usd(l.price)}. High-volume selloffs often see follow-through — watch for bounce or continuation.")
+        mag = abs(l.change_pct)
+        if mag > 4:
+            ret_lo = round(mag * 0.15, 1)
+            ret_hi = round(mag * 0.35, 1)
+            add(l.symbol, "bearish", "medium", f"-{ret_lo}-{ret_hi}%",
+                f"Led losers at {l.change_pct:.1f}% to {fmt_usd(l.price)} yesterday.",
+                f"High-volume declines frequently see follow-through selling as institutional holders reposition and stop-losses trigger below the prior close. "
+                f"A dead-cat bounce is possible intraday but the path of least resistance is lower until a fundamental catalyst appears. "
+                f"Short thesis is best expressed intraday given elevated borrow costs after large single-day drops.")
 
-    # 4. Crypto proxy if BTC moved significantly
+    # 4. Crypto equity proxy — HIGH risk
     btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
     if btc and abs(btc.change_pct) > 3:
         bias = "bullish" if btc.change_pct > 0 else "bearish"
-        proxy = next((m for m in snap.most_active if m.quote.symbol in ("COIN","MSTR","MARA","RIOT","HOOD")), None)
+        proxy = next((m for m in snap.most_active
+                      if m.quote.symbol in ("COIN", "MSTR", "MARA", "RIOT", "HOOD")), None)
         if proxy:
-            add(proxy.quote.symbol, bias,
-                f"BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.1f}% overnight — crypto equities likely to follow. {proxy.quote.symbol} is the highest-volume proxy.")
+            mult = 2.5
+            est = round(abs(btc.change_pct) * mult, 1)
+            add(proxy.quote.symbol, bias, "high", f"{'+'if bias=='bullish' else '-'}{est//2:.0f}-{est:.0f}%",
+                f"BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.1f}% — crypto equity proxy.",
+                f"Crypto equities trade at a 2-3× beta to spot Bitcoin moves, amplifying both upside and downside. "
+                f"{proxy.quote.symbol} is currently the highest-volume proxy, making it the fastest vehicle for this directional thesis. "
+                f"Risk is elevated: crypto equities are subject to equity-market correlation during risk-off sessions that may override the spot BTC signal.")
 
-    # 5. Fill remaining slots from most-active (high interest = high intraday range)
+    # 5. Most-active fill — MEDIUM risk
     for m in snap.most_active:
-        bias = "bullish" if m.quote.change_pct > 0.5 else ("bearish" if m.quote.change_pct < -0.5 else "neutral")
-        vol_str = fmt_usd(m.quote.dollar_volume) if m.quote.dollar_volume else "high volume"
-        add(m.quote.symbol, bias,
-            f"Most active yesterday ({vol_str}) — elevated institutional interest typically carries into the next session.")
+        q = m.quote
+        bias = "bullish" if q.change_pct > 0.5 else ("bearish" if q.change_pct < -0.5 else "neutral")
+        vol_str = fmt_usd(q.dollar_volume) if q.dollar_volume else "high"
+        mag = abs(q.change_pct)
+        ret_est = f"+{mag*0.2:.1f}-{mag*0.4:.1f}%" if mag > 1 else "+1-3%"
+        add(q.symbol, bias, "medium", ret_est,
+            f"Most active at {vol_str} dollar volume — elevated institutional flow.",
+            f"High-dollar-volume sessions signal institutional participation that often sustains directional moves into the next open. "
+            f"The elevated activity makes this name more sensitive to broad market direction — a weak tape will weigh on even fundamentally sound names. "
+            f"Set alerts at yesterday's high and low as breakout/breakdown triggers.")
 
-    if not picks:
-        return ""
-
-    bias_color = {"bullish": "var(--green)", "bearish": "var(--red)", "neutral": "var(--text-dim)"}
-    bias_arrow = {"bullish": "▲", "bearish": "▼", "neutral": "—"}
-    cards = []
-    for p in picks:
-        bc = bias_color.get(p["bias"], "var(--text-dim)")
-        ba = bias_arrow.get(p["bias"], "—")
-        cards.append(
-            f'<div class="b-watch-item">'
-            f'<div class="sym">{escape_html(p["ticker"])} '
-            f'<span style="color:{bc};font-size:11px;font-weight:600">{ba} {p["bias"].title()}</span></div>'
-            f'<div class="why">{escape_html(p["rationale"])}</div>'
-            f'</div>'
-        )
-    return (
-        '<div class="briefing-watch">'
-        '<div class="bs-label">Tickers to Watch · Today\'s Predictions</div>'
-        f'<div class="b-watch-grid">{"".join(cards)}</div>'
-        '</div>'
-    )
+    return picks
 
 
 def _b_coming_day(snap: Snapshot) -> str:
@@ -2275,7 +2393,7 @@ def _build_data_briefing(snap: Snapshot) -> str:
         + _b_us_markets(snap)
         + _b_global_markets(snap)
         + _b_crypto(snap)
-        + _b_tickers_prediction(snap)
+        + _ticker_cards_html(_b_tickers_prediction(snap))
         + _b_coming_day(snap)
         + _b_setup(snap)
         + _b_risks(snap)
@@ -2951,14 +3069,15 @@ def render_premarket_strips(snap: Snapshot) -> str:
 
 def render_data_tickers_block(snap: Snapshot) -> str:
     """Standalone tickers-to-watch section for the main page (data-driven, no AI needed)."""
-    inner = _b_tickers_prediction(snap)
-    if not inner:
+    picks = _b_tickers_prediction(snap)
+    if not picks:
         return ""
+    cards_html = _ticker_cards_html(picks)
     coming = _b_coming_day(snap)
     return (
-        f'<h2>Tickers to Watch &amp; Predictions</h2>'
+        '<h2>Tickers to Watch &amp; Predictions</h2>'
         + coming
-        + inner
+        + cards_html
     )
 
 
