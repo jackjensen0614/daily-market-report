@@ -1460,7 +1460,7 @@ details.earnings-extra > .cols {{ margin-top: 12px; }}
 .main-col {{
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow: clip;
 }}
 /* ── Watchlist sidebar ── */
 .sidebar {{
@@ -1686,6 +1686,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
   <div class="sb-head">
     <div class="sb-title">★ My Watchlist</div>
     <div class="sb-subtitle">Prior session · refreshes every 5 min</div>
+    <button id="sb-restore-btn" onclick="restoreServerCards()" style="display:none;margin-top:6px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-faint);font-size:10px;padding:3px 8px;cursor:pointer;width:100%">Restore hidden tickers</button>
   </div>
   <div class="sb-add">
     <input type="text" id="sb-input" placeholder="Add ticker…" maxlength="10"
@@ -1898,6 +1899,38 @@ function loadUserCards() {{
   }});
 }}
 loadUserCards(); // sidebar is always visible — populate on page load
+
+// ── Hidden server-side cards ──────────────────────────────────────────────
+var HIDDEN_KEY = 'mktHiddenCards';
+function getHiddenCards() {{
+  try {{ return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); }} catch(e) {{ return []; }}
+}}
+function saveHiddenCards(arr) {{
+  try {{ localStorage.setItem(HIDDEN_KEY, JSON.stringify(arr)); }} catch(e) {{}}
+}}
+function hideServerCard(sym) {{
+  var arr = getHiddenCards();
+  if (!arr.includes(sym)) {{ arr.push(sym); saveHiddenCards(arr); }}
+  var el = document.querySelector('.sb-card[data-symbol="' + sym + '"]');
+  if (el) el.style.display = 'none';
+  document.getElementById('sb-restore-btn').style.display = getHiddenCards().length ? 'block' : 'none';
+}}
+function restoreServerCards() {{
+  saveHiddenCards([]);
+  document.querySelectorAll('.sb-card[data-symbol]').forEach(function(el) {{
+    el.style.display = '';
+  }});
+  document.getElementById('sb-restore-btn').style.display = 'none';
+}}
+(function applyHiddenCards() {{
+  var hidden = getHiddenCards();
+  hidden.forEach(function(sym) {{
+    var el = document.querySelector('.sb-card[data-symbol="' + sym + '"]');
+    if (el) el.style.display = 'none';
+  }});
+  var btn = document.getElementById('sb-restore-btn');
+  if (btn) btn.style.display = hidden.length ? 'block' : 'none';
+}})();
 
 // ── Scroll-position preservation across reloads ──────────────────────────
 // Save current scroll before any programmatic reload so the page
@@ -3983,11 +4016,13 @@ def render_sidebar_block(snap: Snapshot) -> str:
                 + '</div>'
             )
 
+        sym_js = escape_html(q.symbol).replace("'", "\\'")
         cards_html += (
-            f'<div class="sb-card {cls}">'
+            f'<div class="sb-card {cls}" data-symbol="{escape_html(q.symbol)}">'
             f'  <div class="sb-card-top">'
             f'    <span class="sb-sym">{escape_html(q.symbol)}</span>'
             f'    <span class="sb-pct {cls}">{pct_sign}{q.change_pct:.2f}%</span>'
+            f'    <button class="sb-user-rm" title="Hide" onclick="hideServerCard(\'{sym_js}\')">✕</button>'
             f'  </div>'
             f'  <div class="sb-name">{name}</div>'
             f'  <div class="sb-price">{fmt_usd(q.price)}</div>'
@@ -4250,19 +4285,31 @@ def parse_args():
     return p.parse_args()
 
 
+_PAGES_BASE = "https://jackjensen0614.github.io/daily-market-report"
+
 def load_briefing_json(path: str | None, snap_date: str | None = None) -> dict | None:
     if not path and snap_date:
         # Auto-detect briefing-YYYY-MM-DD.json next to the script
         candidate = Path(__file__).parent / f"briefing-{snap_date}.json"
         if candidate.exists():
             path = str(candidate)
-    if not path:
-        return None
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except Exception as e:
-        log(f"Could not load briefing JSON ({path}): {e}")
-        return None
+    if path:
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except Exception as e:
+            log(f"Could not load briefing JSON ({path}): {e}")
+            return None
+    # Fallback: fetch from live GitHub Pages (works in GitHub Actions where local file was never committed)
+    if snap_date:
+        url = f"{_PAGES_BASE}/briefing-{snap_date}.json"
+        try:
+            r = requests.get(url, timeout=10, headers={"User-Agent": USER_AGENT})
+            if r.status_code == 200:
+                log(f"Loaded briefing from Pages: {url}")
+                return r.json()
+        except Exception as e:
+            log(f"Could not fetch briefing from Pages ({url}): {e}")
+    return None
 
 
 def main():
@@ -4294,6 +4341,14 @@ def main():
                 log(f"Briefing persisted to {bp.name}")
             except Exception as e:
                 warn(f"Could not persist briefing: {e}")
+        # Also save to the output directory so GitHub Pages hosts it for future runs
+        out_briefing = Path(args.out).parent / f"briefing-{today_iso}.json"
+        if out_briefing != bp:
+            try:
+                out_briefing.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
+                log(f"Briefing also saved to {out_briefing}")
+            except Exception as e:
+                log(f"Could not save briefing to output dir: {e}")
 
     # Score prior day's predictions
     prior_date_str = _prior_trading_day_before(snap.prior_session_date)
