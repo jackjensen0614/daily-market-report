@@ -1417,6 +1417,36 @@ details.earnings-extra > summary::before {{
 details.earnings-extra[open] > summary::before {{ transform: rotate(90deg); }}
 details.earnings-extra > .cols {{ margin-top: 12px; }}
 
+/* ── Economic events + news ── */
+.econ-section {{ display: flex; flex-direction: column; gap: 10px; }}
+.econ-event-card {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+  border-left: 3px solid var(--text-faint);
+}}
+.econ-event-card.high-impact {{ border-left-color: #ef4444; }}
+.econ-event-card.med-impact  {{ border-left-color: #f59e0b; }}
+.econ-event-card.low-impact  {{ border-left-color: var(--border); }}
+.econ-ev-top {{
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 4px; flex-wrap: wrap;
+}}
+.econ-ev-time  {{ font-size: 11px; font-weight: 600; color: var(--text-faint); flex-shrink: 0; }}
+.econ-ev-name  {{ font-size: 13px; font-weight: 700; color: var(--text); }}
+.econ-ev-extra {{ font-size: 11px; color: var(--text-dim); margin: 2px 0 8px; }}
+.econ-ev-news  {{ display: flex; flex-direction: column; gap: 5px; margin-top: 8px;
+                  border-top: 1px solid var(--border); padding-top: 8px; }}
+.econ-news-item {{
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 12px; color: var(--text-dim); line-height: 1.5;
+}}
+.econ-news-item::before {{
+  content: '·'; color: var(--text-faint); flex-shrink: 0; padding-top: 1px;
+}}
+.econ-news-item a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
+.econ-news-item a:hover {{ color: var(--text); }}
+.econ-news-src {{ color: var(--text-faint); font-size: 10px; white-space: nowrap; }}
+
 /* ── World news section ── */
 details.world-news-details {{ margin: 28px 0 0; }}
 details.world-news-details > summary {{
@@ -1676,7 +1706,30 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 if (window.location.protocol === 'file:') {{
   window.location.replace('https://jackjensen0614.github.io/daily-market-report/');
 }}
+
+// ── Scroll-position preservation across reloads ──────────────────────────
+// Save current scroll before any programmatic reload so the page
+// returns to where the user was, not to whatever hash is in the URL.
+var SCROLL_KEY = '_mktScrollY';
+function saveScroll() {{
+  try {{ sessionStorage.setItem(SCROLL_KEY, window.scrollY); }} catch(e) {{}}
+}}
+(function restoreScroll() {{
+  var saved = null;
+  try {{ saved = sessionStorage.getItem(SCROLL_KEY); }} catch(e) {{}}
+  if (saved === null) return;
+  try {{ sessionStorage.removeItem(SCROLL_KEY); }} catch(e) {{}}
+  var target = parseInt(saved, 10);
+  // Double-rAF beats the browser's own hash-scroll which fires after first paint
+  requestAnimationFrame(function() {{
+    requestAnimationFrame(function() {{
+      window.scrollTo(0, target);
+    }});
+  }});
+}})();
+
 function doRefresh() {{
+  saveScroll();
   var btn = document.getElementById('refresh-btn');
   if (btn) {{ btn.classList.add('spinning'); btn.disabled = true; }}
   location.reload();
@@ -1702,7 +1755,7 @@ function doRefresh() {{
       next--;
       setStatus('Live · auto-refresh in ' + next + 's');
       setLabel('Refresh (' + next + 's)');
-      if (next <= 0) {{ clearInterval(timer); location.reload(); }}
+      if (next <= 0) {{ saveScroll(); clearInterval(timer); location.reload(); }}
     }}, 1000);
   }} else {{
     if (statusEl) statusEl.textContent = 'Market closed';
@@ -1895,8 +1948,8 @@ def render_earnings_section(snap: Snapshot) -> str:
         if cards else ""
     )
 
-    rest_table = render_calendar_table(rest, "") if rest else ""
-    econ_table = render_calendar_table(snap.econ_events_today, "No major economic events today.")
+    rest_table  = render_calendar_table(rest, "") if rest else ""
+    econ_block  = render_econ_news_block(snap)
 
     rest_label = f"All earnings ({len(earnings)} companies)" if rest else "Economic events"
     extra_html = (
@@ -1905,12 +1958,12 @@ def render_earnings_section(snap: Snapshot) -> str:
         f'<div class="cols">'
         + (f'<div class="panel"><div class="panel-head"><h3>All Earnings</h3>'
            f'<div class="sub">Full list</div></div>{rest_table}</div>' if rest else "")
-        + f'<div class="panel"><div class="panel-head"><h3>Economic Events</h3>'
-          f'<div class="sub">Data releases &amp; Fed speakers</div></div>{econ_table}</div>'
+        + f'<div class="panel"><div class="panel-head"><h3>Economic Events &amp; News</h3>'
+          f'<div class="sub">Scheduled releases &amp; macro headlines</div></div>{econ_block}</div>'
         f'</div></details>'
     )
 
-    if not earnings and not snap.econ_events_today:
+    if not earnings and not snap.econ_events_today and not snap.world_news_raw:
         return ""
 
     return (
@@ -1922,6 +1975,133 @@ def render_earnings_section(snap: Snapshot) -> str:
         + extra_html
         + '</div>'
     )
+
+
+# Keyword sets for matching world news to economic event categories
+_ECON_TOPIC_KEYS: list[tuple[str, list[str]]] = [
+    ("fed",       ["fed", "fomc", "federal reserve", "powell", "rate decision", "rate cut",
+                   "rate hike", "monetary policy", "basis point", "bps", "dovish", "hawkish"]),
+    ("inflation", ["cpi", "inflation", "consumer price", "pce", "ppi", "producer price",
+                   "core inflation", "price index"]),
+    ("jobs",      ["jobs", "employment", "payroll", "nfp", "unemployment", "jobless",
+                   "labor market", "job growth", "claims"]),
+    ("gdp",       ["gdp", "gross domestic", "recession", "economic growth", "output"]),
+    ("trade",     ["tariff", "trade war", "trade deal", "import", "export", "deficit",
+                   "sanctions", "trade policy"]),
+    ("housing",   ["housing", "home sales", "mortgage", "real estate", "construction"]),
+    ("consumer",  ["retail sales", "consumer confidence", "consumer spending", "sentiment"]),
+    ("earnings_macro", ["earnings season", "corporate earnings", "profit", "guidance"]),
+]
+
+def _topics_for_event(desc: str) -> list[str]:
+    """Return topic keys that match an event description string."""
+    d = desc.lower()
+    return [key for key, words in _ECON_TOPIC_KEYS if any(w in d for w in words)]
+
+def _topics_for_headline(headline: str) -> list[str]:
+    """Return topic keys that a news headline belongs to."""
+    h = headline.lower()
+    return [key for key, words in _ECON_TOPIC_KEYS if any(w in h for w in words)]
+
+def _impact_level(desc: str) -> str:
+    """Classify an economic event as high / med / low impact."""
+    d = desc.lower()
+    if any(w in d for w in ["fomc", "fed", "cpi", "nfp", "payroll", "gdp", "pce"]):
+        return "high-impact"
+    if any(w in d for w in ["ppi", "retail", "housing", "claims", "ism"]):
+        return "med-impact"
+    return "low-impact"
+
+
+def render_econ_news_block(snap: Snapshot) -> str:
+    """
+    Rich economic-events panel: each event card shows its scheduled time/details
+    plus matched news headlines from world_news_raw. Falls back to theme-grouped
+    macro news when the calendar is sparse or empty.
+    """
+    news_items = snap.world_news_raw  # already sorted recent-first
+
+    # Build topic → list[news] index from world_news_raw
+    topic_news: dict[str, list[dict]] = {key: [] for key, _ in _ECON_TOPIC_KEYS}
+    for item in news_items:
+        for t in _topics_for_headline(item.get("headline", "")):
+            if len(topic_news[t]) < 4:
+                topic_news[t].append(item)
+
+    def _news_html(matched: list[dict]) -> str:
+        if not matched:
+            return ""
+        items_html = ""
+        for n in matched[:3]:
+            src  = escape_html(n.get("source", ""))
+            hl   = escape_html(n.get("headline", ""))
+            url  = n.get("url", "")
+            link = (f'<a href="{escape_html(url)}" target="_blank" rel="noopener">{hl}</a>'
+                    if url else hl)
+            src_span = f' <span class="econ-news-src">— {src}</span>' if src else ""
+            items_html += f'<div class="econ-news-item">{link}{src_span}</div>'
+        return f'<div class="econ-ev-news">{items_html}</div>'
+
+    cards_html = ""
+
+    # Calendar-driven cards
+    for ev in snap.econ_events_today:
+        topics  = _topics_for_event(ev.description)
+        matched = []
+        seen_hl = set()
+        for t in topics:
+            for n in topic_news.get(t, []):
+                k = n.get("headline", "")[:60]
+                if k not in seen_hl:
+                    seen_hl.add(k)
+                    matched.append(n)
+        matched = matched[:3]
+
+        lvl = _impact_level(ev.description)
+        cards_html += (
+            f'<div class="econ-event-card {lvl}">'
+            f'  <div class="econ-ev-top">'
+            f'    <span class="econ-ev-time">{escape_html(ev.time)}</span>'
+            f'    <span class="econ-ev-name">{escape_html(ev.description)}</span>'
+            f'  </div>'
+            + (f'<div class="econ-ev-extra">{escape_html(ev.extra)}</div>' if ev.extra else "")
+            + _news_html(matched)
+            + '</div>'
+        )
+
+    # If calendar is sparse, add theme cards for topics with news but no matching event
+    covered_topics = set()
+    for ev in snap.econ_events_today:
+        covered_topics.update(_topics_for_event(ev.description))
+
+    theme_labels = {
+        "fed": "Federal Reserve & Rates",
+        "inflation": "Inflation",
+        "trade": "Trade & Tariffs",
+        "jobs": "Labor Market",
+        "gdp": "Economic Growth",
+        "housing": "Housing",
+        "consumer": "Consumer",
+    }
+    for key, label in theme_labels.items():
+        if key in covered_topics:
+            continue
+        items = topic_news.get(key, [])
+        if not items:
+            continue
+        cards_html += (
+            f'<div class="econ-event-card low-impact">'
+            f'  <div class="econ-ev-top">'
+            f'    <span class="econ-ev-name">{escape_html(label)}</span>'
+            f'  </div>'
+            + _news_html(items)
+            + '</div>'
+        )
+
+    if not cards_html:
+        return '<div style="color:var(--text-faint);font-size:13px;padding:8px 0">No economic events or macro news available.</div>'
+
+    return f'<div class="econ-section">{cards_html}</div>'
 
 
 def render_narrative(ai: dict) -> str:
