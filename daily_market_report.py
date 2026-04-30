@@ -194,6 +194,26 @@ class MoverWithNews:
 
 
 @dataclass
+class SectorPerf:
+    """1D / 1W / YTD performance for a single sector ETF."""
+    symbol: str
+    name: str
+    pct_1d: float
+    pct_1w: float
+    pct_ytd: float
+
+
+@dataclass
+class ScorecardEntry:
+    """Result of grading one predicted ticker against today's tape."""
+    ticker: str
+    rationale: str
+    bias: str           # "bullish", "bearish", "neutral"
+    actual_pct: float | None
+    verdict: str        # "HIT", "MISS", "FLAT", "N/A"
+
+
+@dataclass
 class CalendarEvent:
     time: str
     symbol_or_event: str
@@ -223,6 +243,11 @@ class Snapshot:
     premarket_crypto: list[Quote] = field(default_factory=list)
     overnight_global: list[Quote] = field(default_factory=list)
     premarket_fetched_at: str = ""
+    sectors: list[SectorPerf] = field(default_factory=list)
+    scorecard: list[ScorecardEntry] = field(default_factory=list)
+    sentiment: dict = field(default_factory=dict)
+    watchlist: list[Quote] = field(default_factory=list)
+    earnings_reactions: list[MoverWithNews] = field(default_factory=list)
 
 
 # ------------------------------------------------------------------------
@@ -1119,6 +1144,59 @@ a {{ color: #8ab4f8; }}
 .tile.compact .delta {{ font-size:12px; }}
 .pm-grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-bottom:10px; }}
 .pm-section-label {{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin:8px 0 4px; }}
+
+/* Sticky nav */
+.sticky-nav {{ position:sticky; top:0; z-index:150;
+  background:rgba(11,13,18,.93); backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);
+  display:flex; gap:0; overflow-x:auto;
+  margin:0 0 20px; scrollbar-width:none; }}
+.sticky-nav::-webkit-scrollbar {{ display:none; }}
+.sticky-nav a {{ color:var(--text-dim); text-decoration:none; font-size:12px; font-weight:500;
+  padding:10px 14px; white-space:nowrap; border-bottom:2px solid transparent;
+  transition:color .15s, border-color .15s; flex-shrink:0; }}
+.sticky-nav a:hover {{ color:var(--text); border-bottom-color:var(--accent); }}
+
+/* Watchlist */
+.wl-row {{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }}
+.wl-tile {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:8px;
+  padding:10px 14px; min-width:100px; }}
+.wl-tile .wl-sym {{ font-weight:700; font-size:13px; letter-spacing:.02em; }}
+.wl-tile .wl-price {{ font-size:11px; color:var(--text-dim); margin-top:2px; font-variant-numeric:tabular-nums; }}
+.wl-tile .wl-pct {{ font-size:13px; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums; }}
+
+/* Sector heatmap */
+.sector-grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin-bottom:8px; }}
+.sector-card {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }}
+.sector-card .s-name {{ font-size:11px; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase;
+  letter-spacing:.04em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.sector-card .s-1d {{ font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }}
+.sector-card .s-sub {{ display:flex; gap:10px; margin-top:4px; font-size:11px; color:var(--text-faint); }}
+
+/* Sentiment strip */
+.sentiment-strip {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; margin-bottom:8px; }}
+.st-tile {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }}
+.st-tile .st-label {{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }}
+.st-tile .st-val {{ font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }}
+.st-tile .st-sub {{ font-size:11px; color:var(--text-faint); margin-top:2px; }}
+
+/* Scorecard */
+.scorecard-wrap {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:8px; }}
+.scorecard-head {{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); }}
+.scorecard-head h3 {{ margin:0; font-size:14px; font-weight:600; }}
+.scorecard-stats {{ display:flex; gap:14px; font-size:12px; color:var(--text-dim); }}
+.scorecard-stats .hit {{ color:var(--green); font-weight:700; }}
+.scorecard-stats .miss {{ color:var(--red); font-weight:700; }}
+.sc-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+.sc-table th {{ color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+  padding:8px 14px; border-bottom:1px solid var(--border); text-align:left; }}
+.sc-table td {{ padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }}
+.sc-table tr:last-child td {{ border-bottom:none; }}
+.verdict {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; }}
+.verdict.HIT  {{ background:rgba(34,197,94,.18);  color:var(--green); }}
+.verdict.MISS {{ background:rgba(239,68,68,.18);  color:var(--red); }}
+.verdict.FLAT {{ background:rgba(148,163,184,.15); color:#94a3b8; }}
+.verdict.NA   {{ background:rgba(148,163,184,.08); color:var(--text-faint); }}
 </style>
 </head>
 <body>
@@ -1140,18 +1218,36 @@ a {{ color: #8ab4f8; }}
   </div>
 </header>
 
+<nav class="sticky-nav">
+  <a href="#premarket">Pre-Market</a>
+  <a href="#indices">Indices</a>
+  <a href="#sectors">Sectors</a>
+  <a href="#sentiment">Sentiment</a>
+  <a href="#movers">Movers</a>
+  <a href="#crypto-panel">Crypto</a>
+  <a href="#setup">Setup</a>
+  <a href="#scorecard">Scorecard</a>
+  <a href="#briefing-fab">Briefing ↑</a>
+</nav>
+
+{watchlist_block}
+
 {briefing_block}
 
 {premarket_block}
 
-<h2>Indices & Macro</h2>
+<h2 id="indices">Indices &amp; Macro</h2>
 <div class="index-grid">
   {index_tiles}
 </div>
 
 {ai_narrative_block}
 
-<h2>Stock Movers · {prior_date_human}</h2>
+{sector_heatmap_block}
+
+{sentiment_block}
+
+<h2 id="movers">Stock Movers · {prior_date_human}</h2>
 <div class="cols">
   <div class="panel">
     <div class="panel-head"><h3>Top Gainers</h3><div class="sub">Largest % moves up</div></div>
@@ -1168,14 +1264,16 @@ a {{ color: #8ab4f8; }}
     <div class="panel-head"><h3>Most Active</h3><div class="sub">Sorted by volume</div></div>
     {active_rows}
   </div>
-  <div class="panel">
+  <div class="panel" id="crypto-panel">
     <div class="panel-head"><h3>Crypto · Top {crypto_top_n}</h3><div class="sub">By market cap · 24h change</div></div>
     {crypto_rows}
   </div>
 </div>
 
-<h2>Today's Setup · {today_human}</h2>
+<h2 id="setup">Today&#39;s Setup · {today_human}</h2>
 {today_outlook_block}
+
+{earnings_reactions_block}
 
 <div class="cols">
   <div class="panel">
@@ -1189,6 +1287,8 @@ a {{ color: #8ab4f8; }}
 </div>
 
 {tickers_to_watch_block}
+
+{scorecard_block}
 
 {crypto_outlook_block}
 
@@ -1963,6 +2063,11 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         index_tiles=index_tiles,
         briefing_block=render_briefing_block(briefing, snap),
         premarket_block=render_premarket_strips(snap),
+        watchlist_block=render_watchlist(snap),
+        sector_heatmap_block=render_sector_heatmap(snap),
+        sentiment_block=render_sentiment_strip(snap),
+        scorecard_block=render_scorecard(snap),
+        earnings_reactions_block=render_earnings_reactions(snap),
         ai_narrative_block=render_narrative(ai),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
@@ -1977,6 +2082,330 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         risk_block=render_risk_block(ai),
     )
     return html
+
+
+# ------------------------------------------------------------------------
+# Sector heatmap
+# ------------------------------------------------------------------------
+def fetch_sectors() -> list[SectorPerf]:
+    """Fetch 1D/1W/YTD % change for all 11 SPDR sector ETFs."""
+    out: list[SectorPerf] = []
+    for sym, name in SECTOR_ETFS.items():
+        try:
+            hist = yf.Ticker(sym).history(period="ytd", interval="1d", auto_adjust=False)
+            if hist is None or hist.empty or len(hist) < 2:
+                continue
+            close = hist["Close"].dropna()
+            if len(close) < 2:
+                continue
+            last  = float(close.iloc[-1])
+            prev1 = float(close.iloc[-2])
+            prev5 = float(close.iloc[-6]) if len(close) >= 6 else float(close.iloc[0])
+            first = float(close.iloc[0])
+            def _p(a: float, b: float) -> float:
+                return (a - b) / b * 100.0 if b else 0.0
+            out.append(SectorPerf(symbol=sym, name=name,
+                                  pct_1d=_p(last, prev1),
+                                  pct_1w=_p(last, prev5),
+                                  pct_ytd=_p(last, first)))
+        except Exception as e:
+            log(f"  sector {sym} failed: {e}")
+    out.sort(key=lambda s: s.pct_1d, reverse=True)
+    return out
+
+
+def render_sector_heatmap(snap: Snapshot) -> str:
+    """Render sector heatmap sorted descending by 1D %."""
+    if not snap.sectors:
+        return ""
+    cards = []
+    for s in snap.sectors:
+        cls = cls_for(s.pct_1d)
+        cards.append(
+            f'<div class="sector-card">'
+            f'<div class="s-name">{escape_html(s.name)}</div>'
+            f'<div class="s-1d {cls} num">{fmt_pct(s.pct_1d)}</div>'
+            f'<div class="s-sub">'
+            f'<span>1W <span class="num {cls_for(s.pct_1w)}">{fmt_pct(s.pct_1w)}</span></span>'
+            f'<span>YTD <span class="num {cls_for(s.pct_ytd)}">{fmt_pct(s.pct_ytd)}</span></span>'
+            f'</div></div>'
+        )
+    return f'<h2 id="sectors">Sector Performance</h2><div class="sector-grid">{"".join(cards)}</div>'
+
+
+# ------------------------------------------------------------------------
+# Prediction scorecard
+# ------------------------------------------------------------------------
+def _prior_trading_day_before(date_str: str) -> str:
+    """Return the trading day immediately before the given ISO date."""
+    d = datetime.fromisoformat(date_str).date() - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d.isoformat()
+
+
+_BULLISH_KW = {"beat", "momentum", "upside", "breakout", "continuation", "rally",
+               "strength", "oversold", "recovery", "rebound", "acceleration"}
+_BEARISH_KW = {"miss", "cut", "downside", "breakdown", "weakness", "overbought",
+               "slump", "pressure", "decline", "guidance cut"}
+
+
+def _infer_bias(rationale: str) -> str:
+    """Classify rationale string as bullish/bearish/neutral by keyword count."""
+    lower = rationale.lower()
+    b  = sum(1 for w in _BULLISH_KW if w in lower)
+    br = sum(1 for w in _BEARISH_KW if w in lower)
+    if b > br: return "bullish"
+    if br > b: return "bearish"
+    return "neutral"
+
+
+def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEntry]:
+    """Grade prior day's tickers_to_watch against current snapshot movers."""
+    watches = prior_briefing.get("tickers_to_watch", [])
+    if not watches:
+        return []
+    price_map: dict[str, float] = {}
+    for mw in snap.gainers + snap.losers + snap.most_active:
+        price_map[mw.quote.symbol] = mw.quote.change_pct
+    for q in snap.premarket_us + snap.premarket_crypto:
+        price_map.setdefault(q.symbol, q.change_pct)
+    missing = [w.get("ticker", "") for w in watches
+               if w.get("ticker", "") and w["ticker"] not in price_map]
+    if missing:
+        try:
+            for q in fetch_quotes({s: s for s in missing if s}):
+                price_map[q.symbol] = q.change_pct
+        except Exception:
+            pass
+    entries: list[ScorecardEntry] = []
+    for w in watches:
+        ticker = (w.get("ticker") or "").strip().upper()
+        rationale = w.get("rationale", "")
+        if not ticker:
+            continue
+        bias = _infer_bias(rationale)
+        pct  = price_map.get(ticker)
+        if pct is None:
+            verdict = "N/A"
+        elif abs(pct) < 1.0:
+            verdict = "FLAT"
+        elif (bias == "bullish" and pct >= 1.0) or \
+             (bias == "bearish" and pct <= -1.0) or \
+             (bias == "neutral" and abs(pct) >= 1.0):
+            verdict = "HIT"
+        else:
+            verdict = "MISS"
+        entries.append(ScorecardEntry(ticker=ticker, rationale=rationale,
+                                      bias=bias, actual_pct=pct, verdict=verdict))
+    return entries
+
+
+def render_scorecard(snap: Snapshot) -> str:
+    """Render the prediction scorecard table."""
+    if not snap.scorecard:
+        return ""
+    hits   = sum(1 for e in snap.scorecard if e.verdict == "HIT")
+    misses = sum(1 for e in snap.scorecard if e.verdict == "MISS")
+    flats  = sum(1 for e in snap.scorecard if e.verdict == "FLAT")
+    total  = len(snap.scorecard)
+    rows = []
+    for e in snap.scorecard:
+        vcls = {"HIT": "HIT", "MISS": "MISS", "FLAT": "FLAT", "N/A": "NA"}.get(e.verdict, "NA")
+        pct_str = fmt_pct(e.actual_pct) if e.actual_pct is not None else "—"
+        pcls = cls_for(e.actual_pct or 0.0)
+        rows.append(
+            f'<tr>'
+            f'<td style="font-weight:700">{escape_html(e.ticker)}</td>'
+            f'<td style="font-size:11px;color:#8a92a6;text-transform:capitalize">{escape_html(e.bias)}</td>'
+            f'<td style="font-size:12px;color:var(--text-dim)">'
+            f'{escape_html(e.rationale[:80])}{"…" if len(e.rationale) > 80 else ""}</td>'
+            f'<td class="num {pcls}">{escape_html(pct_str)}</td>'
+            f'<td><span class="verdict {vcls}">{escape_html(e.verdict)}</span></td>'
+            f'</tr>'
+        )
+    return (
+        f'<h2 id="scorecard">Yesterday\'s Calls — Scorecard</h2>'
+        f'<div class="scorecard-wrap">'
+        f'<div class="scorecard-head">'
+        f'<h3>Tickers to Watch · Graded</h3>'
+        f'<div class="scorecard-stats">'
+        f'<span class="hit">{hits} HIT</span>'
+        f'<span class="miss">{misses} MISS</span>'
+        f'<span>{flats} FLAT</span>'
+        f'<span style="color:var(--text-faint)">{total} total</span>'
+        f'</div></div>'
+        f'<table class="sc-table"><thead><tr>'
+        f'<th>Ticker</th><th>Bias</th><th>Rationale</th><th>Actual %</th><th>Verdict</th>'
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table>'
+        f'</div>'
+    )
+
+
+# ------------------------------------------------------------------------
+# Sentiment strip
+# ------------------------------------------------------------------------
+def fetch_sentiment(snap: Snapshot) -> None:
+    """Fetch CNN Fear & Greed, Crypto F&G, Put/Call ratio, BTC dominance."""
+    result: dict = {}
+    try:
+        r = requests.get(
+            "https://production.fear-and-greed.cnn.com/data/fear-and-greed",
+            headers={"User-Agent": USER_AGENT}, timeout=10,
+        )
+        r.raise_for_status()
+        fg = r.json().get("fear_and_greed", {})
+        result["cnn_fg_score"] = fg.get("score")
+        result["cnn_fg_rating"] = fg.get("rating", "")
+    except Exception as e:
+        log(f"CNN Fear & Greed: {e}")
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=1",
+                         headers={"User-Agent": USER_AGENT}, timeout=10)
+        r.raise_for_status()
+        row = r.json().get("data", [{}])[0]
+        result["crypto_fg_score"] = int(row.get("value", 0))
+        result["crypto_fg_rating"] = row.get("value_classification", "")
+    except Exception as e:
+        log(f"Crypto F&G: {e}")
+    # ^PCALL is the CBOE total put/call ratio on some feeds; try gracefully
+    for pc_sym in ("^PCALL", "^PCRATIO"):
+        try:
+            pc = fetch_quotes({pc_sym: "Put/Call Ratio"})
+            if pc and pc[0].price > 0:
+                result["put_call"] = round(pc[0].price, 3)
+                break
+        except Exception:
+            pass
+    vix = next((q for q in snap.indices if q.symbol == "^VIX"), None)
+    if vix:
+        result["vix"] = round(vix.price, 2)
+        result["vix_pct"] = round(vix.change_pct, 2)
+    try:
+        r = requests.get(f"{COINGECKO_BASE}/global",
+                         headers={"User-Agent": USER_AGENT}, timeout=10)
+        r.raise_for_status()
+        dom = r.json().get("data", {}).get("market_cap_percentage", {})
+        result["btc_dominance"] = round(dom.get("btc", 0), 1)
+        result["eth_dominance"] = round(dom.get("eth", 0), 1)
+    except Exception as e:
+        log(f"CoinGecko global: {e}")
+    btc_q = next((m.quote for m in snap.crypto if m.quote.symbol == "BTC"), None)
+    eth_q = next((m.quote for m in snap.crypto if m.quote.symbol == "ETH"), None)
+    if btc_q and eth_q and btc_q.price:
+        result["eth_btc"] = round(eth_q.price / btc_q.price, 5)
+    snap.sentiment = result
+
+
+def render_sentiment_strip(snap: Snapshot) -> str:
+    """Render the sentiment indicator tile row."""
+    s = snap.sentiment
+    if not s:
+        return ""
+
+    def tile(label: str, val: str, sub: str = "", cls: str = "") -> str:
+        cls_str = f" {cls}" if cls else ""
+        sub_html = f'<div class="st-sub">{escape_html(sub)}</div>' if sub else ""
+        return (f'<div class="st-tile">'
+                f'<div class="st-label">{escape_html(label)}</div>'
+                f'<div class="st-val{cls_str}">{escape_html(val)}</div>'
+                f'{sub_html}</div>')
+
+    tiles: list[str] = []
+    if "vix" in s:
+        vcls = "up" if s.get("vix_pct", 0) > 2 else ("down" if s.get("vix_pct", 0) < -2 else "flat")
+        tiles.append(tile("VIX", f'{s["vix"]:.2f}', fmt_pct(s.get("vix_pct", 0)), vcls))
+    if s.get("cnn_fg_score") is not None:
+        sc = int(s["cnn_fg_score"])
+        tiles.append(tile("Fear & Greed", str(sc), s.get("cnn_fg_rating", "").title(),
+                          "up" if sc >= 60 else ("down" if sc <= 40 else "flat")))
+    if "crypto_fg_score" in s:
+        sc = s["crypto_fg_score"]
+        tiles.append(tile("Crypto F&G", str(sc), s.get("crypto_fg_rating", "").title(),
+                          "up" if sc >= 60 else ("down" if sc <= 40 else "flat")))
+    if "put_call" in s:
+        pc = s["put_call"]
+        tiles.append(tile("Put/Call", f'{pc:.2f}', ">1.0 = bearish",
+                          "down" if pc > 1.0 else ("up" if pc < 0.7 else "flat")))
+    if "btc_dominance" in s:
+        tiles.append(tile("BTC Dom", f'{s["btc_dominance"]:.1f}%',
+                          f'ETH {s.get("eth_dominance", 0):.1f}%'))
+    if "eth_btc" in s:
+        tiles.append(tile("ETH/BTC", f'{s["eth_btc"]:.5f}'))
+    if not tiles:
+        return ""
+    return (f'<h2 id="sentiment">Sentiment</h2>'
+            f'<div class="sentiment-strip">{"".join(tiles)}</div>')
+
+
+# ------------------------------------------------------------------------
+# Watchlist
+# ------------------------------------------------------------------------
+def fetch_watchlist_quotes() -> list[Quote]:
+    """Read WATCHLIST env var (comma-separated tickers) and fetch their quotes."""
+    raw_wl = os.environ.get("WATCHLIST", "").strip()
+    if not raw_wl:
+        env_path = SCRIPT_DIR / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("WATCHLIST"):
+                    _, _, v = line.partition("=")
+                    raw_wl = v.strip().strip('"').strip("'")
+                    break
+    tickers = [t.strip().upper() for t in raw_wl.split(",") if t.strip()] if raw_wl else []
+    return fetch_quotes({t: t for t in tickers}) if tickers else []
+
+
+def render_watchlist(snap: Snapshot) -> str:
+    """Render personal watchlist row of compact price/change tiles."""
+    if not snap.watchlist:
+        return ""
+    tiles = []
+    for q in snap.watchlist:
+        cls = cls_for(q.change_pct)
+        tiles.append(
+            f'<div class="wl-tile">'
+            f'<div class="wl-sym">{escape_html(q.symbol)}</div>'
+            f'<div class="wl-price">{fmt_usd(q.price)}</div>'
+            f'<div class="wl-pct {cls}">{fmt_pct(q.change_pct)}</div>'
+            f'</div>'
+        )
+    return f'<div class="wl-row" id="watchlist">{"".join(tiles)}</div>'
+
+
+# ------------------------------------------------------------------------
+# Earnings reactions
+# ------------------------------------------------------------------------
+def fetch_earnings_reactions(prior_earnings: list[CalendarEvent]) -> list[MoverWithNews]:
+    """Fetch today's % change for tickers that reported in the prior session."""
+    symbols = [e.symbol_or_event for e in prior_earnings
+               if e.symbol_or_event and e.symbol_or_event.isalpha()
+               and len(e.symbol_or_event) <= 5][:50]  # cap to avoid timeout
+    if not symbols:
+        return []
+    log(f"Fetching earnings reactions for {len(symbols)} symbols…")
+    name_map = {e.symbol_or_event: (e.description or e.symbol_or_event)
+                for e in prior_earnings if e.symbol_or_event}
+    quotes = fetch_quotes({s: name_map.get(s, s) for s in symbols})
+    if not quotes:
+        return []
+    quotes.sort(key=lambda q: abs(q.change_pct), reverse=True)
+    return attach_news(quotes[:15])
+
+
+def render_earnings_reactions(snap: Snapshot) -> str:
+    """Render panel of last night's earnings gap moves."""
+    if not snap.earnings_reactions:
+        return ""
+    rows = render_movers_block(snap.earnings_reactions, None, "No reaction data.")
+    return (
+        f'<div class="panel" id="earnings-reactions" style="margin-bottom:18px">'
+        f'<div class="panel-head">'
+        f'<h3>Last Night\'s Earnings Reactions</h3>'
+        f'<div class="sub">Sorted by absolute move · today\'s open vs yesterday\'s close</div>'
+        f'</div>{rows}</div>'
+    )
 
 
 # ------------------------------------------------------------------------
@@ -2006,6 +2435,18 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
         snap.global_indices = fetch_quotes(GLOBAL_INDICES)
     except Exception as e:
         warn(f"global indices fetch failed: {e}", snap)
+
+    log("Fetching sector performance (YTD)…")
+    try:
+        snap.sectors = fetch_sectors()
+    except Exception as e:
+        warn(f"sector fetch failed: {e}", snap)
+
+    log("Fetching watchlist…")
+    try:
+        snap.watchlist = fetch_watchlist_quotes()
+    except Exception as e:
+        warn(f"watchlist fetch failed: {e}", snap)
 
     log("Fetching gainers / losers / most active (screener)…")
     gainers_q = fetch_screener("day_gainers", count=MOVERS_COUNT)
@@ -2049,6 +2490,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     snap.crypto_gainers = [MoverWithNews(quote=q) for q in sorted_c[:5]]
     snap.crypto_losers = [MoverWithNews(quote=q) for q in sorted_c[-5:][::-1]]
 
+    log("Fetching sentiment indicators…")
+    try:
+        fetch_sentiment(snap)
+    except Exception as e:
+        warn(f"sentiment fetch failed: {e}", snap)
+
     if not no_premarket:
         log("Fetching pre-market & overnight data…")
         try:
@@ -2061,6 +2508,13 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     snap.earnings_today = fetch_earnings_calendar(today_iso)
     log(f"Fetching economic events for {today_iso}…")
     snap.econ_events_today = fetch_econ_events(today_iso)
+
+    log(f"Fetching earnings reactions ({snap.prior_session_date})…")
+    try:
+        prior_earnings_cal = fetch_earnings_calendar(snap.prior_session_date)
+        snap.earnings_reactions = fetch_earnings_reactions(prior_earnings_cal)
+    except Exception as e:
+        warn(f"earnings reactions failed: {e}", snap)
 
     if not no_ai:
         log("Running AI synthesis via Anthropic…")
@@ -2103,6 +2557,12 @@ def load_cache() -> Snapshot | None:
                 ai_why=d.get("ai_why", ""),
             )
         def ev_from(d): return CalendarEvent(**d)
+        def sp_from(d): return SectorPerf(**d)
+        def sc_from(d): return ScorecardEntry(
+            ticker=d.get("ticker", ""), rationale=d.get("rationale", ""),
+            bias=d.get("bias", "neutral"), actual_pct=d.get("actual_pct"),
+            verdict=d.get("verdict", "N/A"),
+        )
 
         snap = Snapshot(
             prior_session_date=raw["prior_session_date"],
@@ -2125,6 +2585,11 @@ def load_cache() -> Snapshot | None:
             premarket_crypto=[q_from(x) for x in raw.get("premarket_crypto", [])],
             overnight_global=[q_from(x) for x in raw.get("overnight_global", [])],
             premarket_fetched_at=raw.get("premarket_fetched_at", ""),
+            sectors=[sp_from(x) for x in raw.get("sectors", [])],
+            scorecard=[sc_from(x) for x in raw.get("scorecard", [])],
+            sentiment=raw.get("sentiment", {}),
+            watchlist=[q_from(x) for x in raw.get("watchlist", [])],
+            earnings_reactions=[mw_from(x) for x in raw.get("earnings_reactions", [])],
         )
         return snap
     except Exception as e:
@@ -2179,6 +2644,24 @@ def main():
     if briefing is None and not args.no_ai:
         log("Generating morning briefing via Anthropic…")
         briefing = generate_briefing(snap)
+
+    # Persist today's briefing so tomorrow's scorecard can grade it
+    if briefing:
+        today_iso = datetime.now(ET).date().isoformat()
+        bp = SCRIPT_DIR / f"briefing-{today_iso}.json"
+        if not bp.exists():
+            try:
+                bp.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
+                log(f"Briefing persisted to {bp.name}")
+            except Exception as e:
+                warn(f"Could not persist briefing: {e}")
+
+    # Score prior day's predictions
+    prior_date_str = _prior_trading_day_before(snap.prior_session_date)
+    prior_briefing = load_briefing_json(None, snap_date=prior_date_str)
+    if prior_briefing:
+        log("Scoring prior day's predictions…")
+        snap.scorecard = score_predictions(prior_briefing, snap)
 
     log("Rendering HTML…")
     html = render_report(snap, briefing=briefing)
