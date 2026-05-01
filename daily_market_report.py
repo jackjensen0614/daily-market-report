@@ -219,7 +219,9 @@ class ScorecardEntry:
     rationale: str
     bias: str           # "bullish", "bearish", "neutral"
     actual_pct: float | None
-    verdict: str        # "HIT", "MISS", "FLAT", "N/A"
+    verdict: str        # "HIT", "MISS", "FLAT", "N/A" (legacy 3-tier)
+    letter_grade: str = "—"   # "A", "B", "C", "D", "F", or "—"
+    grade_reason: str = ""    # one-line explanation of the grade
 
 
 @dataclass
@@ -1335,6 +1337,71 @@ details.scorecard-details > .scorecard-body {{
 }}
 .sc-section-sub {{ font-size: 11px; color: var(--text-faint); }}
 .sc-picks-wrap {{ padding: 14px 14px 6px; }}
+
+/* A–F grade cards (post-close scorecard) */
+.grade-cards {{
+  display: grid; grid-template-columns: 1fr; gap: 10px;
+  padding: 14px 16px 18px;
+}}
+@media (min-width: 900px) {{ .grade-cards {{ grid-template-columns: 1fr 1fr; }} }}
+.grade-card {{
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+}}
+.gc-top {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
+.gc-ticker {{ font-weight: 700; letter-spacing: 0.02em; font-size: 15px; flex: 0 0 auto; }}
+.gc-pct {{ font-size: 13px; font-weight: 600; }}
+.gc-bias {{
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(148,163,184,.12); color: var(--text-faint);
+  margin-left: auto;
+}}
+.gc-bias-bullish {{ background: rgba(34,197,94,.14); color: var(--green); }}
+.gc-bias-bearish {{ background: rgba(239,68,68,.14); color: var(--red); }}
+.gc-bias-neutral {{ background: rgba(148,163,184,.12); color: var(--text-faint); }}
+.gc-grade {{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  font-weight: 800; font-size: 18px; flex: 0 0 auto;
+}}
+.gc-grade-A {{ background: rgba(34,197,94,.22);  color: var(--green); }}
+.gc-grade-B {{ background: rgba(110,231,183,.18); color: var(--accent); }}
+.gc-grade-C {{ background: rgba(245,158,11,.20); color: var(--yellow); }}
+.gc-grade-D {{ background: rgba(249,115,22,.22); color: #fb923c; }}
+.gc-grade-F {{ background: rgba(239,68,68,.22);  color: var(--red); }}
+.gc-grade-NA {{ background: rgba(148,163,184,.10); color: var(--text-faint); }}
+.gc-thesis, .gc-reasoning {{
+  font-size: 12.5px; line-height: 1.55; margin-top: 8px;
+  color: var(--text);
+}}
+.gc-thesis {{ color: var(--text-dim); }}
+.gc-label {{
+  display: inline-block; min-width: 52px;
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-faint); margin-right: 8px;
+  vertical-align: 1px;
+}}
+
+/* GPA + grade-distribution pills used in section header & summary line */
+.gpa-pill {{
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+}}
+.gpa-A {{ background: rgba(34,197,94,.18);  color: var(--green); }}
+.gpa-B {{ background: rgba(110,231,183,.18); color: var(--accent); }}
+.gpa-C {{ background: rgba(245,158,11,.18); color: var(--yellow); }}
+.gpa-D {{ background: rgba(249,115,22,.18); color: #fb923c; }}
+.gpa-F {{ background: rgba(239,68,68,.18);  color: var(--red); }}
+.gd-pill {{
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+}}
+.gd-A {{ background: rgba(34,197,94,.14);  color: var(--green); }}
+.gd-B {{ background: rgba(110,231,183,.14); color: var(--accent); }}
+.gd-C {{ background: rgba(245,158,11,.14); color: var(--yellow); }}
+.gd-D {{ background: rgba(249,115,22,.14); color: #fb923c; }}
+.gd-F {{ background: rgba(239,68,68,.14);  color: var(--red); }}
 
 /* Colored left border on tiles for immediate direction signal */
 .tile-up   {{ border-left: 3px solid var(--green); }}
@@ -3876,6 +3943,50 @@ def _infer_bias(rationale: str) -> str:
     return "neutral"
 
 
+def _grade_prediction(bias: str, pct: float | None) -> tuple[str, str]:
+    """Return (letter_grade, reason) for a single prediction vs actual close.
+
+    Bullish/bearish: graded on directional correctness + magnitude.
+    Neutral (watchlist flag): graded on realized volatility — did the ticker
+    actually move enough to deserve a watchlist slot.
+    """
+    if pct is None:
+        return ("—", "No price data available — ticker may be delisted or untracked.")
+    p = float(pct)
+    a = abs(p)
+    if bias == "bullish":
+        if p >= 3.0:
+            return ("A", f"Bullish thesis confirmed with conviction: +{p:.2f}% — strong upside captured.")
+        if p >= 1.5:
+            return ("B", f"Bullish thesis worked: +{p:.2f}% — direction right with solid magnitude.")
+        if p >= 0:
+            return ("C", f"Bullish call closed mildly green: +{p:.2f}% — direction right, conviction lacking.")
+        if p > -1.5:
+            return ("D", f"Bullish thesis underwhelmed: {p:.2f}% — wrong direction, contained loss.")
+        return ("F", f"Bullish thesis broke: {p:.2f}% — moved sharply against the call.")
+    if bias == "bearish":
+        if p <= -3.0:
+            return ("A", f"Bearish thesis confirmed with conviction: {p:.2f}% — strong downside captured.")
+        if p <= -1.5:
+            return ("B", f"Bearish thesis worked: {p:.2f}% — direction right with solid magnitude.")
+        if p <= 0:
+            return ("C", f"Bearish call closed mildly red: {p:.2f}% — direction right, conviction lacking.")
+        if p < 1.5:
+            return ("D", f"Bearish thesis underwhelmed: +{p:.2f}% — wrong direction, contained gain.")
+        return ("F", f"Bearish thesis broke: +{p:.2f}% — moved sharply against the call.")
+    # neutral / watchlist flag — graded on realized volatility
+    sign = "+" if p >= 0 else ""
+    if a >= 3.0:
+        return ("A", f"Watchlist call vindicated: {sign}{p:.2f}% — high realized volatility as flagged.")
+    if a >= 1.5:
+        return ("B", f"Notable mover: {sign}{p:.2f}% — meaningful tape action validated the watch.")
+    if a >= 0.5:
+        return ("C", f"Modest mover: {sign}{p:.2f}% — within ordinary range, soft signal.")
+    if a >= 0.2:
+        return ("D", f"Quiet day: {sign}{p:.2f}% — minimal movement despite watchlist flag.")
+    return ("F", f"Flat tape: {sign}{p:.2f}% — watchlist call added no signal.")
+
+
 def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEntry]:
     """Grade prior day's tickers_to_watch against current snapshot movers."""
     watches = prior_briefing.get("tickers_to_watch", [])
@@ -3912,8 +4023,12 @@ def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEnt
             verdict = "HIT"
         else:
             verdict = "MISS"
-        entries.append(ScorecardEntry(ticker=ticker, rationale=rationale,
-                                      bias=bias, actual_pct=pct, verdict=verdict))
+        letter, reason = _grade_prediction(bias, pct)
+        entries.append(ScorecardEntry(
+            ticker=ticker, rationale=rationale, bias=bias,
+            actual_pct=pct, verdict=verdict,
+            letter_grade=letter, grade_reason=reason,
+        ))
     return entries
 
 
@@ -3948,40 +4063,63 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None, eod: bool = F
         )
 
     # ── Graded scorecard ───────────────────────────────────────────────────
-    hits   = sum(1 for e in snap.scorecard if e.verdict == "HIT")
-    misses = sum(1 for e in snap.scorecard if e.verdict == "MISS")
-    flats  = sum(1 for e in snap.scorecard if e.verdict == "FLAT")
-    total  = len(snap.scorecard)
+    total = len(snap.scorecard)
     graded_title = "Today's Calls · Graded at Close" if eod else "Yesterday's Calls · Graded"
 
+    grade_pts = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+    graded_letters = [e.letter_grade for e in snap.scorecard if e.letter_grade in grade_pts]
+    grade_counts = {g: sum(1 for l in graded_letters if l == g) for g in "ABCDF"}
+    gpa = (sum(grade_pts[l] for l in graded_letters) / len(graded_letters)) if graded_letters else None
+
+    def _gpa_letter(g: float | None) -> str:
+        if g is None: return "—"
+        if g >= 3.5:  return "A"
+        if g >= 2.5:  return "B"
+        if g >= 1.5:  return "C"
+        if g >= 0.5:  return "D"
+        return "F"
+    gpa_letter = _gpa_letter(gpa)
+
+    def _grade_dist_html() -> str:
+        parts = []
+        for g in "ABCDF":
+            n = grade_counts[g]
+            if n:
+                parts.append(f'<span class="gd-pill gd-{g}">{n}{g}</span>')
+        return "".join(parts) if parts else '<span style="color:var(--text-faint)">no graded picks</span>'
+
     if snap.scorecard:
-        rows = []
+        cards = []
         for e in snap.scorecard:
-            vcls = {"HIT": "HIT", "MISS": "MISS", "FLAT": "FLAT", "N/A": "NA"}.get(e.verdict, "NA")
             pct_str = fmt_pct(e.actual_pct) if e.actual_pct is not None else "—"
             pcls = cls_for(e.actual_pct or 0.0)
-            rows.append(
-                f'<tr>'
-                f'<td style="font-weight:700">{escape_html(e.ticker)}</td>'
-                f'<td style="font-size:11px;color:#8a92a6;text-transform:capitalize">{escape_html(e.bias)}</td>'
-                f'<td style="font-size:12px;color:var(--text-dim)">'
-                f'{escape_html(e.rationale[:80])}{"…" if len(e.rationale) > 80 else ""}</td>'
-                f'<td class="num {pcls}">{escape_html(pct_str)}</td>'
-                f'<td><span class="verdict {vcls}">{escape_html(e.verdict)}</span></td>'
-                f'</tr>'
+            grade = e.letter_grade if e.letter_grade else "—"
+            gcls = grade if grade in {"A", "B", "C", "D", "F"} else "NA"
+            reason = e.grade_reason or "—"
+            cards.append(
+                f'<div class="grade-card">'
+                f'<div class="gc-top">'
+                f'<span class="gc-grade gc-grade-{gcls}">{escape_html(grade)}</span>'
+                f'<span class="gc-ticker">{escape_html(e.ticker)}</span>'
+                f'<span class="gc-pct num {pcls}">{escape_html(pct_str)}</span>'
+                f'<span class="gc-bias gc-bias-{escape_html(e.bias)}">{escape_html(e.bias)}</span>'
+                f'</div>'
+                f'<div class="gc-thesis"><span class="gc-label">Thesis</span>'
+                f'{escape_html(e.rationale)}</div>'
+                f'<div class="gc-reasoning"><span class="gc-label">Result</span>'
+                f'{escape_html(reason)}</div>'
+                f'</div>'
             )
+        gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
         graded_section = (
             f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
             f'<span class="sc-section-title">{escape_html(graded_title)}</span>'
             f'<div class="scorecard-stats">'
-            f'<span class="hit">{hits} HIT</span>'
-            f'<span class="miss">{misses} MISS</span>'
-            f'<span>{flats} FLAT</span>'
+            f'<span class="gpa-pill gpa-{gpa_letter}">GPA {gpa_str} · {gpa_letter}</span>'
+            f'{_grade_dist_html()}'
             f'<span style="color:var(--text-faint)">{total} total</span>'
             f'</div></div>'
-            f'<table class="sc-table"><thead><tr>'
-            f'<th>Ticker</th><th>Bias</th><th>Rationale</th><th>Actual %</th><th>Verdict</th>'
-            f'</tr></thead><tbody>{"".join(rows)}</tbody></table>'
+            f'<div class="grade-cards">{"".join(cards)}</div>'
         )
     else:
         graded_section = (
@@ -3994,11 +4132,12 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None, eod: bool = F
 
     # ── Summary badge for the closed <summary> line ───────────────────────
     if snap.scorecard:
+        gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
         stats_html = (
             f'<span class="sc-summary-stats">'
-            f'<span class="hit">{hits} HIT</span>'
-            f'<span class="miss">{misses} MISS</span>'
-            f'<span style="color:var(--text-faint)">{flats} FLAT · {total} graded</span>'
+            f'<span class="gpa-pill gpa-{gpa_letter}">GPA {gpa_str} · {gpa_letter}</span>'
+            f'{_grade_dist_html()}'
+            f'<span style="color:var(--text-faint)">{total} graded</span>'
             f'</span>'
         )
     else:
@@ -4545,6 +4684,8 @@ def load_cache() -> Snapshot | None:
             ticker=d.get("ticker", ""), rationale=d.get("rationale", ""),
             bias=d.get("bias", "neutral"), actual_pct=d.get("actual_pct"),
             verdict=d.get("verdict", "N/A"),
+            letter_grade=d.get("letter_grade", "—"),
+            grade_reason=d.get("grade_reason", ""),
         )
 
         snap = Snapshot(
