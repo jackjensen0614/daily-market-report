@@ -3745,7 +3745,7 @@ def render_global_block(snap: Snapshot) -> str:
     return f'{sub}<div class="pm-grid">{tiles}</div>'
 
 
-def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
+def render_report(snap: Snapshot, briefing: dict | None = None, eod: bool = False) -> str:
     prior_date = snap.prior_session_date
     prior_dt = datetime.fromisoformat(snap.prior_session_date)
     today_dt = datetime.fromisoformat(snap.generated_at[:10])
@@ -3781,7 +3781,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None) -> str:
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
-        scorecard_block=render_scorecard(snap, briefing),
+        scorecard_block=render_scorecard(snap, briefing, eod=eod),
         earnings_reactions_block=render_earnings_reactions(snap),
         analysis_block=render_analysis_block(snap, briefing),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
@@ -3917,29 +3917,42 @@ def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEnt
     return entries
 
 
-def render_scorecard(snap: Snapshot, briefing: dict | None = None) -> str:
-    """Collapsible scorecard: today's predictions on top, yesterday's graded calls below."""
-    # ── Today's picks ─────────────────────────────────────────────────────
-    ai = briefing or snap.ai or {}
-    watch_picks = ai.get("tickers_to_watch") or []
-    if watch_picks:
-        picks_html = _ticker_cards_html(watch_picks)
-    else:
-        picks_html = _ticker_cards_html(_b_tickers_prediction(snap))
+def render_scorecard(snap: Snapshot, briefing: dict | None = None, eod: bool = False) -> str:
+    """Collapsible scorecard: today's predictions on top, yesterday's graded calls below.
 
-    picks_section = (
-        f'<div class="sc-section-head">'
-        f'<span class="sc-section-title" id="sc-preds-label">Today\'s Predictions</span>'
-        f'<span class="sc-section-sub" id="sc-preds-sub">Next session watchlist</span>'
-        f'</div>'
-        f'<div class="sc-picks-wrap">{picks_html}</div>'
-    )
+    When eod=True (end-of-day run), the predictions section is replaced by an EOD notice and the
+    graded section is retitled to reflect same-day grading vs the close.
+    """
+    # ── Today's picks (morning view only) ─────────────────────────────────
+    if eod:
+        picks_section = (
+            f'<div class="sc-section-head">'
+            f'<span class="sc-section-title" id="sc-preds-label">End-of-Day · Session Closed</span>'
+            f'<span class="sc-section-sub" id="sc-preds-sub">'
+            f'Tomorrow\'s predictions will appear in the morning briefing</span>'
+            f'</div>'
+        )
+    else:
+        ai = briefing or snap.ai or {}
+        watch_picks = ai.get("tickers_to_watch") or []
+        if watch_picks:
+            picks_html = _ticker_cards_html(watch_picks)
+        else:
+            picks_html = _ticker_cards_html(_b_tickers_prediction(snap))
+        picks_section = (
+            f'<div class="sc-section-head">'
+            f'<span class="sc-section-title" id="sc-preds-label">Today\'s Predictions</span>'
+            f'<span class="sc-section-sub" id="sc-preds-sub">Next session watchlist</span>'
+            f'</div>'
+            f'<div class="sc-picks-wrap">{picks_html}</div>'
+        )
 
     # ── Graded scorecard ───────────────────────────────────────────────────
     hits   = sum(1 for e in snap.scorecard if e.verdict == "HIT")
     misses = sum(1 for e in snap.scorecard if e.verdict == "MISS")
     flats  = sum(1 for e in snap.scorecard if e.verdict == "FLAT")
     total  = len(snap.scorecard)
+    graded_title = "Today's Calls · Graded at Close" if eod else "Yesterday's Calls · Graded"
 
     if snap.scorecard:
         rows = []
@@ -3959,7 +3972,7 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None) -> str:
             )
         graded_section = (
             f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            f'<span class="sc-section-title">Yesterday\'s Calls · Graded</span>'
+            f'<span class="sc-section-title">{escape_html(graded_title)}</span>'
             f'<div class="scorecard-stats">'
             f'<span class="hit">{hits} HIT</span>'
             f'<span class="miss">{misses} MISS</span>'
@@ -3973,7 +3986,7 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None) -> str:
     else:
         graded_section = (
             f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            f'<span class="sc-section-title">Yesterday\'s Calls · Graded</span>'
+            f'<span class="sc-section-title">{escape_html(graded_title)}</span>'
             f'<span class="sc-section-sub" style="color:var(--text-faint)">'
             f'Populates after the first full trading day with briefing data</span>'
             f'</div>'
@@ -3989,7 +4002,12 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None) -> str:
             f'</span>'
         )
     else:
-        n_picks = len(watch_picks) or len(_b_tickers_prediction(snap))
+        if not eod:
+            ai = briefing or snap.ai or {}
+            watch_picks = ai.get("tickers_to_watch") or []
+            n_picks = len(watch_picks) or len(_b_tickers_prediction(snap))
+        else:
+            n_picks = 0
         stats_html = (
             f'<span class="sc-summary-stats">'
             f'<span style="color:var(--text-faint)">{n_picks} picks · no prior grades yet</span>'
@@ -4576,6 +4594,10 @@ def parse_args():
         help="Path to a briefing JSON file to embed in the report.",
     )
     p.add_argument("--no-premarket", action="store_true", help="Skip pre-market / overnight fetch.")
+    p.add_argument(
+        "--eod", action="store_true",
+        help="End-of-day mode: grade today's predictions against today's close (runs at 4:15 PM ET).",
+    )
     return p.parse_args()
 
 
@@ -4621,38 +4643,51 @@ def main():
 
     briefing = load_briefing_json(args.briefing_json, snap_date=snap.prior_session_date)
 
-    if briefing is None and not args.no_ai:
-        log("Generating morning briefing via Anthropic…")
-        briefing = generate_briefing(snap)
+    if not args.eod:
+        if briefing is None and not args.no_ai:
+            log("Generating morning briefing via Anthropic…")
+            briefing = generate_briefing(snap)
 
-    # Persist today's briefing so tomorrow's scorecard can grade it
-    if briefing:
+        # Persist today's briefing so tomorrow's scorecard can grade it
+        if briefing:
+            today_iso = datetime.now(ET).date().isoformat()
+            bp = SCRIPT_DIR / f"briefing-{today_iso}.json"
+            if not bp.exists():
+                try:
+                    bp.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
+                    log(f"Briefing persisted to {bp.name}")
+                except Exception as e:
+                    warn(f"Could not persist briefing: {e}")
+            # Also save to the output directory so GitHub Pages hosts it for future runs
+            out_briefing = Path(args.out).parent / f"briefing-{today_iso}.json"
+            if out_briefing != bp:
+                try:
+                    out_briefing.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
+                    log(f"Briefing also saved to {out_briefing}")
+                except Exception as e:
+                    log(f"Could not save briefing to output dir: {e}")
+
+    # Score predictions
+    if args.eod:
+        # EOD mode: grade TODAY's morning predictions against today's closing prices
         today_iso = datetime.now(ET).date().isoformat()
-        bp = SCRIPT_DIR / f"briefing-{today_iso}.json"
-        if not bp.exists():
-            try:
-                bp.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
-                log(f"Briefing persisted to {bp.name}")
-            except Exception as e:
-                warn(f"Could not persist briefing: {e}")
-        # Also save to the output directory so GitHub Pages hosts it for future runs
-        out_briefing = Path(args.out).parent / f"briefing-{today_iso}.json"
-        if out_briefing != bp:
-            try:
-                out_briefing.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
-                log(f"Briefing also saved to {out_briefing}")
-            except Exception as e:
-                log(f"Could not save briefing to output dir: {e}")
-
-    # Score prior day's predictions
-    prior_date_str = _prior_trading_day_before(snap.prior_session_date)
-    prior_briefing = load_briefing_json(None, snap_date=prior_date_str)
-    if prior_briefing:
-        log("Scoring prior day's predictions…")
-        snap.scorecard = score_predictions(prior_briefing, snap)
+        eod_briefing = load_briefing_json(None, snap_date=today_iso)
+        if eod_briefing is None:
+            eod_briefing = load_briefing_json(None, snap_date=snap.prior_session_date)
+        if eod_briefing:
+            log("EOD: Scoring today's predictions against today's close…")
+            snap.scorecard = score_predictions(eod_briefing, snap)
+        else:
+            log("EOD: No today's briefing found — scorecard will be empty.")
+    else:
+        prior_date_str = _prior_trading_day_before(snap.prior_session_date)
+        prior_briefing = load_briefing_json(None, snap_date=prior_date_str)
+        if prior_briefing:
+            log("Scoring prior day's predictions…")
+            snap.scorecard = score_predictions(prior_briefing, snap)
 
     log("Rendering HTML…")
-    html = render_report(snap, briefing=briefing)
+    html = render_report(snap, briefing=briefing, eod=args.eod)
     out = Path(args.out)
     out.write_text(html, encoding="utf-8")
     log(f"Report written to {out}")
