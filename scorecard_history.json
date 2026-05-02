@@ -1,0 +1,292 @@
+{
+  "days": [
+    {
+      "date": "2026-04-29",
+      "graded_at": "2026-05-02T15:56:17-04:00",
+      "entries": [
+        {
+          "ticker": "MSFT",
+          "rationale": "AH earnings, EPS est $4.07; Azure cloud growth rate is the AI infrastructure bellwether for all cloud names tomorrow.",
+          "bias": "neutral",
+          "actual_pct": -1.1159018159398661,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Modest mover: -1.12% \u2014 within ordinary range, soft signal."
+        },
+        {
+          "ticker": "META",
+          "rationale": "AH earnings, EPS est $6.71; Reels ad revenue and AI capex discipline are the cleanest digital-spend signal.",
+          "bias": "neutral",
+          "actual_pct": -0.3306866341159181,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Quiet day: -0.33% \u2014 minimal movement despite watchlist flag."
+        },
+        {
+          "ticker": "AMZN",
+          "rationale": "AH earnings, EPS est $1.60; AWS growth + tariff commentary on retail margins \u2014 higher variance than usual print.",
+          "bias": "neutral",
+          "actual_pct": 1.2860978748156549,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Modest mover: +1.29% \u2014 within ordinary range, soft signal."
+        },
+        {
+          "ticker": "NXPI",
+          "rationale": "+23.88% yesterday on Q1 earnings beat; semi rotation momentum may extend as KLAC/QCOM report tonight.",
+          "bias": "bullish",
+          "actual_pct": 25.547984186068877,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +25.55% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "INTC",
+          "rationale": "+10.23% on 104M shares; AI rotation into laggard semis \u2014 watch if it holds above $90 into Mag-7 results.",
+          "bias": "neutral",
+          "actual_pct": 12.103648560394035,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Watchlist call vindicated: +12.10% \u2014 high realized volatility."
+        },
+        {
+          "ticker": "KLAC",
+          "rationale": "AH earnings, EPS est $9.16; yesterday's semi strength sets a favorable bar \u2014 a beat extends the equipment rally.",
+          "bias": "bullish",
+          "actual_pct": 0.40022722055252813,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Bullish call closed mildly correct: +0.40% \u2014 direction right, conviction lacking."
+        },
+        {
+          "ticker": "PSX",
+          "rationale": "+5.88% on Q1 beat; WTI crude at $105.33 (+5.4%) is a direct tailwind for refinery margins \u2014 continuation watch.",
+          "bias": "bullish",
+          "actual_pct": 5.06267811006509,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +5.06% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "HOOD",
+          "rationale": "-13.70% on crypto revenue slump; Barclays PT cut to $82 still ~16% above $70.83 \u2014 watch for dead-cat or continued selling.",
+          "bias": "bearish",
+          "actual_pct": -13.244794427929737,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bearish thesis confirmed with conviction: -13.24% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "COIN",
+          "rationale": "-7.61% in HOOD sympathy; if BTC holds $76K support, downside may be limited from current levels.",
+          "bias": "bearish",
+          "actual_pct": -6.3730087516738685,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bearish thesis confirmed with conviction: -6.37% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "QCOM",
+          "rationale": "AH earnings, EPS est $1.90; handset recovery and AI-on-device monetization are the reads after yesterday's semi strength.",
+          "bias": "bullish",
+          "actual_pct": 4.0,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +4.00% \u2014 strong follow-through."
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "graded_at": "2026-05-02T15:56:17-04:00",
+      "entries": [
+        {
+          "ticker": "MSFT",
+          "rationale": "AH earnings, EPS est $4.07; Azure cloud growth rate is the AI infrastructure bellwether for all cloud names tomorrow.",
+          "bias": "neutral",
+          "actual_pct": -3.9296972651300033,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Watchlist call vindicated: -3.93% \u2014 high realized volatility."
+        },
+        {
+          "ticker": "META",
+          "rationale": "AH earnings, EPS est $6.71; Reels ad revenue and AI capex discipline are the cleanest digital-spend signal.",
+          "bias": "neutral",
+          "actual_pct": -8.550039214212493,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Watchlist call vindicated: -8.55% \u2014 high realized volatility."
+        },
+        {
+          "ticker": "AMZN",
+          "rationale": "AH earnings, EPS est $1.60; AWS growth + tariff commentary on retail margins \u2014 higher variance than usual print.",
+          "bias": "neutral",
+          "actual_pct": 0.7679398373068795,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Modest mover: +0.77% \u2014 within ordinary range, soft signal."
+        },
+        {
+          "ticker": "NXPI",
+          "rationale": "+23.88% yesterday on Q1 earnings beat; semi rotation momentum may extend as KLAC/QCOM report tonight.",
+          "bias": "bullish",
+          "actual_pct": 1.5004308860468885,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Bullish thesis worked: +1.50% \u2014 direction right, solid magnitude."
+        },
+        {
+          "ticker": "INTC",
+          "rationale": "+10.23% on 104M shares; AI rotation into laggard semis \u2014 watch if it holds above $90 into Mag-7 results.",
+          "bias": "neutral",
+          "actual_pct": -0.2849568792257586,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Quiet day: -0.28% \u2014 minimal movement despite watchlist flag."
+        },
+        {
+          "ticker": "KLAC",
+          "rationale": "AH earnings, EPS est $9.16; yesterday's semi strength sets a favorable bar \u2014 a beat extends the equipment rally.",
+          "bias": "bullish",
+          "actual_pct": -3.6262319207613296,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bullish thesis broke: -3.63% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "PSX",
+          "rationale": "+5.88% on Q1 beat; WTI crude at $105.33 (+5.4%) is a direct tailwind for refinery margins \u2014 continuation watch.",
+          "bias": "bullish",
+          "actual_pct": 3.2624290876187274,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +3.26% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "HOOD",
+          "rationale": "-13.70% on crypto revenue slump; Barclays PT cut to $82 still ~16% above $70.83 \u2014 watch for dead-cat or continued selling.",
+          "bias": "bearish",
+          "actual_pct": 2.3735990362959885,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bearish thesis broke: +2.37% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "COIN",
+          "rationale": "-7.61% in HOOD sympathy; if BTC holds $76K support, downside may be limited from current levels.",
+          "bias": "bearish",
+          "actual_pct": 3.3236167319221384,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bearish thesis broke: +3.32% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "QCOM",
+          "rationale": "AH earnings, EPS est $1.90; handset recovery and AI-on-device monetization are the reads after yesterday's semi strength.",
+          "bias": "bullish",
+          "actual_pct": 15.115385789137619,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +15.12% \u2014 strong follow-through."
+        }
+      ]
+    },
+    {
+      "date": "2026-05-01",
+      "graded_at": "2026-05-02T15:56:18-04:00",
+      "entries": [
+        {
+          "ticker": "MSFT",
+          "rationale": "AH earnings, EPS est $4.07; Azure cloud growth rate is the AI infrastructure bellwether for all cloud names tomorrow.",
+          "bias": "neutral",
+          "actual_pct": 1.6332345093055862,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Notable mover: +1.63% \u2014 meaningful tape action validated the watch."
+        },
+        {
+          "ticker": "META",
+          "rationale": "AH earnings, EPS est $6.71; Reels ad revenue and AI capex discipline are the cleanest digital-spend signal.",
+          "bias": "neutral",
+          "actual_pct": -0.5164114466532602,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Modest mover: -0.52% \u2014 within ordinary range, soft signal."
+        },
+        {
+          "ticker": "AMZN",
+          "rationale": "AH earnings, EPS est $1.60; AWS growth + tariff commentary on retail margins \u2014 higher variance than usual print.",
+          "bias": "neutral",
+          "actual_pct": 1.2072784412985065,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Modest mover: +1.21% \u2014 within ordinary range, soft signal."
+        },
+        {
+          "ticker": "NXPI",
+          "rationale": "+23.88% yesterday on Q1 earnings beat; semi rotation momentum may extend as KLAC/QCOM report tonight.",
+          "bias": "bullish",
+          "actual_pct": 0.5620061708728689,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Bullish call closed mildly correct: +0.56% \u2014 direction right, conviction lacking."
+        },
+        {
+          "ticker": "INTC",
+          "rationale": "+10.23% on 104M shares; AI rotation into laggard semis \u2014 watch if it holds above $90 into Mag-7 results.",
+          "bias": "neutral",
+          "actual_pct": 5.440303987109489,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Watchlist call vindicated: +5.44% \u2014 high realized volatility."
+        },
+        {
+          "ticker": "KLAC",
+          "rationale": "AH earnings, EPS est $9.16; yesterday's semi strength sets a favorable bar \u2014 a beat extends the equipment rally.",
+          "bias": "bullish",
+          "actual_pct": -1.376294235799802,
+          "verdict": "MISS",
+          "letter_grade": "D",
+          "grade_reason": "Bullish thesis underwhelmed: -1.38% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "PSX",
+          "rationale": "+5.88% on Q1 beat; WTI crude at $105.33 (+5.4%) is a direct tailwind for refinery margins \u2014 continuation watch.",
+          "bias": "bullish",
+          "actual_pct": -1.6522420072134936,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bullish thesis broke: -1.65% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "HOOD",
+          "rationale": "-13.70% on crypto revenue slump; Barclays PT cut to $82 still ~16% above $70.83 \u2014 watch for dead-cat or continued selling.",
+          "bias": "bearish",
+          "actual_pct": 1.0563922059385977,
+          "verdict": "MISS",
+          "letter_grade": "D",
+          "grade_reason": "Bearish thesis underwhelmed: +1.06% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "COIN",
+          "rationale": "-7.61% in HOOD sympathy; if BTC holds $76K support, downside may be limited from current levels.",
+          "bias": "bearish",
+          "actual_pct": 1.8533288855282044,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bearish thesis broke: +1.85% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "QCOM",
+          "rationale": "AH earnings, EPS est $1.90; handset recovery and AI-on-device monetization are the reads after yesterday's semi strength.",
+          "bias": "bullish",
+          "actual_pct": -1.4311211148313507,
+          "verdict": "MISS",
+          "letter_grade": "D",
+          "grade_reason": "Bullish thesis underwhelmed: -1.43% \u2014 wrong direction, contained."
+        }
+      ]
+    }
+  ]
+}

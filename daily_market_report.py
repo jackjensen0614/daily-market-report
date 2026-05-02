@@ -56,6 +56,7 @@ CACHE_DIR = SCRIPT_DIR / ".cache"
 CACHE_DIR.mkdir(exist_ok=True)
 REPORT_PATH = SCRIPT_DIR / "report.html"
 DATA_SNAPSHOT_PATH = CACHE_DIR / "last_snapshot.json"
+SCORECARD_HISTORY_PATH = SCRIPT_DIR / "scorecard_history.json"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -657,8 +658,9 @@ def fetch_earnings_calendar(date_str: str) -> list[CalendarEvent]:
             extra_bits = []
             if eps_est:
                 extra_bits.append(f"EPS est {eps_est}")
-            if mcap:
-                extra_bits.append(f"Mkt cap {mcap}")
+            mcap_compact = fmt_mcap_compact(mcap)
+            if mcap_compact:
+                extra_bits.append(f"Mkt cap {mcap_compact}")
             out.append(
                 CalendarEvent(
                     time=time or "—",
@@ -1249,13 +1251,25 @@ html {{ scroll-padding-top: 64px; }}
 .sticky-nav {{ position:sticky; top:0; z-index:150;
   background:rgba(11,13,18,.93); backdrop-filter:blur(8px);
   border-bottom:1px solid var(--border);
-  display:flex; gap:0; overflow-x:auto;
-  margin:0 0 20px; scrollbar-width:none; }}
+  display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  margin:0 0 20px; scrollbar-width:none;
+  scroll-snap-type:x proximity;
+}}
 .sticky-nav::-webkit-scrollbar {{ display:none; }}
 .sticky-nav a {{ color:var(--text-dim); text-decoration:none; font-size:12px; font-weight:500;
   padding:10px 14px; white-space:nowrap; border-bottom:2px solid transparent;
-  transition:color .15s, border-color .15s; flex-shrink:0; }}
+  transition:color .15s, border-color .15s; flex-shrink:0;
+  scroll-snap-align:start; }}
 .sticky-nav a:hover {{ color:var(--text); border-bottom-color:var(--accent); }}
+@media (max-width: 720px) {{
+  .sticky-nav {{
+    margin:0 -16px 16px;
+    padding:0 8px;
+    -webkit-mask-image:linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
+            mask-image:linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
+  }}
+  .sticky-nav a {{ padding:10px 11px; font-size:11.5px; }}
+}}
 
 /* Watchlist */
 .wl-row {{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }}
@@ -1402,6 +1416,144 @@ details.scorecard-details > .scorecard-body {{
 .gd-C {{ background: rgba(245,158,11,.14); color: var(--yellow); }}
 .gd-D {{ background: rgba(249,115,22,.14); color: #fb923c; }}
 .gd-F {{ background: rgba(239,68,68,.14);  color: var(--red); }}
+
+/* Earnings time badges */
+.time-badge {{
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  background: rgba(148,163,184,.12); color: var(--text-faint);
+  white-space: nowrap;
+}}
+.time-bmo {{ background: rgba(96,165,250,.18); color: var(--blue); }}
+.time-amc {{ background: rgba(167,139,250,.18); color: var(--purple); }}
+.time-tbd {{ background: rgba(148,163,184,.10); color: var(--text-faint); }}
+
+/* Sector horizontal-bar chart */
+.sector-bars {{
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 18px 16px; margin: 12px 0 18px;
+}}
+.sb-caption {{
+  font-size: 11px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px;
+}}
+.sb-row {{
+  display: grid; grid-template-columns: 180px 1fr 70px;
+  align-items: center; gap: 14px; padding: 4px 0;
+}}
+.sb-name {{ font-size: 13px; color: var(--text); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }}
+.sb-track {{
+  position: relative; height: 14px; background: var(--bg-panel-2);
+  border-radius: 4px; overflow: hidden;
+}}
+.sb-axis {{
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: var(--border);
+}}
+.sb-fill {{
+  position: absolute; top: 1px; bottom: 1px; height: 12px; border-radius: 2px;
+}}
+.sb-fill.sb-right {{ left: 50%; }}
+.sb-fill.sb-left  {{ right: 50%; }}
+.sb-fill.up   {{ background: var(--green); }}
+.sb-fill.down {{ background: var(--red); }}
+.sb-fill.flat {{ background: var(--text-faint); }}
+.sb-pct {{ font-size: 12px; text-align: right; font-weight: 600; }}
+@media (max-width: 720px) {{
+  .sb-row {{ grid-template-columns: 120px 1fr 56px; gap: 8px; }}
+  .sb-name {{ font-size: 12px; }}
+  .sb-pct  {{ font-size: 11px; }}
+}}
+
+/* World-news sentiment legend */
+.wn-legend {{
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px 14px; margin: 8px 0 4px;
+  border: 1px solid var(--border); background: var(--bg-panel-2);
+  border-radius: 8px; font-size: 12px; color: var(--text-dim);
+}}
+.wn-legend-label {{
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-faint);
+}}
+.wn-legend-item {{ display: inline-flex; align-items: center; gap: 6px; }}
+.wn-legend-item .wn-dir {{ font-size: 14px; line-height: 1; }}
+
+/* Multi-day scorecard history + self-calibration */
+.sc-day-stack {{ padding: 6px 16px 14px; display: flex; flex-direction: column; gap: 8px; }}
+details.sc-day {{
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}}
+details.sc-day > summary {{
+  cursor: pointer; list-style: none;
+  padding: 10px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  user-select: none; transition: background .15s;
+}}
+details.sc-day > summary::-webkit-details-marker {{ display: none; }}
+details.sc-day > summary:hover {{ background: rgba(255,255,255,.02); }}
+details.sc-day[open] > summary {{ border-bottom: 1px solid var(--border); }}
+.sc-day-date {{
+  font-size: 13px; font-weight: 700; color: var(--text);
+  letter-spacing: 0.01em;
+}}
+.sc-day-meta {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11px; }}
+details.sc-day .grade-cards {{ padding: 12px 14px 16px; }}
+
+.sc-calibration {{
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(110,231,183,.04), transparent);
+  border-bottom: 1px solid var(--border);
+}}
+.cal-label {{
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent); margin-bottom: 10px;
+}}
+.cal-grid {{
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+}}
+@media (max-width: 720px) {{ .cal-grid {{ grid-template-columns: repeat(2, minmax(0,1fr)); }} }}
+.cal-tile {{
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+}}
+.cal-key {{
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 4px;
+}}
+.cal-val {{ font-size: 18px; font-weight: 700; }}
+.cal-val.gpa-A {{ color: var(--green); }}
+.cal-val.gpa-B {{ color: var(--accent); }}
+.cal-val.gpa-C {{ color: var(--yellow); }}
+.cal-val.gpa-D {{ color: #fb923c; }}
+.cal-val.gpa-F {{ color: var(--red); }}
+.cal-rate {{ color: var(--text); }}
+.cal-n   {{ font-size: 11px; color: var(--text-faint); font-weight: 500; }}
+.cal-na  {{ color: var(--text-faint); font-size: 12px; font-weight: 500; }}
+.cal-sub {{ font-size: 11px; color: var(--text-faint); margin-top: 3px; }}
+
+/* What to Watch Today checklist (briefing card) */
+.b-watchlist {{
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(110,231,183,.04);
+}}
+.bw-label {{
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent); margin-bottom: 8px;
+}}
+.bw-list {{ margin: 0; padding: 0; list-style: none; }}
+.bw-list li {{
+  padding: 5px 0 5px 26px; position: relative;
+  font-size: 13px; color: var(--text); line-height: 1.5;
+}}
+.bw-list li::before {{
+  content: '☐'; position: absolute; left: 2px; top: 4px;
+  color: var(--accent); font-size: 14px; font-weight: 700;
+}}
 
 /* Colored left border on tiles for immediate direction signal */
 .tile-up   {{ border-left: 3px solid var(--green); }}
@@ -1840,7 +1992,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
     <h1>Daily Market Report
       <span class="subtle">Prior session · {prior_date_human}</span>
     </h1>
-    <div class="meta">Generated {generated_human} · Today is {today_human}</div>
+    <div class="meta">Last updated: {last_updated} · Today is {today_human}</div>
   </div>
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
     <div class="meta">{warnings_html}</div>
@@ -2195,6 +2347,45 @@ def escape_html(s: str) -> str:
     )
 
 
+def fmt_mcap_compact(value) -> str:
+    """Format a market cap value as $X.XT / $X.XB / $XM.
+
+    Accepts ints, floats, or strings like '$643,056,603,701' / '643056603701'.
+    Returns '' for falsy / unparseable input.
+    """
+    if value in (None, "", 0):
+        return ""
+    try:
+        n = float(re.sub(r"[^\d.\-]", "", str(value)))
+    except (TypeError, ValueError):
+        return str(value)
+    if n == 0:
+        return ""
+    sign = "-" if n < 0 else ""
+    n = abs(n)
+    if n >= 1e12: return f"{sign}${n/1e12:.2f}T"
+    if n >= 1e9:  return f"{sign}${n/1e9:.1f}B"
+    if n >= 1e6:  return f"{sign}${n/1e6:.0f}M"
+    return f"{sign}${n:,.0f}"
+
+
+def time_badge(t: str) -> str:
+    """Render an earnings 'time' field as a small styled badge.
+
+    Handles raw API tokens (time-pre-market, time-not-supplied, etc.) and
+    falls back to a generic badge for anything unrecognized.
+    """
+    raw = (t or "").strip().lower()
+    if raw in ("", "—", "-") or "not-supplied" in raw or "not_supplied" in raw \
+       or "tbd" in raw or "high-potential" in raw:
+        return '<span class="time-badge time-tbd">TBD</span>'
+    if any(x in raw for x in ("pre-market", "premarket", "before", "bmo", "pre")):
+        return '<span class="time-badge time-bmo">Pre-Market</span>'
+    if any(x in raw for x in ("after-hours", "afterhours", "after", "amc", "post")):
+        return '<span class="time-badge time-amc">After Hours</span>'
+    return f'<span class="time-badge">{escape_html(t)}</span>'
+
+
 def render_mover_row(m: MoverWithNews, ai_why: dict[str, str] | None = None) -> str:
     q = m.quote
     cls = cls_for(q.change_pct)
@@ -2247,7 +2438,7 @@ def render_calendar_table(events: list[CalendarEvent], empty_msg: str) -> str:
             name = f'<a href="{escape_html(e.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:3px;">{name}</a>'
         rows.append(f"""
         <tr>
-          <td class="time">{escape_html(e.time)}</td>
+          <td class="time">{time_badge(e.time)}</td>
           <td class="sym">{escape_html(e.symbol_or_event)}</td>
           <td>{name}</td>
           <td style="color: var(--text-dim)">{escape_html(e.extra)}</td>
@@ -2287,7 +2478,10 @@ def render_earnings_section(snap: Snapshot) -> str:
             return "Before Open"
         if any(x in t for x in ("after", "amc", "post")):
             return "After Close"
-        return t.title() or "—"
+        if not t or t in ("—", "-") or "not-supplied" in t or "not_supplied" in t \
+           or "tbd" in t or "high-potential" in t:
+            return "TBD"
+        return t.title()
 
     # Build lookup maps from reactions and results for fast access
     reaction_map: dict[str, MoverWithNews] = {
@@ -2848,7 +3042,7 @@ def _b_setup(snap: Snapshot) -> str:
     parts: list[str] = []
     if snap.earnings_today:
         rows = "".join(
-            f'<tr><td class="time">{escape_html(e.time)}</td>'
+            f'<tr><td class="time">{time_badge(e.time)}</td>'
             f'<td style="font-weight:700">{escape_html(e.symbol_or_event)}</td>'
             f'<td>{escape_html(e.description)}</td>'
             f'<td style="color:var(--text-dim)">{escape_html(e.extra)}</td></tr>'
@@ -2865,7 +3059,7 @@ def _b_setup(snap: Snapshot) -> str:
 
     if snap.econ_events_today:
         rows = "".join(
-            f'<tr><td class="time">{escape_html(e.time)}</td>'
+            f'<tr><td class="time">{time_badge(e.time)}</td>'
             f'<td style="color:#8a92a6">{escape_html(e.symbol_or_event)}</td>'
             f'<td>{escape_html(e.description)}</td>'
             f'<td style="color:var(--text-dim)">{escape_html(e.extra)}</td></tr>'
@@ -2991,7 +3185,7 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
     for e in snap.earnings_today[:3]:
         sym = e.symbol_or_event
         if sym and sym.isalpha() and len(sym) <= 5:
-            detail = f" (EPS est: {e.extra})" if e.extra else ""
+            detail = f" ({e.extra})" if e.extra else ""
             add(sym, "neutral", "high", "±5-15% (gap risk)",
                 f"Reporting {e.time or 'today'}{detail}.",
                 f"Earnings prints create binary gap risk — a beat typically gaps +5-15% at open while a miss or guidance cut can produce the reverse. "
@@ -3508,12 +3702,20 @@ def render_world_news_block(snap: Snapshot, briefing: dict | None = None) -> str
         )
 
     grid = '<div class="wn-grid">' + "\n".join(cards) + '</div>'
+    legend = (
+        '<div class="wn-legend">'
+        '<span class="wn-legend-label">Sentiment:</span>'
+        '<span class="wn-legend-item"><span class="wn-dir up">↑</span> Bullish</span>'
+        '<span class="wn-legend-item"><span class="wn-dir down">↓</span> Bearish</span>'
+        '<span class="wn-legend-item"><span class="wn-dir flat">↔</span> Mixed / Neutral</span>'
+        '</div>'
+    )
     return (
         '<details class="world-news-details" id="world-news">'
         '<summary>Global News &amp; Market Impact'
         '<span class="expand-hint"> — click to expand</span>'
         '</summary>'
-        + grid +
+        + legend + grid +
         '</details>'
     )
 
@@ -3592,6 +3794,47 @@ def render_outlook_block(snap: Snapshot, briefing: dict | None = None) -> str:
 
 # --------------------------------------------------------------------------
 
+def _what_to_watch_html(snap: Snapshot | None, briefing: dict | None) -> str:
+    """Build a 3-bullet 'What to Watch Today' checklist from snapshot + briefing data."""
+    items: list[str] = []
+
+    # 1) Top earnings reporters today (by market cap)
+    if snap and snap.earnings_today:
+        big = sorted(snap.earnings_today, key=lambda e: e.market_cap, reverse=True)
+        names = [e.symbol_or_event for e in big[:3] if e.symbol_or_event]
+        if names:
+            label = "Earnings on deck"
+            items.append(f"{label}: {', '.join(names)}")
+
+    # 2) Biggest pre-market mover (futures or single-name pre-market)
+    if snap and snap.premarket_us:
+        biggest = max(snap.premarket_us, key=lambda q: abs(q.change_pct or 0.0), default=None)
+        if biggest and abs(biggest.change_pct or 0.0) >= 0.05:
+            sign = "+" if (biggest.change_pct or 0.0) >= 0 else ""
+            items.append(f"Pre-market: {biggest.name} {sign}{biggest.change_pct:.2f}%")
+
+    # 3) Risk note from AI briefing, or first economic event of the day
+    if briefing:
+        risks = briefing.get("risk_notes")
+        if isinstance(risks, list) and risks:
+            first = str(risks[0]).split(".")[0].strip()
+            if first:
+                items.append(f"Watch: {first[:140]}")
+    if len(items) < 3 and snap and snap.econ_events_today:
+        ev = snap.econ_events_today[0]
+        items.append(f"Macro: {ev.description} ({ev.time or 'today'})")
+
+    if not items:
+        return ""
+    bullets = "".join(f"<li>{escape_html(b)}</li>" for b in items[:3])
+    return (
+        '<div class="b-watchlist">'
+        '<div class="bw-label">What to Watch Today</div>'
+        f'<ul class="bw-list">{bullets}</ul>'
+        '</div>'
+    )
+
+
 def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -> str:
     """Render the Morning Briefing as an inline card at the top of the page.
 
@@ -3602,6 +3845,7 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
         return ""
 
     gen_date = datetime.now(ET).strftime("%b %-d, %Y · %-I:%M %p %Z")
+    watch_html = _what_to_watch_html(snap, briefing)
 
     # Index chips row — always visible
     index_row_html = ""
@@ -3722,6 +3966,7 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
         f'</div>'
         f'{index_row_html}'
         f'{exec_html}'
+        f'{watch_html}'
         f'{details_block}'
         f'</div>'
     )
@@ -3812,7 +4057,8 @@ def render_global_block(snap: Snapshot) -> str:
     return f'{sub}<div class="pm-grid">{tiles}</div>'
 
 
-def render_report(snap: Snapshot, briefing: dict | None = None, eod: bool = False) -> str:
+def render_report(snap: Snapshot, briefing: dict | None = None,
+                  eod: bool = False, history: dict | None = None) -> str:
     prior_date = snap.prior_session_date
     prior_dt = datetime.fromisoformat(snap.prior_session_date)
     today_dt = datetime.fromisoformat(snap.generated_at[:10])
@@ -3836,10 +4082,14 @@ def render_report(snap: Snapshot, briefing: dict | None = None, eod: bool = Fals
     # Prefer crypto_gainers/losers for the crypto panel if available; else full list
     crypto_list = snap.crypto
 
+    gen_dt_et = datetime.fromisoformat(snap.generated_at).astimezone(ET)
+    last_updated = gen_dt_et.strftime("%-I:%M %p ET")
+
     html = HTML_TEMPLATE.format(
         prior_date=prior_date,
         prior_date_human=prior_dt.strftime("%A, %B %-d, %Y"),
-        generated_human=datetime.fromisoformat(snap.generated_at).strftime("%Y-%m-%d %H:%M %Z"),
+        generated_human=gen_dt_et.strftime("%Y-%m-%d %H:%M %Z"),
+        last_updated=last_updated,
         today_human=today_dt.strftime("%A, %B %-d, %Y"),
         warnings_html=warnings_html,
         index_tiles=index_tiles,
@@ -3848,7 +4098,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None, eod: bool = Fals
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
-        scorecard_block=render_scorecard(snap, briefing, eod=eod),
+        scorecard_block=render_scorecard(snap, briefing, eod=eod, history=history),
         earnings_reactions_block=render_earnings_reactions(snap),
         analysis_block=render_analysis_block(snap, briefing),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
@@ -3898,11 +4148,36 @@ def fetch_sectors() -> list[SectorPerf]:
 
 
 def render_sector_heatmap(snap: Snapshot) -> str:
-    """Render sector heatmap sorted descending by 1D %."""
+    """Render sector heatmap with horizontal bar chart + detail card grid."""
     if not snap.sectors:
         return ""
+    sectors_sorted = sorted(snap.sectors, key=lambda s: s.pct_1d, reverse=True)
+    max_abs = max((abs(s.pct_1d) for s in sectors_sorted), default=0.5) or 0.5
+
+    bar_rows = []
+    for s in sectors_sorted:
+        cls = cls_for(s.pct_1d)
+        width_pct = min(100.0, abs(s.pct_1d) / max_abs * 50.0)
+        side = "right" if s.pct_1d >= 0 else "left"
+        bar_rows.append(
+            f'<div class="sb-row">'
+            f'<div class="sb-name">{escape_html(s.name)}</div>'
+            f'<div class="sb-track" role="img" aria-label="{escape_html(s.name)} 1-day {fmt_pct(s.pct_1d)}">'
+            f'<div class="sb-axis"></div>'
+            f'<div class="sb-fill sb-{side} {cls}" style="width:{width_pct:.2f}%"></div>'
+            f'</div>'
+            f'<div class="sb-pct num {cls}">{fmt_pct(s.pct_1d)}</div>'
+            f'</div>'
+        )
+    bars_html = (
+        '<div class="sector-bars">'
+        '<div class="sb-caption">1-day performance · scaled to range</div>'
+        + "".join(bar_rows) +
+        '</div>'
+    )
+
     cards = []
-    for s in snap.sectors:
+    for s in sectors_sorted:
         cls = cls_for(s.pct_1d)
         cards.append(
             f'<div class="sector-card">'
@@ -3913,12 +4188,30 @@ def render_sector_heatmap(snap: Snapshot) -> str:
             f'<span>YTD <span class="num {cls_for(s.pct_ytd)}">{fmt_pct(s.pct_ytd)}</span></span>'
             f'</div></div>'
         )
-    return f'<h2 id="sectors">Sector Performance</h2><div class="sector-grid">{"".join(cards)}</div>'
+    return (
+        f'<h2 id="sectors">Sector Performance</h2>'
+        f'{bars_html}'
+        f'<div class="sector-grid">{"".join(cards)}</div>'
+    )
 
 
-# ------------------------------------------------------------------------
-# Prediction scorecard
-# ------------------------------------------------------------------------
+# ============================================================================
+# SCORECARD — daily prediction grading, multi-day history, self-calibration
+# ============================================================================
+# Flow:
+#   morning briefing  →  briefing-{date}.json (predictions for the session)
+#   end of session    →  grade those predictions vs that day's close
+#   persisted to      →  scorecard_history.json (durable across runs)
+#   render            →  recent N days + rolling calibration metrics
+# ----------------------------------------------------------------------------
+
+_BULL_KW = {"beat","momentum","upside","breakout","continuation","rally",
+            "strength","oversold","recovery","rebound","acceleration"}
+_BEAR_KW = {"miss","cut","downside","breakdown","weakness","overbought",
+            "slump","pressure","decline","guidance cut"}
+_GRADE_PTS = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+
+
 def _prior_trading_day_before(date_str: str) -> str:
     """Return the trading day immediately before the given ISO date."""
     d = datetime.fromisoformat(date_str).date() - timedelta(days=1)
@@ -3927,68 +4220,93 @@ def _prior_trading_day_before(date_str: str) -> str:
     return d.isoformat()
 
 
-_BULLISH_KW = {"beat", "momentum", "upside", "breakout", "continuation", "rally",
-               "strength", "oversold", "recovery", "rebound", "acceleration"}
-_BEARISH_KW = {"miss", "cut", "downside", "breakdown", "weakness", "overbought",
-               "slump", "pressure", "decline", "guidance cut"}
-
-
 def _infer_bias(rationale: str) -> str:
-    """Classify rationale string as bullish/bearish/neutral by keyword count."""
-    lower = rationale.lower()
-    b  = sum(1 for w in _BULLISH_KW if w in lower)
-    br = sum(1 for w in _BEARISH_KW if w in lower)
-    if b > br: return "bullish"
-    if br > b: return "bearish"
-    return "neutral"
+    low = (rationale or "").lower()
+    b = sum(1 for w in _BULL_KW if w in low)
+    r = sum(1 for w in _BEAR_KW if w in low)
+    return "bullish" if b > r else "bearish" if r > b else "neutral"
 
 
-def _grade_prediction(bias: str, pct: float | None) -> tuple[str, str]:
-    """Return (letter_grade, reason) for a single prediction vs actual close.
+def _gpa_letter(g: float | None) -> str:
+    if g is None: return "—"
+    if g >= 3.5:  return "A"
+    if g >= 2.5:  return "B"
+    if g >= 1.5:  return "C"
+    if g >= 0.5:  return "D"
+    return "F"
 
-    Bullish/bearish: graded on directional correctness + magnitude.
-    Neutral (watchlist flag): graded on realized volatility — did the ticker
-    actually move enough to deserve a watchlist slot.
-    """
+
+def _grade_prediction(bias: str, pct: float | None) -> tuple[str, str, str]:
+    """Return (verdict, letter_grade, reason) for one prediction vs actual % move."""
     if pct is None:
-        return ("—", "No price data available — ticker may be delisted or untracked.")
-    p = float(pct)
-    a = abs(p)
-    if bias == "bullish":
-        if p >= 3.0:
-            return ("A", f"Bullish thesis confirmed with conviction: +{p:.2f}% — strong upside captured.")
-        if p >= 1.5:
-            return ("B", f"Bullish thesis worked: +{p:.2f}% — direction right with solid magnitude.")
-        if p >= 0:
-            return ("C", f"Bullish call closed mildly green: +{p:.2f}% — direction right, conviction lacking.")
-        if p > -1.5:
-            return ("D", f"Bullish thesis underwhelmed: {p:.2f}% — wrong direction, contained loss.")
-        return ("F", f"Bullish thesis broke: {p:.2f}% — moved sharply against the call.")
-    if bias == "bearish":
-        if p <= -3.0:
-            return ("A", f"Bearish thesis confirmed with conviction: {p:.2f}% — strong downside captured.")
-        if p <= -1.5:
-            return ("B", f"Bearish thesis worked: {p:.2f}% — direction right with solid magnitude.")
-        if p <= 0:
-            return ("C", f"Bearish call closed mildly red: {p:.2f}% — direction right, conviction lacking.")
-        if p < 1.5:
-            return ("D", f"Bearish thesis underwhelmed: +{p:.2f}% — wrong direction, contained gain.")
-        return ("F", f"Bearish thesis broke: +{p:.2f}% — moved sharply against the call.")
-    # neutral / watchlist flag — graded on realized volatility
-    sign = "+" if p >= 0 else ""
-    if a >= 3.0:
-        return ("A", f"Watchlist call vindicated: {sign}{p:.2f}% — high realized volatility as flagged.")
-    if a >= 1.5:
-        return ("B", f"Notable mover: {sign}{p:.2f}% — meaningful tape action validated the watch.")
-    if a >= 0.5:
-        return ("C", f"Modest mover: {sign}{p:.2f}% — within ordinary range, soft signal.")
-    if a >= 0.2:
-        return ("D", f"Quiet day: {sign}{p:.2f}% — minimal movement despite watchlist flag.")
-    return ("F", f"Flat tape: {sign}{p:.2f}% — watchlist call added no signal.")
+        return ("N/A", "—", "No price data available — ticker may be delisted or untracked.")
+    p = float(pct); a = abs(p); sign = "+" if p >= 0 else ""
+
+    if bias == "neutral":
+        # graded on realized volatility — did watchlist call deserve the slot
+        if a >= 3.0: return ("HIT", "A",  f"Watchlist call vindicated: {sign}{p:.2f}% — high realized volatility.")
+        if a >= 1.5: return ("HIT", "B",  f"Notable mover: {sign}{p:.2f}% — meaningful tape action validated the watch.")
+        if a >= 0.5: return ("FLAT","C",  f"Modest mover: {sign}{p:.2f}% — within ordinary range, soft signal.")
+        if a >= 0.2: return ("FLAT","D",  f"Quiet day: {sign}{p:.2f}% — minimal movement despite watchlist flag.")
+        return            ("FLAT","F",  f"Flat tape: {sign}{p:.2f}% — watchlist call added no signal.")
+
+    # directional bias: signed_p > 0 means thesis is correct
+    signed_p = p if bias == "bullish" else -p
+    label = bias.title()
+    verdict = "FLAT" if a < 1.0 else ("HIT" if signed_p >= 1.0 else "MISS")
+
+    if signed_p >= 3.0:
+        return (verdict, "A", f"{label} thesis confirmed with conviction: {sign}{p:.2f}% — strong follow-through.")
+    if signed_p >= 1.5:
+        return (verdict, "B", f"{label} thesis worked: {sign}{p:.2f}% — direction right, solid magnitude.")
+    if signed_p >= 0:
+        return (verdict, "C", f"{label} call closed mildly correct: {sign}{p:.2f}% — direction right, conviction lacking.")
+    if signed_p > -1.5:
+        return (verdict, "D", f"{label} thesis underwhelmed: {sign}{p:.2f}% — wrong direction, contained.")
+    return     (verdict, "F", f"{label} thesis broke: {sign}{p:.2f}% — moved sharply against the call.")
+
+
+def _entry_from_pred(ticker: str, rationale: str, pct: float | None) -> ScorecardEntry:
+    bias = _infer_bias(rationale)
+    verdict, letter, reason = _grade_prediction(bias, pct)
+    return ScorecardEntry(
+        ticker=ticker, rationale=rationale, bias=bias,
+        actual_pct=pct, verdict=verdict,
+        letter_grade=letter, grade_reason=reason,
+    )
+
+
+def fetch_eod_change_pct(ticker: str, date_iso: str) -> float | None:
+    """Day-over-day % close change for `ticker` on the given trading date.
+
+    Used for backfilling historical grades. Returns None on any failure.
+    """
+    try:
+        d = datetime.fromisoformat(date_iso).date()
+        start = (d - timedelta(days=10)).isoformat()
+        end   = (d + timedelta(days=1)).isoformat()
+        h = yf.Ticker(ticker).history(start=start, end=end, auto_adjust=False)
+        if h is None or h.empty:
+            return None
+        closes = [(idx.date().isoformat(), float(h.loc[idx, "Close"]))
+                  for idx in h.index if not pd.isna(h.loc[idx, "Close"])]
+        target_idx = next((i for i, (di, _) in enumerate(closes) if di == date_iso), None)
+        if target_idx is None or target_idx == 0:
+            return None
+        prior_close = closes[target_idx - 1][1]
+        target_close = closes[target_idx][1]
+        if prior_close <= 0:
+            return None
+        return (target_close - prior_close) / prior_close * 100.0
+    except Exception:
+        return None
 
 
 def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEntry]:
-    """Grade prior day's tickers_to_watch against current snapshot movers."""
+    """Grade a briefing's tickers_to_watch using prices already in the snapshot.
+
+    Falls back to live quotes for tickers not present in snapshot movers.
+    """
     watches = prior_briefing.get("tickers_to_watch", [])
     if not watches:
         return []
@@ -4005,148 +4323,282 @@ def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEnt
                 price_map[q.symbol] = q.change_pct
         except Exception:
             pass
-    entries: list[ScorecardEntry] = []
+    out: list[ScorecardEntry] = []
     for w in watches:
-        ticker = (w.get("ticker") or "").strip().upper()
-        rationale = w.get("rationale", "")
-        if not ticker:
-            continue
-        bias = _infer_bias(rationale)
-        pct  = price_map.get(ticker)
-        if pct is None:
-            verdict = "N/A"
-        elif abs(pct) < 1.0:
-            verdict = "FLAT"
-        elif (bias == "bullish" and pct >= 1.0) or \
-             (bias == "bearish" and pct <= -1.0) or \
-             (bias == "neutral" and abs(pct) >= 1.0):
-            verdict = "HIT"
-        else:
-            verdict = "MISS"
-        letter, reason = _grade_prediction(bias, pct)
-        entries.append(ScorecardEntry(
-            ticker=ticker, rationale=rationale, bias=bias,
-            actual_pct=pct, verdict=verdict,
-            letter_grade=letter, grade_reason=reason,
-        ))
-    return entries
+        t = (w.get("ticker") or "").strip().upper()
+        if not t: continue
+        out.append(_entry_from_pred(t, w.get("rationale", ""), price_map.get(t)))
+    return out
 
 
-def render_scorecard(snap: Snapshot, briefing: dict | None = None, eod: bool = False) -> str:
-    """Collapsible scorecard: today's predictions on top, yesterday's graded calls below.
+# ── History persistence ────────────────────────────────────────────────────
+def load_scorecard_history() -> dict:
+    if SCORECARD_HISTORY_PATH.exists():
+        try:
+            return json.loads(SCORECARD_HISTORY_PATH.read_text(encoding="utf-8"))
+        except Exception as e:
+            log(f"  scorecard history unreadable: {e}")
+    return {"days": []}
 
-    When eod=True (end-of-day run), the predictions section is replaced by an EOD notice and the
-    graded section is retitled to reflect same-day grading vs the close.
+
+def save_scorecard_history(hist: dict) -> None:
+    try:
+        SCORECARD_HISTORY_PATH.write_text(json.dumps(hist, indent=2), encoding="utf-8")
+    except Exception as e:
+        warn(f"  could not persist scorecard history: {e}")
+
+
+def upsert_scorecard_day(hist: dict, date_iso: str, entries: list[ScorecardEntry]) -> dict:
+    """Insert or replace a day's scorecard entries in history (in place)."""
+    days = [d for d in hist.get("days", []) if d.get("date") != date_iso]
+    days.append({
+        "date": date_iso,
+        "graded_at": datetime.now(ET).isoformat(timespec="seconds"),
+        "entries": [asdict(e) for e in entries],
+    })
+    days.sort(key=lambda d: d.get("date", ""))
+    hist["days"] = days
+    return hist
+
+
+def backfill_scorecard_history(force_dates: list[str] | None = None) -> dict:
+    """Process every briefing-YYYY-MM-DD.json and grade it using yfinance close data.
+
+    Skips dates already present in history unless `force_dates` includes them.
+    Returns the updated history dict.
     """
-    # ── Today's picks (morning view only) ─────────────────────────────────
+    hist = load_scorecard_history()
+    have = {d["date"] for d in hist.get("days", [])}
+    force = set(force_dates or [])
+    pat = re.compile(r"briefing-(\d{4}-\d{2}-\d{2})\.json$")
+
+    for path in sorted(SCRIPT_DIR.glob("briefing-*.json")):
+        m = pat.search(path.name)
+        if not m: continue
+        date = m.group(1)
+        if date in have and date not in force:
+            continue
+        try:
+            b = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            log(f"  briefing {path.name} unreadable: {e}")
+            continue
+        watches = b.get("tickers_to_watch") or []
+        if not watches: continue
+        log(f"  backfilling scorecard for {date} ({len(watches)} picks)")
+        entries: list[ScorecardEntry] = []
+        for w in watches:
+            t = (w.get("ticker") or "").strip().upper()
+            if not t: continue
+            pct = fetch_eod_change_pct(t, date)
+            entries.append(_entry_from_pred(t, w.get("rationale", ""), pct))
+        # Skip non-trading days: if every pick returned None, the date had no
+        # market data (weekend/holiday or session not yet closed).
+        if entries and any(e.actual_pct is not None for e in entries):
+            upsert_scorecard_day(hist, date, entries)
+        else:
+            log(f"  skipping {date}: no price data (likely non-trading day)")
+
+    save_scorecard_history(hist)
+    return hist
+
+
+# ── Calibration metrics (the "self-learning" feedback loop) ────────────────
+def compute_calibration(hist: dict, window: int = 5) -> dict:
+    """Compute rolling stats from the most recent `window` days of history.
+
+    Provides the AI with empirical feedback on its own track record so future
+    predictions can be calibrated against measured performance.
+    """
+    days = sorted(hist.get("days", []), key=lambda d: d.get("date", ""), reverse=True)[:window]
+    all_entries = [e for d in days for e in d.get("entries", [])]
+
+    def _gpa(entries: list[dict]) -> float | None:
+        letters = [e.get("letter_grade") for e in entries if e.get("letter_grade") in _GRADE_PTS]
+        return (sum(_GRADE_PTS[l] for l in letters) / len(letters)) if letters else None
+
+    def _hit_rate(entries: list[dict], bias: str) -> tuple[float | None, int]:
+        same = [e for e in entries if e.get("bias") == bias and e.get("verdict") in ("HIT", "MISS", "FLAT")]
+        if not same: return (None, 0)
+        hits = sum(1 for e in same if e.get("verdict") == "HIT")
+        return (hits / len(same), len(same))
+
+    bullish_hr, bullish_n = _hit_rate(all_entries, "bullish")
+    bearish_hr, bearish_n = _hit_rate(all_entries, "bearish")
+    neutral_hr, neutral_n = _hit_rate(all_entries, "neutral")
+
+    return {
+        "window_days": len(days),
+        "total_graded": len(all_entries),
+        "rolling_gpa": _gpa(all_entries),
+        "rolling_letter": _gpa_letter(_gpa(all_entries)),
+        "hit_rate": {
+            "bullish": {"rate": bullish_hr, "n": bullish_n},
+            "bearish": {"rate": bearish_hr, "n": bearish_n},
+            "neutral": {"rate": neutral_hr, "n": neutral_n},
+        },
+        "best_day": (max(days, key=lambda d: _gpa(d.get("entries", [])) or -1).get("date")
+                     if days else None),
+        "worst_day": (min(days, key=lambda d: _gpa(d.get("entries", [])) or 99).get("date")
+                      if days else None),
+        "last_updated": datetime.now(ET).isoformat(timespec="seconds"),
+    }
+
+
+# ── Render ─────────────────────────────────────────────────────────────────
+def _grade_card_html(e: dict) -> str:
+    pct = e.get("actual_pct")
+    pct_str = fmt_pct(pct) if pct is not None else "—"
+    pcls = cls_for(pct or 0.0)
+    grade = e.get("letter_grade") or "—"
+    gcls = grade if grade in {"A","B","C","D","F"} else "NA"
+    bias = e.get("bias", "neutral")
+    return (
+        f'<div class="grade-card">'
+        f'<div class="gc-top">'
+        f'<span class="gc-grade gc-grade-{gcls}">{escape_html(grade)}</span>'
+        f'<span class="gc-ticker">{escape_html(e.get("ticker",""))}</span>'
+        f'<span class="gc-pct num {pcls}">{escape_html(pct_str)}</span>'
+        f'<span class="gc-bias gc-bias-{escape_html(bias)}">{escape_html(bias)}</span>'
+        f'</div>'
+        f'<div class="gc-thesis"><span class="gc-label">Thesis</span>{escape_html(e.get("rationale",""))}</div>'
+        f'<div class="gc-reasoning"><span class="gc-label">Result</span>{escape_html(e.get("grade_reason","—"))}</div>'
+        f'</div>'
+    )
+
+
+def _day_section_html(day: dict, open_default: bool = False) -> str:
+    """One collapsible day-of-grades section."""
+    entries = day.get("entries", [])
+    letters = [e.get("letter_grade") for e in entries if e.get("letter_grade") in _GRADE_PTS]
+    gpa = (sum(_GRADE_PTS[l] for l in letters) / len(letters)) if letters else None
+    gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
+    gpa_l = _gpa_letter(gpa)
+    counts = {g: sum(1 for l in letters if l == g) for g in "ABCDF"}
+    dist = "".join(f'<span class="gd-pill gd-{g}">{counts[g]}{g}</span>'
+                   for g in "ABCDF" if counts[g])
+
+    try:
+        date_human = datetime.fromisoformat(day["date"]).strftime("%a, %b %-d")
+    except Exception:
+        date_human = day.get("date", "—")
+
+    cards = "".join(_grade_card_html(e) for e in entries)
+    open_attr = " open" if open_default else ""
+    return (
+        f'<details class="sc-day"{open_attr}>'
+        f'<summary>'
+        f'<span class="sc-day-date">{escape_html(date_human)}</span>'
+        f'<span class="sc-day-meta">'
+        f'<span class="gpa-pill gpa-{gpa_l}">GPA {gpa_str} · {gpa_l}</span>'
+        f'{dist}<span style="color:var(--text-faint)">{len(entries)} picks</span>'
+        f'</span>'
+        f'</summary>'
+        f'<div class="grade-cards">{cards}</div>'
+        f'</details>'
+    )
+
+
+def _calibration_html(cal: dict) -> str:
+    """Header strip showing self-learning metrics across the rolling window."""
+    if not cal or cal.get("total_graded", 0) == 0:
+        return ""
+
+    def _hr(b: dict) -> str:
+        if b["rate"] is None: return f'<span class="cal-na">{b["n"]} picks</span>'
+        return f'<span class="cal-rate">{b["rate"]*100:.0f}%</span> <span class="cal-n">({b["n"]})</span>'
+
+    gpa = cal.get("rolling_gpa")
+    gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
+    gpa_l = cal.get("rolling_letter") or "—"
+    hr = cal.get("hit_rate", {})
+
+    return (
+        '<div class="sc-calibration">'
+        '<div class="cal-label">Self-Calibration · Rolling ' + str(cal.get("window_days", 0)) + 'd</div>'
+        '<div class="cal-grid">'
+        f'<div class="cal-tile"><div class="cal-key">GPA</div>'
+        f'<div class="cal-val gpa-{gpa_l}">{gpa_str}</div>'
+        f'<div class="cal-sub">{cal.get("total_graded",0)} graded</div></div>'
+        f'<div class="cal-tile"><div class="cal-key">Bullish hit-rate</div>'
+        f'<div class="cal-val">{_hr(hr.get("bullish", {"rate":None,"n":0}))}</div></div>'
+        f'<div class="cal-tile"><div class="cal-key">Bearish hit-rate</div>'
+        f'<div class="cal-val">{_hr(hr.get("bearish", {"rate":None,"n":0}))}</div></div>'
+        f'<div class="cal-tile"><div class="cal-key">Neutral hit-rate</div>'
+        f'<div class="cal-val">{_hr(hr.get("neutral", {"rate":None,"n":0}))}</div></div>'
+        '</div></div>'
+    )
+
+
+def render_scorecard(snap: Snapshot, briefing: dict | None = None,
+                     eod: bool = False, history: dict | None = None) -> str:
+    """Multi-day scorecard with self-calibration panel + today's predictions."""
+    history = history if history is not None else load_scorecard_history()
+    days = sorted(history.get("days", []), key=lambda d: d.get("date",""), reverse=True)
+    cal = compute_calibration(history, window=5)
+
+    # ── Today's predictions (forward-looking) ─────────────────────────────
     if eod:
         picks_section = (
-            f'<div class="sc-section-head">'
-            f'<span class="sc-section-title" id="sc-preds-label">End-of-Day · Session Closed</span>'
-            f'<span class="sc-section-sub" id="sc-preds-sub">'
-            f'Tomorrow\'s predictions will appear in the morning briefing</span>'
-            f'</div>'
+            '<div class="sc-section-head">'
+            '<span class="sc-section-title" id="sc-preds-label">End-of-Day · Session Closed</span>'
+            '<span class="sc-section-sub" id="sc-preds-sub">'
+            'Tomorrow\'s predictions will appear in the morning briefing</span>'
+            '</div>'
         )
     else:
         ai = briefing or snap.ai or {}
-        watch_picks = ai.get("tickers_to_watch") or []
-        if watch_picks:
-            picks_html = _ticker_cards_html(watch_picks)
-        else:
-            picks_html = _ticker_cards_html(_b_tickers_prediction(snap))
+        watch_picks = ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or []
+        picks_html = _ticker_cards_html(watch_picks) if watch_picks else ""
         picks_section = (
-            f'<div class="sc-section-head">'
-            f'<span class="sc-section-title" id="sc-preds-label">Today\'s Predictions</span>'
-            f'<span class="sc-section-sub" id="sc-preds-sub">Next session watchlist</span>'
-            f'</div>'
+            '<div class="sc-section-head">'
+            '<span class="sc-section-title" id="sc-preds-label">Today\'s Predictions</span>'
+            '<span class="sc-section-sub" id="sc-preds-sub">Next session watchlist</span>'
+            '</div>'
             f'<div class="sc-picks-wrap">{picks_html}</div>'
         )
 
-    # ── Graded scorecard ───────────────────────────────────────────────────
-    total = len(snap.scorecard)
-    graded_title = "Today's Calls · Graded at Close" if eod else "Yesterday's Calls · Graded"
-
-    grade_pts = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
-    graded_letters = [e.letter_grade for e in snap.scorecard if e.letter_grade in grade_pts]
-    grade_counts = {g: sum(1 for l in graded_letters if l == g) for g in "ABCDF"}
-    gpa = (sum(grade_pts[l] for l in graded_letters) / len(graded_letters)) if graded_letters else None
-
-    def _gpa_letter(g: float | None) -> str:
-        if g is None: return "—"
-        if g >= 3.5:  return "A"
-        if g >= 2.5:  return "B"
-        if g >= 1.5:  return "C"
-        if g >= 0.5:  return "D"
-        return "F"
-    gpa_letter = _gpa_letter(gpa)
-
-    def _grade_dist_html() -> str:
-        parts = []
-        for g in "ABCDF":
-            n = grade_counts[g]
-            if n:
-                parts.append(f'<span class="gd-pill gd-{g}">{n}{g}</span>')
-        return "".join(parts) if parts else '<span style="color:var(--text-faint)">no graded picks</span>'
-
-    if snap.scorecard:
-        cards = []
-        for e in snap.scorecard:
-            pct_str = fmt_pct(e.actual_pct) if e.actual_pct is not None else "—"
-            pcls = cls_for(e.actual_pct or 0.0)
-            grade = e.letter_grade if e.letter_grade else "—"
-            gcls = grade if grade in {"A", "B", "C", "D", "F"} else "NA"
-            reason = e.grade_reason or "—"
-            cards.append(
-                f'<div class="grade-card">'
-                f'<div class="gc-top">'
-                f'<span class="gc-grade gc-grade-{gcls}">{escape_html(grade)}</span>'
-                f'<span class="gc-ticker">{escape_html(e.ticker)}</span>'
-                f'<span class="gc-pct num {pcls}">{escape_html(pct_str)}</span>'
-                f'<span class="gc-bias gc-bias-{escape_html(e.bias)}">{escape_html(e.bias)}</span>'
-                f'</div>'
-                f'<div class="gc-thesis"><span class="gc-label">Thesis</span>'
-                f'{escape_html(e.rationale)}</div>'
-                f'<div class="gc-reasoning"><span class="gc-label">Result</span>'
-                f'{escape_html(reason)}</div>'
-                f'</div>'
-            )
-        gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
-        graded_section = (
-            f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            f'<span class="sc-section-title">{escape_html(graded_title)}</span>'
-            f'<div class="scorecard-stats">'
-            f'<span class="gpa-pill gpa-{gpa_letter}">GPA {gpa_str} · {gpa_letter}</span>'
-            f'{_grade_dist_html()}'
-            f'<span style="color:var(--text-faint)">{total} total</span>'
-            f'</div></div>'
-            f'<div class="grade-cards">{"".join(cards)}</div>'
+    # ── Calibration + per-day history ─────────────────────────────────────
+    if days:
+        # Most recent day expanded by default; older days collapsed.
+        day_blocks = "".join(
+            _day_section_html(d, open_default=(i == 0))
+            for i, d in enumerate(days[:10])
+        )
+        history_section = (
+            '<div class="sc-section-head" style="border-top:1px solid var(--border)">'
+            '<span class="sc-section-title">Graded Calls — Recent Sessions</span>'
+            f'<span class="sc-section-sub">{len(days)} day(s) of history · expandable</span>'
+            '</div>'
+            f'{_calibration_html(cal)}'
+            f'<div class="sc-day-stack">{day_blocks}</div>'
         )
     else:
-        graded_section = (
-            f'<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            f'<span class="sc-section-title">{escape_html(graded_title)}</span>'
-            f'<span class="sc-section-sub" style="color:var(--text-faint)">'
-            f'Populates after the first full trading day with briefing data</span>'
-            f'</div>'
+        history_section = (
+            '<div class="sc-section-head" style="border-top:1px solid var(--border)">'
+            '<span class="sc-section-title">Graded Calls — Recent Sessions</span>'
+            '<span class="sc-section-sub" style="color:var(--text-faint)">'
+            'Populates after the first full trading day with briefing data</span>'
+            '</div>'
         )
 
-    # ── Summary badge for the closed <summary> line ───────────────────────
-    if snap.scorecard:
+    # ── Summary badge (collapsed-state header) ────────────────────────────
+    if days:
+        gpa = cal.get("rolling_gpa")
         gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
+        gpa_l = cal.get("rolling_letter") or "—"
         stats_html = (
-            f'<span class="sc-summary-stats">'
-            f'<span class="gpa-pill gpa-{gpa_letter}">GPA {gpa_str} · {gpa_letter}</span>'
-            f'{_grade_dist_html()}'
-            f'<span style="color:var(--text-faint)">{total} graded</span>'
-            f'</span>'
+            '<span class="sc-summary-stats">'
+            f'<span class="gpa-pill gpa-{gpa_l}">GPA {gpa_str} · {gpa_l}</span>'
+            f'<span style="color:var(--text-faint)">{cal.get("total_graded",0)} graded · '
+            f'{len(days)} session(s)</span>'
+            '</span>'
         )
     else:
+        n_picks = 0
         if not eod:
             ai = briefing or snap.ai or {}
-            watch_picks = ai.get("tickers_to_watch") or []
-            n_picks = len(watch_picks) or len(_b_tickers_prediction(snap))
-        else:
-            n_picks = 0
+            n_picks = len(ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or [])
         stats_html = (
             f'<span class="sc-summary-stats">'
             f'<span style="color:var(--text-faint)">{n_picks} picks · no prior grades yet</span>'
@@ -4154,19 +4606,19 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None, eod: bool = F
         )
 
     return (
-        f'<details class="scorecard-details" id="scorecard" open>'
-        f'<summary>'
-        f'<span class="sc-summary-left">'
-        f'<span class="sc-summary-arrow">▶</span>'
-        f'<span class="sc-summary-title">Scorecard</span>'
-        f'</span>'
+        '<details class="scorecard-details" id="scorecard" open>'
+        '<summary>'
+        '<span class="sc-summary-left">'
+        '<span class="sc-summary-arrow">▶</span>'
+        '<span class="sc-summary-title">Scorecard</span>'
+        '</span>'
         f'{stats_html}'
-        f'</summary>'
-        f'<div class="scorecard-body">'
+        '</summary>'
+        '<div class="scorecard-body">'
         f'{picks_section}'
-        f'{graded_section}'
-        f'</div>'
-        f'</details>'
+        f'{history_section}'
+        '</div>'
+        '</details>'
     )
 
 
@@ -4808,16 +5260,21 @@ def main():
                 except Exception as e:
                     log(f"Could not save briefing to output dir: {e}")
 
-    # Score predictions
+    # Score predictions for the relevant day, then upsert into history
+    history = load_scorecard_history()
     if args.eod:
         # EOD mode: grade TODAY's morning predictions against today's closing prices
         today_iso = datetime.now(ET).date().isoformat()
         eod_briefing = load_briefing_json(None, snap_date=today_iso)
+        graded_date = today_iso
         if eod_briefing is None:
             eod_briefing = load_briefing_json(None, snap_date=snap.prior_session_date)
+            graded_date = snap.prior_session_date
         if eod_briefing:
             log("EOD: Scoring today's predictions against today's close…")
             snap.scorecard = score_predictions(eod_briefing, snap)
+            if snap.scorecard:
+                upsert_scorecard_day(history, graded_date, snap.scorecard)
         else:
             log("EOD: No today's briefing found — scorecard will be empty.")
     else:
@@ -4826,9 +5283,15 @@ def main():
         if prior_briefing:
             log("Scoring prior day's predictions…")
             snap.scorecard = score_predictions(prior_briefing, snap)
+            if snap.scorecard:
+                upsert_scorecard_day(history, prior_date_str, snap.scorecard)
+
+    # Backfill any other briefings we have on disk but no grades for yet
+    log("Backfilling scorecard history from briefing files…")
+    history = backfill_scorecard_history()
 
     log("Rendering HTML…")
-    html = render_report(snap, briefing=briefing, eod=args.eod)
+    html = render_report(snap, briefing=briefing, eod=args.eod, history=history)
     out = Path(args.out)
     out.write_text(html, encoding="utf-8")
     log(f"Report written to {out}")
