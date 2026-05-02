@@ -1754,7 +1754,7 @@ details.earnings-extra > .cols {{ margin-top: 12px; }}
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--bg-card);
+  background: var(--bg-panel);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1766,7 +1766,9 @@ details.earnings-extra > .cols {{ margin-top: 12px; }}
 @media (max-width: 920px) {{ .sidebar {{ display: none; }} }}
 .sb-head {{
   padding: 14px 14px 10px; border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; background: var(--bg-card); z-index: 1;
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 6px -4px rgba(0,0,0,0.4);
 }}
 .sb-title {{ font-size: 13px; font-weight: 700; color: var(--text); }}
 .sb-subtitle {{ font-size: 10px; color: var(--text-faint); margin-top: 2px; }}
