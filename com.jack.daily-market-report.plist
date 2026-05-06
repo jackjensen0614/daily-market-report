@@ -16,7 +16,7 @@
     <array>
         <string>/bin/bash</string>
         <string>-lc</string>
-        <string>cd "$HOME/Documents/Claude/Projects/Daily Report" &amp;&amp; ./venv/bin/python3 daily_market_report.py --no-open &amp;&amp; /usr/bin/open "$HOME/Documents/Claude/Projects/Daily Report/report.html"</string>
+        <string>cd "$HOME/Documents/Claude/Projects/Daily Report" &amp;&amp; ./venv/bin/python3 daily_market_report.py --no-open &amp;&amp; ./auto_publish.sh &amp;&amp; /usr/bin/open "$HOME/Documents/Claude/Projects/Daily Report/report.html"</string>
     </array>
 
     <!-- 6:00 AM, Mon (1) through Fri (5). One <dict> per day. -->
