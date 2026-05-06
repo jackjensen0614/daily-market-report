@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the launchd jobs for the Daily Market Report.
 #   Morning job  -- 6:00 AM ET, Mon-Fri  (generates briefing + morning report)
-#   EOD job      -- 4:15 PM ET, Mon-Fri  (grades today's predictions at close)
+#   EOD job      -- 4:30 PM ET, Mon-Fri  (grades today's predictions at close)
 # Idempotent -- safe to run repeatedly.
 
 set -euo pipefail
@@ -13,7 +13,7 @@ TARGET_DIR="$HOME/Library/LaunchAgents"
 echo "==> Installing Daily Market Report scheduled jobs"
 echo "    Project dir: $PROJECT_DIR"
 echo "    Morning job: 6:00 AM, Monday through Friday"
-echo "    EOD job:     4:15 PM, Monday through Friday"
+echo "    EOD job:     4:30 PM, Monday through Friday"
 echo
 
 # 1) Make sure the project is set up first.

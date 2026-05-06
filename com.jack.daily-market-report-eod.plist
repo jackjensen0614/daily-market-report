@@ -4,7 +4,7 @@
 <dict>
     <!--
       Daily Market Report — End-of-Day Scorecard
-      Runs at 4:15 PM ET (16:15), Monday–Friday, after US markets close.
+      Runs at 4:30 PM ET (16:30), Monday–Friday, after US markets close.
       Grades today's morning predictions against today's closing prices
       and regenerates report.html with the results.
 
@@ -21,33 +21,33 @@
         <string>cd "$HOME/Documents/Claude/Projects/Daily Report" &amp;&amp; ./venv/bin/python3 daily_market_report.py --eod --no-ai --no-open &amp;&amp; ./auto_publish.sh &amp;&amp; /usr/bin/open "$HOME/Documents/Claude/Projects/Daily Report/report.html"</string>
     </array>
 
-    <!-- 4:15 PM ET, Mon (1) through Fri (5). One <dict> per day. -->
+    <!-- 4:30 PM ET, Mon (1) through Fri (5). One <dict> per day. -->
     <key>StartCalendarInterval</key>
     <array>
         <dict>
             <key>Weekday</key><integer>1</integer>
             <key>Hour</key><integer>16</integer>
-            <key>Minute</key><integer>15</integer>
+            <key>Minute</key><integer>30</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>2</integer>
             <key>Hour</key><integer>16</integer>
-            <key>Minute</key><integer>15</integer>
+            <key>Minute</key><integer>30</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>3</integer>
             <key>Hour</key><integer>16</integer>
-            <key>Minute</key><integer>15</integer>
+            <key>Minute</key><integer>30</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>4</integer>
             <key>Hour</key><integer>16</integer>
-            <key>Minute</key><integer>15</integer>
+            <key>Minute</key><integer>30</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>5</integer>
             <key>Hour</key><integer>16</integer>
-            <key>Minute</key><integer>15</integer>
+            <key>Minute</key><integer>30</integer>
         </dict>
     </array>
 
