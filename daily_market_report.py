@@ -222,7 +222,9 @@ class ScorecardEntry:
     actual_pct: float | None
     verdict: str        # "HIT", "MISS", "FLAT", "N/A" (legacy 3-tier)
     letter_grade: str = "—"   # "A", "B", "C", "D", "F", or "—"
-    grade_reason: str = ""    # one-line explanation of the grade
+    grade_reason: str = ""    # legacy single-register reason (kept for back-compat)
+    grade_reason_standard: str = ""   # plain-English explanation
+    grade_reason_advanced: str = ""   # technical / thesis-language explanation
 
 
 @dataclass
@@ -1960,9 +1962,33 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
   font-size: 12px; color: var(--text-faint); line-height: 1.6;
   border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;
 }}
+
+/* Reading-mode toggle */
+body.mode-standard .adv-only {{ display: none !important; }}
+body.mode-advanced .std-only {{ display: none !important; }}
+.mode-toggle {{
+  display: inline-flex; align-items: center;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 999px; padding: 2px; font-size: 11px;
+  user-select: none;
+}}
+.mode-toggle .mt-label {{
+  font-size: 10px; color: var(--text-faint); text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 0 8px; margin-right: 2px;
+}}
+.mode-toggle button {{
+  appearance: none; background: transparent; border: 0;
+  color: var(--text-dim); padding: 5px 12px; border-radius: 999px;
+  cursor: pointer; font: inherit; font-size: 11px; font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}}
+.mode-toggle button:hover {{ color: var(--text); }}
+.mode-toggle button.active {{
+  background: var(--bg-panel-2); color: var(--text); font-weight: 600;
+}}
 </style>
 </head>
-<body>
+<body class="mode-standard">
 
 <div class="page-layout">
 
@@ -1998,6 +2024,11 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
   </div>
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
     <div class="meta">{warnings_html}</div>
+    <div class="mode-toggle" role="group" aria-label="Reading mode">
+      <span class="mt-label">View</span>
+      <button id="mt-std" class="active" onclick="setReadingMode('standard')">Standard</button>
+      <button id="mt-adv" onclick="setReadingMode('advanced')">Advanced</button>
+    </div>
     <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
       <span class="spin">&#8635;</span> <span id="refresh-label">Refresh</span>
     </button>
@@ -2007,13 +2038,13 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 
 <nav class="sticky-nav">
   <a href="#live-markets">Live</a>
-  <a href="#briefing">Briefing</a>
-  <a href="#predictions">Predictions</a>
-  <a href="#us-markets">US Markets</a>
+  <a href="#briefing"><span class="std-only">Summary</span><span class="adv-only">Briefing</span></a>
+  <a href="#predictions"><span class="std-only">Picks</span><span class="adv-only">Predictions</span></a>
+  <a href="#us-markets"><span class="std-only">U.S.</span><span class="adv-only">US Markets</span></a>
   <a href="#earnings-cal">Earnings</a>
-  <a href="#global-markets">Global</a>
+  <a href="#global-markets"><span class="std-only">World</span><span class="adv-only">Global</span></a>
   <a href="#crypto-section">Crypto</a>
-  <a href="#scorecard">Scorecard</a>
+  <a href="#scorecard"><span class="std-only">Scoreboard</span><span class="adv-only">Scorecard</span></a>
 </nav>
 
 <!-- ===== LIVE MARKETS TICKER ===== -->
@@ -2062,7 +2093,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 
 {premarket_block}
 
-<h2 id="indices">Indices &amp; Macro</h2>
+<h2 id="indices"><span class="std-only">Major Indexes &amp; Big-Picture Numbers</span><span class="adv-only">Indices &amp; Macro</span></h2>
 <div class="index-grid">
   {index_tiles}
 </div>
@@ -2073,20 +2104,20 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 
 {sentiment_block}
 
-<h2 id="movers">Stock Movers · {prior_date_human}</h2>
+<h2 id="movers"><span class="std-only">Biggest Winners &amp; Losers</span><span class="adv-only">Stock Movers</span> · {prior_date_human}</h2>
 <div class="cols">
   <div class="panel">
-    <div class="panel-head"><h3>Top Gainers</h3><div class="sub">Largest % moves up</div></div>
+    <div class="panel-head"><h3><span class="std-only">Stocks Up the Most</span><span class="adv-only">Top Gainers</span></h3><div class="sub"><span class="std-only">Stocks that rose the most today</span><span class="adv-only">Largest % moves up</span></div></div>
     {gainers_rows}
   </div>
   <div class="panel">
-    <div class="panel-head"><h3>Top Losers</h3><div class="sub">Largest % moves down</div></div>
+    <div class="panel-head"><h3><span class="std-only">Stocks Down the Most</span><span class="adv-only">Top Losers</span></h3><div class="sub"><span class="std-only">Stocks that fell the most today</span><span class="adv-only">Largest % moves down</span></div></div>
     {losers_rows}
   </div>
 </div>
 <div class="cols" style="margin-top: 18px;">
   <div class="panel">
-    <div class="panel-head"><h3>Most Active</h3><div class="sub">Sorted by volume</div></div>
+    <div class="panel-head"><h3><span class="std-only">Most Traded</span><span class="adv-only">Most Active</span></h3><div class="sub"><span class="std-only">Stocks with the most shares changing hands</span><span class="adv-only">Sorted by volume</span></div></div>
     {active_rows}
   </div>
   {earnings_reactions_block}
@@ -2108,7 +2139,7 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 <div class="market-group" id="crypto-section">
 <div class="market-group-header crypto">Crypto</div>
 <div class="panel" id="crypto-panel">
-  <div class="panel-head"><h3>Crypto · Top {crypto_top_n}</h3><div class="sub">By market cap · 24h change</div></div>
+  <div class="panel-head"><h3><span class="std-only">Top Cryptocurrencies</span><span class="adv-only">Crypto · Top {crypto_top_n}</span></h3><div class="sub"><span class="std-only">Largest by total value · last 24 hours</span><span class="adv-only">By market cap · 24h change</span></div></div>
   {crypto_rows}
 </div>
 {crypto_outlook_block}
@@ -2127,6 +2158,26 @@ details.world-news-details[open] > summary .expand-hint {{ display: none; }}
 if (window.location.protocol === 'file:') {{
   window.location.replace('https://jackjensen0614.github.io/daily-market-report/');
 }}
+
+// ── Reading-mode toggle (Standard / Advanced) ───────────────────────────
+var MODE_KEY = 'mktReadingMode';
+function setReadingMode(mode) {{
+  if (mode !== 'standard' && mode !== 'advanced') mode = 'standard';
+  document.body.classList.remove('mode-standard', 'mode-advanced');
+  document.body.classList.add('mode-' + mode);
+  var s = document.getElementById('mt-std');
+  var a = document.getElementById('mt-adv');
+  if (s && a) {{
+    s.classList.toggle('active', mode === 'standard');
+    a.classList.toggle('active', mode === 'advanced');
+  }}
+  try {{ localStorage.setItem(MODE_KEY, mode); }} catch(e) {{}}
+}}
+(function initReadingMode() {{
+  var saved = 'standard';
+  try {{ saved = localStorage.getItem(MODE_KEY) || 'standard'; }} catch(e) {{}}
+  setReadingMode(saved);
+}})();
 
 // ── Watchlist sidebar ────────────────────────────────────────────────────
 var SB_KEY = 'mktSbTickers';
@@ -2347,6 +2398,19 @@ def escape_html(s: str) -> str:
          .replace(">", "&gt;")
          .replace('"', "&quot;")
     )
+
+
+def mode_pair(std: str, adv: str) -> str:
+    """Emit paired-mode HTML — Standard text shows by default, Advanced when the toggle is on.
+
+    Pass already-escaped or trusted HTML; this wrapper does not call escape_html.
+    """
+    return f'<span class="std-only">{std}</span><span class="adv-only">{adv}</span>'
+
+
+def mode_pair_text(std: str, adv: str) -> str:
+    """Like mode_pair() but escapes both inputs first (use for plain text)."""
+    return f'<span class="std-only">{escape_html(std)}</span><span class="adv-only">{escape_html(adv)}</span>'
 
 
 def fmt_mcap_compact(value) -> str:
@@ -2582,9 +2646,9 @@ def render_earnings_section(snap: Snapshot) -> str:
         f'<details class="earnings-extra">'
         f'<summary>{rest_label} &amp; economic events</summary>'
         f'<div class="cols">'
-        + (f'<div class="panel"><div class="panel-head"><h3>All Earnings</h3>'
+        + (f'<div class="panel"><div class="panel-head"><h3><span class="std-only">Companies Reporting Earnings</span><span class="adv-only">All Earnings</span></h3>'
            f'<div class="sub">Full list</div></div>{rest_table}</div>' if rest else "")
-        + f'<div class="panel"><div class="panel-head"><h3>Economic Events &amp; News</h3>'
+        + f'<div class="panel"><div class="panel-head"><h3><span class="std-only">Today\'s Economic News</span><span class="adv-only">Economic Events &amp; News</span></h3>'
           f'<div class="sub">Scheduled releases &amp; macro headlines</div></div>{econ_block}</div>'
         f'</div></details>'
     )
@@ -2755,7 +2819,7 @@ def render_today_outlook(ai: dict) -> str:
         return ""
     return f"""
     <div class="narr">
-      <div class="label">Today's Outlook</div>
+      <div class="label">{mode_pair("What to expect today", "Today's Outlook")}</div>
       <p>{escape_html(text)}</p>
     </div>
     """
@@ -2769,7 +2833,7 @@ def render_crypto_outlook(ai: dict) -> str:
         return ""
     return f"""
     <div class="narr">
-      <div class="label">Crypto Outlook</div>
+      <div class="label">{mode_pair("Crypto · What to watch", "Crypto Outlook")}</div>
       <p>{escape_html(text)}</p>
     </div>
     """
@@ -2783,7 +2847,7 @@ def render_risk_block(ai: dict) -> str:
         return ""
     return f"""
     <div class="narr risk">
-      <div class="label">Risk Notes</div>
+      <div class="label">{mode_pair("Things that could go wrong", "Risk Notes")}</div>
       <p>{escape_html(text)}</p>
     </div>
     """
@@ -2842,7 +2906,7 @@ def render_tickers_to_watch(ai: dict) -> str:
         return ""
     cards_html = _ticker_cards_html(watch)
     return (
-        '<h2>Tickers to Watch &amp; Predictions</h2>'
+        '<h2><span class="std-only">Stocks Worth Watching</span><span class="adv-only">Tickers to Watch &amp; Predictions</span></h2>'
         + cards_html
     )
 
@@ -2988,7 +3052,7 @@ def _b_us_markets(snap: Snapshot) -> str:
 
     return (
         '<div class="briefing-section">'
-        '<div class="bs-label">US Markets · Yesterday\'s Session</div>'
+        '<div class="bs-label"><span class="std-only">U.S. stocks · what happened yesterday</span><span class="adv-only">US Markets · Yesterday\'s Session</span></div>'
         f'{index_chips_html}{idx_table}{movers_2col}'
         '</div>'
     )
@@ -3006,7 +3070,7 @@ def _b_global_markets(snap: Snapshot) -> str:
     )
     return (
         '<div class="briefing-section">'
-        '<div class="bs-label">Global Markets</div>'
+        '<div class="bs-label"><span class="std-only">Markets around the world</span><span class="adv-only">Global Markets</span></div>'
         '<table><thead><tr>'
         '<th style="text-align:left">Market</th>'
         '<th style="text-align:right">Price</th>'
@@ -3030,7 +3094,7 @@ def _b_crypto(snap: Snapshot) -> str:
     )
     return (
         '<div class="briefing-section crypto">'
-        '<div class="bs-label">Crypto Markets · Top 10 by Market Cap</div>'
+        '<div class="bs-label"><span class="std-only">Top 10 cryptocurrencies</span><span class="adv-only">Crypto Markets · Top 10 by Market Cap</span></div>'
         '<table><thead><tr>'
         '<th style="text-align:left">Symbol</th><th style="text-align:left">Name</th>'
         '<th style="text-align:right">Price</th><th style="text-align:right">24h %</th>'
@@ -3078,7 +3142,7 @@ def _b_setup(snap: Snapshot) -> str:
 
     return (
         '<div class="briefing-section setup">'
-        '<div class="bs-label">Today\'s Setup — What to Watch</div>'
+        '<div class="bs-label"><span class="std-only">What to watch today</span><span class="adv-only">Today\'s Setup — What to Watch</span></div>'
         + "".join(parts) +
         '</div>'
     )
@@ -3123,7 +3187,7 @@ def _b_risks(snap: Snapshot) -> str:
     lis = "".join(f"<li>{escape_html(r)}</li>" for r in risks[:4])
     return (
         '<div class="briefing-section risk">'
-        '<div class="bs-label">Risk Notes</div>'
+        '<div class="bs-label"><span class="std-only">Things that could go wrong</span><span class="adv-only">Risk Notes</span></div>'
         f'<ul>{lis}</ul>'
         '</div>'
     )
@@ -3164,7 +3228,7 @@ def _b_session_narrative(snap: Snapshot) -> str:
         return ""
     return (
         '<div class="briefing-section">'
-        '<div class="bs-label">Yesterday\'s Session</div>'
+        '<div class="bs-label"><span class="std-only">What happened yesterday</span><span class="adv-only">Yesterday\'s Session</span></div>'
         f'<p>{escape_html(" ".join(sentences))}</p>'
         '</div>'
     )
@@ -3279,7 +3343,7 @@ def _b_coming_day(snap: Snapshot) -> str:
 
     return (
         '<div class="briefing-section setup">'
-        '<div class="bs-label">Coming Trading Day</div>'
+        '<div class="bs-label"><span class="std-only">Today\'s trading session</span><span class="adv-only">Coming Trading Day</span></div>'
         f'<p>{escape_html(" ".join(lines))}</p>'
         '</div>'
     )
@@ -3749,7 +3813,7 @@ def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
     if not cards:
         return ""
 
-    html = '<h2 id="analysis">Market Analysis</h2>'
+    html = '<h2 id="analysis"><span class="std-only">What\'s Happening Today</span><span class="adv-only">Market Analysis</span></h2>'
     for title, text in cards:
         paragraphs = "".join(
             f"<p>{escape_html(s.strip())}</p>"
@@ -3883,21 +3947,21 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
         session_text = briefing.get("session_recap", "")
         session_html = (
             '<div class="briefing-section">'
-            '<div class="bs-label">Yesterday\'s Session</div>'
+            '<div class="bs-label"><span class="std-only">What happened yesterday</span><span class="adv-only">Yesterday\'s Session</span></div>'
             f'{_paras(session_text)}</div>'
         ) if session_text else ""
 
         crypto_recap = briefing.get("crypto_recap", "")
         crypto_recap_html = (
             '<div class="briefing-section crypto">'
-            '<div class="bs-label">Crypto Recap</div>'
+            '<div class="bs-label"><span class="std-only">Crypto · what happened</span><span class="adv-only">Crypto Recap</span></div>'
             f'{_paras(crypto_recap)}</div>'
         ) if crypto_recap else ""
 
         setup_text = briefing.get("today_setup", "")
         setup_html = (
             '<div class="briefing-section setup">'
-            '<div class="bs-label">Today\'s Setup</div>'
+            '<div class="bs-label"><span class="std-only">What to watch today</span><span class="adv-only">Today\'s Setup</span></div>'
             f'{_paras(setup_text)}</div>'
         ) if setup_text else ""
 
@@ -3913,7 +3977,7 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
             )
             watch_html = (
                 '<div class="briefing-watch">'
-                '<div class="bs-label">Tickers to Watch Today</div>'
+                '<div class="bs-label"><span class="std-only">Stocks to watch today</span><span class="adv-only">Tickers to Watch Today</span></div>'
                 f'<div class="b-watch-grid">{cards}</div>'
                 '</div>'
             )
@@ -3921,7 +3985,7 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
         crypto_out = briefing.get("crypto_outlook", "")
         crypto_out_html = (
             '<div class="briefing-section crypto">'
-            '<div class="bs-label">Crypto Outlook</div>'
+            '<div class="bs-label"><span class="std-only">Crypto · what to watch</span><span class="adv-only">Crypto Outlook</span></div>'
             f'{_paras(crypto_out)}</div>'
         ) if crypto_out else ""
 
@@ -3932,13 +3996,13 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
                 lis = "".join(f"<li>{escape_html(r)}</li>" for r in risk_items)
                 risk_html = (
                     '<div class="briefing-section risk">'
-                    '<div class="bs-label">Risk Notes</div>'
+                    '<div class="bs-label"><span class="std-only">Things that could go wrong</span><span class="adv-only">Risk Notes</span></div>'
                     f'<ul>{lis}</ul></div>'
                 )
             else:
                 risk_html = (
                     '<div class="briefing-section risk">'
-                    '<div class="bs-label">Risk Notes</div>'
+                    '<div class="bs-label"><span class="std-only">Things that could go wrong</span><span class="adv-only">Risk Notes</span></div>'
                     f'{_paras(str(risk_items))}</div>'
                 )
 
@@ -4036,7 +4100,7 @@ def render_data_tickers_block(snap: Snapshot) -> str:
     cards_html = _ticker_cards_html(picks)
     coming = _b_coming_day(snap)
     return (
-        '<h2>Tickers to Watch &amp; Predictions</h2>'
+        '<h2><span class="std-only">Stocks Worth Watching</span><span class="adv-only">Tickers to Watch &amp; Predictions</span></h2>'
         + coming
         + cards_html
     )
@@ -4191,7 +4255,7 @@ def render_sector_heatmap(snap: Snapshot) -> str:
             f'</div></div>'
         )
     return (
-        f'<h2 id="sectors">Sector Performance</h2>'
+        f'<h2 id="sectors"><span class="std-only">How Each Industry Is Doing</span><span class="adv-only">Sector Performance</span></h2>'
         f'{bars_html}'
         f'<div class="sector-grid">{"".join(cards)}</div>'
     )
@@ -4246,43 +4310,73 @@ def _gpa_letter(g: float | None) -> str:
     return "F"
 
 
-def _grade_prediction(bias: str, pct: float | None) -> tuple[str, str, str]:
-    """Return (verdict, letter_grade, reason) for one prediction vs actual % move."""
+def _grade_prediction(bias: str, pct: float | None) -> tuple[str, str, str, str]:
+    """Return (verdict, letter_grade, reason_standard, reason_advanced)."""
     if pct is None:
-        return ("N/A", "—", "No price data available — ticker may be delisted or untracked.")
+        return ("N/A", "—",
+                "Couldn't grade — no price data for this ticker.",
+                "No price data available — ticker may be delisted or untracked.")
     p = float(pct); a = abs(p); sign = "+" if p >= 0 else ""
 
     if bias == "neutral":
-        # graded on realized volatility — did watchlist call deserve the slot
-        if a >= 3.0: return ("HIT", "A",  f"Watchlist call vindicated: {sign}{p:.2f}% — high realized volatility.")
-        if a >= 1.5: return ("HIT", "B",  f"Notable mover: {sign}{p:.2f}% — meaningful tape action validated the watch.")
-        if a >= 0.5: return ("FLAT","C",  f"Modest mover: {sign}{p:.2f}% — within ordinary range, soft signal.")
-        if a >= 0.2: return ("FLAT","D",  f"Quiet day: {sign}{p:.2f}% — minimal movement despite watchlist flag.")
-        return            ("FLAT","F",  f"Flat tape: {sign}{p:.2f}% — watchlist call added no signal.")
+        if a >= 3.0:
+            return ("HIT", "A",
+                    f"Big move ({sign}{p:.2f}%). Watching this stock paid off.",
+                    f"Watchlist call vindicated: {sign}{p:.2f}% — high realized volatility.")
+        if a >= 1.5:
+            return ("HIT", "B",
+                    f"Solid move ({sign}{p:.2f}%). Worth watching.",
+                    f"Notable mover: {sign}{p:.2f}% — meaningful tape action validated the watch.")
+        if a >= 0.5:
+            return ("FLAT", "C",
+                    f"Small move ({sign}{p:.2f}%). Below what we'd hope from a flagged stock.",
+                    f"Modest mover: {sign}{p:.2f}% — within ordinary range, soft signal.")
+        if a >= 0.2:
+            return ("FLAT", "D",
+                    f"Barely moved ({sign}{p:.2f}%).",
+                    f"Quiet day: {sign}{p:.2f}% — minimal movement despite watchlist flag.")
+        return     ("FLAT", "F",
+                    f"Didn't move ({sign}{p:.2f}%). Pick added nothing.",
+                    f"Flat tape: {sign}{p:.2f}% — watchlist call added no signal.")
 
-    # directional bias: signed_p > 0 means thesis is correct
+    # directional bias: signed_p > 0 means the call was right
     signed_p = p if bias == "bullish" else -p
-    label = bias.title()
+    label_adv = bias.title()
+    expected = "up" if bias == "bullish" else "down"
+    moved = "rose" if bias == "bullish" else "fell"
     verdict = "FLAT" if a < 1.0 else ("HIT" if signed_p >= 1.0 else "MISS")
 
     if signed_p >= 3.0:
-        return (verdict, "A", f"{label} thesis confirmed with conviction: {sign}{p:.2f}% — strong follow-through.")
+        return (verdict, "A",
+                f"Predicted {expected}. Stock {moved} sharply ({sign}{p:.2f}%). Strong call.",
+                f"{label_adv} thesis confirmed with conviction: {sign}{p:.2f}% — strong follow-through.")
     if signed_p >= 1.5:
-        return (verdict, "B", f"{label} thesis worked: {sign}{p:.2f}% — direction right, solid magnitude.")
+        return (verdict, "B",
+                f"Predicted {expected}. Stock moved {expected} ({sign}{p:.2f}%). Good call.",
+                f"{label_adv} thesis worked: {sign}{p:.2f}% — direction right, solid magnitude.")
     if signed_p >= 0:
-        return (verdict, "C", f"{label} call closed mildly correct: {sign}{p:.2f}% — direction right, conviction lacking.")
+        return (verdict, "C",
+                f"Predicted {expected}. Stock barely moved that way ({sign}{p:.2f}%). Right idea, weak follow-through.",
+                f"{label_adv} call closed mildly correct: {sign}{p:.2f}% — direction right, conviction lacking.")
     if signed_p > -1.5:
-        return (verdict, "D", f"{label} thesis underwhelmed: {sign}{p:.2f}% — wrong direction, contained.")
-    return     (verdict, "F", f"{label} thesis broke: {sign}{p:.2f}% — moved sharply against the call.")
+        return (verdict, "D",
+                f"Predicted {expected}. Stock went the other way slightly ({sign}{p:.2f}%). Wrong but contained.",
+                f"{label_adv} thesis underwhelmed: {sign}{p:.2f}% — wrong direction, contained.")
+    return     (verdict, "F",
+                f"Predicted {expected}. Stock moved sharply opposite ({sign}{p:.2f}%). Bad call.",
+                f"{label_adv} thesis broke: {sign}{p:.2f}% — moved sharply against the call.")
 
 
 def _entry_from_pred(ticker: str, rationale: str, pct: float | None) -> ScorecardEntry:
     bias = _infer_bias(rationale)
-    verdict, letter, reason = _grade_prediction(bias, pct)
+    verdict, letter, reason_std, reason_adv = _grade_prediction(bias, pct)
     return ScorecardEntry(
         ticker=ticker, rationale=rationale, bias=bias,
         actual_pct=pct, verdict=verdict,
-        letter_grade=letter, grade_reason=reason,
+        letter_grade=letter,
+        grade_reason=reason_adv,  # legacy field retained for back-compat
+        grade_reason_standard=reason_std,
+        grade_reason_advanced=reason_adv,
     )
 
 
@@ -4463,16 +4557,31 @@ def _grade_card_html(e: dict) -> str:
     grade = e.get("letter_grade") or "—"
     gcls = grade if grade in {"A","B","C","D","F"} else "NA"
     bias = e.get("bias", "neutral")
+    bias_label = mode_pair_text(
+        {"bullish": "up", "bearish": "down", "neutral": "watch"}.get(bias, bias),
+        bias,
+    )
+
+    # Paired grade reasons; recompute from bias+pct if not stored (legacy entries).
+    reason_std = e.get("grade_reason_standard")
+    reason_adv = e.get("grade_reason_advanced") or e.get("grade_reason")
+    if not reason_std or not reason_adv:
+        _, _, recomp_std, recomp_adv = _grade_prediction(bias, pct)
+        reason_std = reason_std or recomp_std
+        reason_adv = reason_adv or recomp_adv
+    result_label = mode_pair("Result", "Result")  # same word, kept symmetric
+    thesis_label = mode_pair("Why we picked it", "Thesis")
     return (
         f'<div class="grade-card">'
         f'<div class="gc-top">'
         f'<span class="gc-grade gc-grade-{gcls}">{escape_html(grade)}</span>'
         f'<span class="gc-ticker">{escape_html(e.get("ticker",""))}</span>'
         f'<span class="gc-pct num {pcls}">{escape_html(pct_str)}</span>'
-        f'<span class="gc-bias gc-bias-{escape_html(bias)}">{escape_html(bias)}</span>'
+        f'<span class="gc-bias gc-bias-{escape_html(bias)}">{bias_label}</span>'
         f'</div>'
-        f'<div class="gc-thesis"><span class="gc-label">Thesis</span>{escape_html(e.get("rationale",""))}</div>'
-        f'<div class="gc-reasoning"><span class="gc-label">Result</span>{escape_html(e.get("grade_reason","—"))}</div>'
+        f'<div class="gc-thesis"><span class="gc-label">{thesis_label}</span>{escape_html(e.get("rationale",""))}</div>'
+        f'<div class="gc-reasoning"><span class="gc-label">{result_label}</span>'
+        f'{mode_pair_text(reason_std, reason_adv)}</div>'
         f'</div>'
     )
 
@@ -4495,13 +4604,21 @@ def _day_section_html(day: dict, open_default: bool = False) -> str:
 
     cards = "".join(_grade_card_html(e) for e in entries)
     open_attr = " open" if open_default else ""
+    gpa_pill_inner = mode_pair(
+        f"Grade {gpa_l} · score {gpa_str}",
+        f"GPA {gpa_str} · {gpa_l}",
+    )
+    picks_count = mode_pair(
+        f"{len(entries)} stocks scored",
+        f"{len(entries)} picks",
+    )
     return (
         f'<details class="sc-day"{open_attr}>'
         f'<summary>'
         f'<span class="sc-day-date">{escape_html(date_human)}</span>'
         f'<span class="sc-day-meta">'
-        f'<span class="gpa-pill gpa-{gpa_l}">GPA {gpa_str} · {gpa_l}</span>'
-        f'{dist}<span style="color:var(--text-faint)">{len(entries)} picks</span>'
+        f'<span class="gpa-pill gpa-{gpa_l}">{gpa_pill_inner}</span>'
+        f'{dist}<span style="color:var(--text-faint)">{picks_count}</span>'
         f'</span>'
         f'</summary>'
         f'<div class="grade-cards">{cards}</div>'
@@ -4523,18 +4640,26 @@ def _calibration_html(cal: dict) -> str:
     gpa_l = cal.get("rolling_letter") or "—"
     hr = cal.get("hit_rate", {})
 
+    window_d = cal.get("window_days", 0)
+    cal_label = mode_pair(
+        f"How we're doing · last {window_d} sessions",
+        f"Self-Calibration · Rolling {window_d}d",
+    )
+    bull_label = mode_pair("\"Up\" picks that worked", "Bullish hit-rate")
+    bear_label = mode_pair("\"Down\" picks that worked", "Bearish hit-rate")
+    neut_label = mode_pair("\"Watch\" picks that moved", "Neutral hit-rate")
     return (
         '<div class="sc-calibration">'
-        '<div class="cal-label">Self-Calibration · Rolling ' + str(cal.get("window_days", 0)) + 'd</div>'
+        f'<div class="cal-label">{cal_label}</div>'
         '<div class="cal-grid">'
         f'<div class="cal-tile"><div class="cal-key">GPA</div>'
         f'<div class="cal-val gpa-{gpa_l}">{gpa_str}</div>'
         f'<div class="cal-sub">{cal.get("total_graded",0)} graded</div></div>'
-        f'<div class="cal-tile"><div class="cal-key">Bullish hit-rate</div>'
+        f'<div class="cal-tile"><div class="cal-key">{bull_label}</div>'
         f'<div class="cal-val">{_hr(hr.get("bullish", {"rate":None,"n":0}))}</div></div>'
-        f'<div class="cal-tile"><div class="cal-key">Bearish hit-rate</div>'
+        f'<div class="cal-tile"><div class="cal-key">{bear_label}</div>'
         f'<div class="cal-val">{_hr(hr.get("bearish", {"rate":None,"n":0}))}</div></div>'
-        f'<div class="cal-tile"><div class="cal-key">Neutral hit-rate</div>'
+        f'<div class="cal-tile"><div class="cal-key">{neut_label}</div>'
         f'<div class="cal-val">{_hr(hr.get("neutral", {"rate":None,"n":0}))}</div></div>'
         '</div></div>'
     )
@@ -4549,46 +4674,60 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None,
 
     # ── Today's predictions (forward-looking) ─────────────────────────────
     if eod:
+        eod_title = mode_pair("Today's market is closed", "End-of-Day · Session Closed")
+        eod_sub = mode_pair(
+            "Tomorrow's picks will show up in the morning briefing",
+            "Tomorrow's predictions will appear in the morning briefing",
+        )
         picks_section = (
             '<div class="sc-section-head">'
-            '<span class="sc-section-title" id="sc-preds-label">End-of-Day · Session Closed</span>'
-            '<span class="sc-section-sub" id="sc-preds-sub">'
-            'Tomorrow\'s predictions will appear in the morning briefing</span>'
+            f'<span class="sc-section-title" id="sc-preds-label">{eod_title}</span>'
+            f'<span class="sc-section-sub" id="sc-preds-sub">{eod_sub}</span>'
             '</div>'
         )
     else:
         ai = briefing or snap.ai or {}
         watch_picks = ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or []
         picks_html = _ticker_cards_html(watch_picks) if watch_picks else ""
+        preds_title = mode_pair("Today's picks", "Today's Predictions")
+        preds_sub = mode_pair("Stocks to watch this session", "Next session watchlist")
         picks_section = (
             '<div class="sc-section-head">'
-            '<span class="sc-section-title" id="sc-preds-label">Today\'s Predictions</span>'
-            '<span class="sc-section-sub" id="sc-preds-sub">Next session watchlist</span>'
+            f'<span class="sc-section-title" id="sc-preds-label">{preds_title}</span>'
+            f'<span class="sc-section-sub" id="sc-preds-sub">{preds_sub}</span>'
             '</div>'
             f'<div class="sc-picks-wrap">{picks_html}</div>'
         )
 
     # ── Calibration + per-day history ─────────────────────────────────────
+    history_title = mode_pair("Past picks · how they did", "Graded Calls — Recent Sessions")
     if days:
         # Most recent day expanded by default; older days collapsed.
         day_blocks = "".join(
             _day_section_html(d, open_default=(i == 0))
             for i, d in enumerate(days[:10])
         )
+        history_sub = mode_pair(
+            f"{len(days)} day(s) saved · click to expand",
+            f"{len(days)} day(s) of history · expandable",
+        )
         history_section = (
             '<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            '<span class="sc-section-title">Graded Calls — Recent Sessions</span>'
-            f'<span class="sc-section-sub">{len(days)} day(s) of history · expandable</span>'
+            f'<span class="sc-section-title">{history_title}</span>'
+            f'<span class="sc-section-sub">{history_sub}</span>'
             '</div>'
             f'{_calibration_html(cal)}'
             f'<div class="sc-day-stack">{day_blocks}</div>'
         )
     else:
+        empty_sub = mode_pair(
+            "Will fill in after the first full trading day",
+            "Populates after the first full trading day with briefing data",
+        )
         history_section = (
             '<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            '<span class="sc-section-title">Graded Calls — Recent Sessions</span>'
-            '<span class="sc-section-sub" style="color:var(--text-faint)">'
-            'Populates after the first full trading day with briefing data</span>'
+            f'<span class="sc-section-title">{history_title}</span>'
+            f'<span class="sc-section-sub" style="color:var(--text-faint)">{empty_sub}</span>'
             '</div>'
         )
 
@@ -4597,11 +4736,20 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None,
         gpa = cal.get("rolling_gpa")
         gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
         gpa_l = cal.get("rolling_letter") or "—"
+        graded_n = cal.get("total_graded", 0)
+        sessions_n = len(days)
+        gpa_pill = mode_pair(
+            f"Grade {gpa_l} · score {gpa_str}",
+            f"GPA {gpa_str} · {gpa_l}",
+        )
+        meta_text = mode_pair(
+            f"{graded_n} picks scored across {sessions_n} day(s)",
+            f"{graded_n} graded · {sessions_n} session(s)",
+        )
         stats_html = (
             '<span class="sc-summary-stats">'
-            f'<span class="gpa-pill gpa-{gpa_l}">GPA {gpa_str} · {gpa_l}</span>'
-            f'<span style="color:var(--text-faint)">{cal.get("total_graded",0)} graded · '
-            f'{len(days)} session(s)</span>'
+            f'<span class="gpa-pill gpa-{gpa_l}">{gpa_pill}</span>'
+            f'<span style="color:var(--text-faint)">{meta_text}</span>'
             '</span>'
         )
     else:
@@ -4609,18 +4757,23 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None,
         if not eod:
             ai = briefing or snap.ai or {}
             n_picks = len(ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or [])
+        empty_meta = mode_pair(
+            f"{n_picks} picks · nothing scored yet",
+            f"{n_picks} picks · no prior grades yet",
+        )
         stats_html = (
             f'<span class="sc-summary-stats">'
-            f'<span style="color:var(--text-faint)">{n_picks} picks · no prior grades yet</span>'
+            f'<span style="color:var(--text-faint)">{empty_meta}</span>'
             f'</span>'
         )
 
+    title_html = mode_pair("Scoreboard", "Scorecard")
     return (
         '<details class="scorecard-details" id="scorecard" open>'
         '<summary>'
         '<span class="sc-summary-left">'
         '<span class="sc-summary-arrow">▶</span>'
-        '<span class="sc-summary-title">Scorecard</span>'
+        f'<span class="sc-summary-title">{title_html}</span>'
         '</span>'
         f'{stats_html}'
         '</summary>'
@@ -4724,7 +4877,7 @@ def render_sentiment_strip(snap: Snapshot) -> str:
         tiles.append(tile("ETH/BTC", f'{s["eth_btc"]:.5f}'))
     if not tiles:
         return ""
-    return (f'<h2 id="sentiment">Sentiment</h2>'
+    return (f'<h2 id="sentiment"><span class="std-only">Investor Mood</span><span class="adv-only">Sentiment</span></h2>'
             f'<div class="sentiment-strip">{"".join(tiles)}</div>')
 
 
@@ -5148,6 +5301,8 @@ def load_cache() -> Snapshot | None:
             verdict=d.get("verdict", "N/A"),
             letter_grade=d.get("letter_grade", "—"),
             grade_reason=d.get("grade_reason", ""),
+            grade_reason_standard=d.get("grade_reason_standard", ""),
+            grade_reason_advanced=d.get("grade_reason_advanced", ""),
         )
 
         snap = Snapshot(
