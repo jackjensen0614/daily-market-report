@@ -1575,6 +1575,28 @@ details.sc-day .grade-cards {{ padding: 12px 14px 16px; }}
 .market-group-header.crypto {{ border-bottom-color: #f59e0b; color: #fbbf24; }}
 .market-group-header.setup  {{ border-bottom-color: var(--accent); color: var(--accent); }}
 
+/* Collapsible top-level sections (Predictions, US Markets, Global, Crypto) */
+details.section-details {{ margin: 40px 0 0; }}
+details.section-details > summary {{
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 0 0 10px; margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+  transition: background 0.12s;
+}}
+details.section-details > summary::-webkit-details-marker {{ display: none; }}
+details.section-details > summary:hover {{ background: rgba(255,255,255,0.015); }}
+details.section-details.us     > summary {{ border-bottom-color: #3b82f6; color: #60a5fa; }}
+details.section-details.global > summary {{ border-bottom-color: #a78bfa; color: #c4b5fd; }}
+details.section-details.crypto > summary {{ border-bottom-color: #f59e0b; color: #fbbf24; }}
+details.section-details.setup  > summary {{ border-bottom-color: var(--accent); color: var(--accent); }}
+.sg-arrow {{
+  font-size: 11px; color: var(--text-faint);
+  transition: transform 0.2s; width: 10px; display: inline-block;
+}}
+details.section-details[open] > summary .sg-arrow {{ transform: rotate(90deg); }}
+
 /* Inline Morning Briefing card (replaces FAB + modal) */
 .briefing-inline {{
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
@@ -2078,16 +2100,16 @@ body.mode-advanced .std-only {{ display: none !important; }}
 {briefing_block}
 
 <!-- ===== PREDICTIONS ===== -->
-<div class="market-group" id="predictions">
-<div class="market-group-header setup">Predictions · {today_human}</div>
+<details class="section-details setup" id="predictions" open>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">Today's Picks</span><span class="adv-only">Predictions</span> · {today_human}</span></summary>
 {outlook_block}
 {scorecard_block}
 {risk_block}
-</div><!-- /predictions -->
+</details><!-- /predictions -->
 
 <!-- ===== US MARKETS ===== -->
-<div class="market-group" id="us-markets">
-<div class="market-group-header us">US Markets</div>
+<details class="section-details us" id="us-markets" open>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">U.S. Stock Market</span><span class="adv-only">US Markets</span></span></summary>
 
 {watchlist_block}
 
@@ -2127,23 +2149,23 @@ body.mode-advanced .std-only {{ display: none !important; }}
 
 {earnings_section_block}
 
-</div><!-- /us-markets -->
+</details><!-- /us-markets -->
 
 <!-- ===== GLOBAL MARKETS ===== -->
-<div class="market-group" id="global-markets">
-<div class="market-group-header global">Global Markets</div>
+<details class="section-details global" id="global-markets" open>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">Markets Around the World</span><span class="adv-only">Global Markets</span></span></summary>
 {global_block}
-</div><!-- /global-markets -->
+</details><!-- /global-markets -->
 
 <!-- ===== CRYPTO ===== -->
-<div class="market-group" id="crypto-section">
-<div class="market-group-header crypto">Crypto</div>
+<details class="section-details crypto" id="crypto-section" open>
+<summary><span class="sg-arrow">▶</span><span>Crypto</span></summary>
 <div class="panel" id="crypto-panel">
   <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {crypto_top_n}</span></h3><div class="sub"><span class="std-only">Ranked by total value · price change in the last 24 hours</span><span class="adv-only">By market cap · 24h change</span></div></div>
   {crypto_rows}
 </div>
 {crypto_outlook_block}
-</div><!-- /crypto-section -->
+</details><!-- /crypto-section -->
 
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
