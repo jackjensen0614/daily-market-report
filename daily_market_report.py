@@ -4222,6 +4222,14 @@ def _prior_trading_day_before(date_str: str) -> str:
     return d.isoformat()
 
 
+def _next_trading_day_at_or_after(date_str: str) -> str:
+    """Return the next trading day at-or-after the given ISO date (weekend-aware)."""
+    d = datetime.fromisoformat(date_str).date()
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d.isoformat()
+
+
 def _infer_bias(rationale: str) -> str:
     low = (rationale or "").lower()
     b = sum(1 for w in _BULL_KW if w in low)
@@ -5236,25 +5244,28 @@ def main():
         snap = build_snapshot(no_ai=args.no_ai, no_premarket=args.no_premarket)
         save_cache(snap)
 
-    briefing = load_briefing_json(args.briefing_json, snap_date=snap.prior_session_date)
+    # Target the next upcoming trading session (today if a weekday, else next Monday).
+    # This makes weekend rollover runs generate Monday's briefing automatically.
+    today_iso = datetime.now(ET).date().isoformat()
+    target_session = _next_trading_day_at_or_after(today_iso)
+    briefing = load_briefing_json(args.briefing_json, snap_date=target_session)
 
     if not args.eod:
         if briefing is None and not args.no_ai:
-            log("Generating morning briefing via Anthropic…")
+            log(f"Generating briefing for {target_session} via Anthropic…")
             briefing = generate_briefing(snap)
 
-        # Persist today's briefing so tomorrow's scorecard can grade it
+        # Persist briefing under the target trading session's date so the
+        # following EOD run finds it for grading.
         if briefing:
-            today_iso = datetime.now(ET).date().isoformat()
-            bp = SCRIPT_DIR / f"briefing-{today_iso}.json"
+            bp = SCRIPT_DIR / f"briefing-{target_session}.json"
             if not bp.exists():
                 try:
                     bp.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
                     log(f"Briefing persisted to {bp.name}")
                 except Exception as e:
                     warn(f"Could not persist briefing: {e}")
-            # Also save to the output directory so GitHub Pages hosts it for future runs
-            out_briefing = Path(args.out).parent / f"briefing-{today_iso}.json"
+            out_briefing = Path(args.out).parent / f"briefing-{target_session}.json"
             if out_briefing != bp:
                 try:
                     out_briefing.write_text(json.dumps(briefing, indent=2), encoding="utf-8")

@@ -3,8 +3,10 @@
 <plist version="1.0">
 <dict>
     <!--
-      Daily Market Report — runs at 6:00 AM, Monday–Friday.
-      Generates report.html and opens it in your default browser.
+      Daily Market Report — Daily Rollover
+      Runs at 00:05 every calendar day (Sun-Sat). Generates a fresh briefing
+      for the next upcoming trading session and auto-publishes to GitHub
+      so the deployed page rolls forward overnight.
 
       Install with:   ./install_schedule.sh
       Uninstall with: ./uninstall_schedule.sh
@@ -16,40 +18,50 @@
     <array>
         <string>/bin/bash</string>
         <string>-lc</string>
-        <string>cd "$HOME/Documents/Claude/Projects/Daily Report" &amp;&amp; ./venv/bin/python3 daily_market_report.py --no-open &amp;&amp; ./auto_publish.sh &amp;&amp; /usr/bin/open "$HOME/Documents/Claude/Projects/Daily Report/report.html"</string>
+        <string>cd "$HOME/Documents/Claude/Projects/Daily Report" &amp;&amp; ./venv/bin/python3 daily_market_report.py --no-open &amp;&amp; ./auto_publish.sh</string>
     </array>
 
-    <!-- 6:00 AM, Mon (1) through Fri (5). One <dict> per day. -->
+    <!-- 00:05 every day (0=Sun..6=Sat). One <dict> per day. -->
     <key>StartCalendarInterval</key>
     <array>
         <dict>
+            <key>Weekday</key><integer>0</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
+        </dict>
+        <dict>
             <key>Weekday</key><integer>1</integer>
-            <key>Hour</key><integer>6</integer>
-            <key>Minute</key><integer>0</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>2</integer>
-            <key>Hour</key><integer>6</integer>
-            <key>Minute</key><integer>0</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>3</integer>
-            <key>Hour</key><integer>6</integer>
-            <key>Minute</key><integer>0</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>4</integer>
-            <key>Hour</key><integer>6</integer>
-            <key>Minute</key><integer>0</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
         </dict>
         <dict>
             <key>Weekday</key><integer>5</integer>
-            <key>Hour</key><integer>6</integer>
-            <key>Minute</key><integer>0</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>6</integer>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>5</integer>
         </dict>
     </array>
 
-    <!-- If your Mac was asleep at 6am, run as soon as it wakes. -->
+    <!-- If the Mac was asleep at midnight, run as soon as it wakes. -->
     <key>RunAtLoad</key>
     <false/>
 
@@ -58,7 +70,6 @@
     <key>StandardErrorPath</key>
     <string>/tmp/daily-market-report.err.log</string>
 
-    <!-- Make sure $HOME and PATH are sane when launchd kicks this off. -->
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
