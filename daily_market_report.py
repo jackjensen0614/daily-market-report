@@ -1053,6 +1053,102 @@ def get_anthropic_client():
     return Anthropic(api_key=api_key)
 
 
+# Rationale used when the model omits a per-ticker explanation. Kept generic
+# on purpose so it reads honestly when nothing else can be said.
+_DEFAULT_RATIONALE = "Moved with broader sector flow; no single-stock catalyst."
+
+
+def _log_missing_rationales(snap: Snapshot, briefing: dict | None) -> None:
+    """Walk rendered tickers and log any with missing AI rationale.
+
+    Acts as a safety net AFTER Layer 1 fallback runs — if a ticker still has
+    no rationale at render time, that's a regression worth surfacing in the
+    console. Silent when everything is filled in.
+    """
+    ai = snap.ai or {}
+    if "_skipped" in ai or "_error" in ai:
+        return  # AI unavailable; nothing to validate.
+    sources = [
+        ("gainers",     snap.gainers,     ai.get("why_gainers") or {}),
+        ("losers",      snap.losers,      ai.get("why_losers")  or {}),
+        ("most_active", snap.most_active, ai.get("why_active")  or {}),
+        ("crypto",      snap.crypto,      ai.get("why_crypto")  or {}),
+    ]
+    missing: list[str] = []
+    for label, items, bucket in sources:
+        for m in items or []:
+            sym = m.quote.symbol
+            if not (bucket.get(sym) or "").strip():
+                missing.append(f"{label}:{sym}")
+
+    if briefing:
+        watch = briefing.get("watch") if isinstance(briefing, dict) else None
+        for w in watch or []:
+            if not isinstance(w, dict):
+                continue
+            ticker = str(w.get("ticker", "")).strip()
+            r_adv   = str(w.get("rationale", "")).strip()
+            r_plain = str(w.get("rationale_plain", "")).strip()
+            if ticker and not r_adv and not r_plain:
+                missing.append(f"briefing-watch:{ticker}")
+
+    if missing:
+        log(f"Missing AI rationale for {len(missing)} entry(ies): "
+            f"{', '.join(missing)}")
+
+
+def _fill_missing_briefing_rationales(briefing: dict | None) -> None:
+    """Ensure every briefing 'watch' item carries a non-empty rationale.
+
+    Mutates briefing['watch'] in place. Logs each fallback. No-op if briefing
+    is None or has no watch list.
+    """
+    if not briefing:
+        return
+    watch = briefing.get("watch")
+    if not isinstance(watch, list):
+        return
+    for w in watch:
+        if not isinstance(w, dict):
+            continue
+        ticker = str(w.get("ticker", "")).strip()
+        rationale_adv   = str(w.get("rationale", "")).strip()
+        rationale_plain = str(w.get("rationale_plain", "")).strip()
+        if not rationale_adv and not rationale_plain:
+            w["rationale"] = _DEFAULT_RATIONALE
+            w["rationale_plain"] = _DEFAULT_RATIONALE
+            if ticker:
+                log(f"  briefing rationale fallback: watch {ticker}")
+
+
+def _fill_missing_mover_rationales(ai: dict, snap: Snapshot) -> None:
+    """Ensure every rendered mover/crypto ticker has a non-empty rationale.
+
+    Mutates ai in place. Logs each fallback so silent regressions are visible.
+    Safe to call on any ai dict; no-op when ai is empty or signals
+    failure/skip (those are handled by the renderers).
+    """
+    if not ai or "_skipped" in ai or "_error" in ai or "_raw" in ai:
+        return
+    sources = [
+        ("why_gainers", snap.gainers, "gainer"),
+        ("why_losers",  snap.losers,  "loser"),
+        ("why_active",  snap.most_active, "most-active"),
+        ("why_crypto",  snap.crypto, "crypto"),
+    ]
+    for key, items, label in sources:
+        bucket = ai.get(key)
+        if not isinstance(bucket, dict):
+            bucket = {}
+            ai[key] = bucket
+        for m in items or []:
+            sym = m.quote.symbol
+            existing = (bucket.get(sym) or "").strip()
+            if not existing:
+                bucket[sym] = _DEFAULT_RATIONALE
+                log(f"  AI rationale fallback: {label} {sym}")
+
+
 def build_ai_context(snap: Snapshot) -> dict:
     """Compact JSON payload to send to Claude."""
     def mw_brief(m: MoverWithNews) -> dict:
@@ -1218,17 +1314,21 @@ def generate_briefing(snap: Snapshot) -> dict | None:
         text = re.sub(r"^```(?:json)?\n", "", text)
         text = re.sub(r"\n```$", "", text)
 
+    parsed: dict | None = None
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
         start, end = text.find("{"), text.rfind("}")
         if start != -1 and end != -1:
             try:
-                return json.loads(text[start : end + 1])
+                parsed = json.loads(text[start : end + 1])
             except Exception:
-                pass
+                parsed = None
+    if parsed is None:
         log("Briefing: unparseable JSON returned — modal will be skipped.")
         return None
+    _fill_missing_briefing_rationales(parsed)
+    return parsed
 
 
 def run_ai_synthesis(snap: Snapshot) -> dict:
@@ -1264,18 +1364,22 @@ def run_ai_synthesis(snap: Snapshot) -> dict:
         text = re.sub(r"^```(?:json)?\n", "", text)
         text = re.sub(r"\n```$", "", text)
 
+    parsed: dict | None = None
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
         # Best-effort: find the first/last brace
         start, end = text.find("{"), text.rfind("}")
         if start != -1 and end != -1:
             try:
-                return json.loads(text[start : end + 1])
+                parsed = json.loads(text[start : end + 1])
             except Exception:
-                pass
+                parsed = None
+    if parsed is None:
         warn("AI returned unparseable JSON — showing raw text.", snap)
         return {"_raw": text}
+    _fill_missing_mover_rationales(parsed, snap)
+    return parsed
 
 
 def fetch_premarket(snap: Snapshot) -> None:
@@ -1475,8 +1579,9 @@ def render_mover_row(m: MoverWithNews, ai_why: dict[str, str] | None = None) -> 
     q = m.quote
     cls = cls_for(q.change_pct)
     why = ""
-    if ai_why and q.symbol in ai_why:
-        why = f'<div class="why">{escape_html(ai_why[q.symbol])}</div>'
+    why_text = ((ai_why or {}).get(q.symbol) or "").strip()
+    if why_text:
+        why = f'<div class="why">{escape_html(why_text)}</div>'
 
     news_html = ""
     if m.news:
@@ -3454,22 +3559,34 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None,
         watch = briefing.get("tickers_to_watch", [])
         watch_html = ""
         if watch:
-            cards = "".join(
-                f'<div class="b-watch-item">'
-                f'<div class="sym">{escape_html(str(w.get("ticker", "")))}</div>'
-                f'<div class="why">'
-                f'<span class="std-only">{escape_html(str(w.get("rationale_plain") or w.get("rationale", "")))}</span>'
-                f'<span class="adv-only">{escape_html(str(w.get("rationale", "")))}</span>'
-                f'</div>'
-                f'</div>'
-                for w in watch
-            )
-            watch_html = (
-                '<div class="briefing-watch">'
-                '<div class="bs-label"><span class="std-only">Stocks we\'re watching today</span><span class="adv-only">Tickers to Watch Today</span></div>'
-                f'<div class="b-watch-grid">{cards}</div>'
-                '</div>'
-            )
+            card_parts = []
+            for w in watch:
+                ticker = str(w.get("ticker", "")).strip()
+                if not ticker:
+                    continue
+                rationale_adv   = str(w.get("rationale", "")).strip()
+                rationale_plain = (str(w.get("rationale_plain", "")).strip()
+                                   or rationale_adv)
+                if not rationale_adv and not rationale_plain:
+                    log(f"  briefing watch item '{ticker}' has no rationale; "
+                        f"dropping from cards.")
+                    continue
+                card_parts.append(
+                    f'<div class="b-watch-item">'
+                    f'<div class="sym">{escape_html(ticker)}</div>'
+                    f'<div class="why">'
+                    f'<span class="std-only">{escape_html(rationale_plain)}</span>'
+                    f'<span class="adv-only">{escape_html(rationale_adv)}</span>'
+                    f'</div>'
+                    f'</div>'
+                )
+            if card_parts:
+                watch_html = (
+                    '<div class="briefing-watch">'
+                    '<div class="bs-label"><span class="std-only">Stocks we\'re watching today</span><span class="adv-only">Tickers to Watch Today</span></div>'
+                    f'<div class="b-watch-grid">{"".join(card_parts)}</div>'
+                    '</div>'
+                )
 
         crypto_out       = briefing.get("crypto_outlook", "")
         crypto_out_plain = briefing.get("crypto_outlook_plain", "") or crypto_out
@@ -5038,6 +5155,7 @@ def main():
     log("Backfilling scorecard history from briefing files…")
     history = backfill_scorecard_history()
 
+    _log_missing_rationales(snap, briefing)
     log("Rendering HTML…")
     html = render_report(snap, briefing=briefing, eod=args.eod, history=history)
     out = Path(args.out)
