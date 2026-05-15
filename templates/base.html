@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Daily Market Report · {{ prior_date }}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<style>
+{% include 'static/style.css' -%}
+</style>
+</head>
+<body class="mode-standard">
+
+<div class="page-layout">
+
+<!-- ── Watchlist sidebar (always visible) ── -->
+<div class="sidebar" id="sidebar">
+  <div class="sb-head">
+    <div class="sb-title">★ <span class="std-only">Stocks I'm Watching</span><span class="adv-only">My Watchlist</span></div>
+    <div class="sb-subtitle"><span class="std-only">Yesterday's close · refreshes every 5 minutes</span><span class="adv-only">Prior session · refreshes every 5 min</span></div>
+    <button id="sb-restore-btn" onclick="restoreServerCards()" style="display:none;margin-top:6px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-faint);font-size:10px;padding:3px 8px;cursor:pointer;width:100%">Restore hidden tickers</button>
+  </div>
+  <div class="sb-add">
+    <input type="text" id="sb-input" placeholder="Add ticker or company name…"
+           autocomplete="off"
+           oninput="updateSbSuggestions()"
+           onkeydown="handleSbKey(event)"
+           onfocus="updateSbSuggestions()"
+           onblur="setTimeout(hideSbSuggestions, 150)" />
+    <button onclick="addSbTicker()">+</button>
+    <div id="sb-suggest" class="sb-suggest" hidden></div>
+  </div>
+  <div id="sb-user-cards"></div>
+  <div class="sb-section-label">Tracked</div>
+  <div class="sb-cards" id="sb-server-cards">
+    {{ sidebar_block }}
+  </div>
+</div>
+
+<!-- ── Main content ── -->
+<div class="main-col">
+<div class="wrap">
+
+<header>
+  <div>
+    <h1><span class="std-only">Your Daily Market Snapshot</span><span class="adv-only">Daily Market Report</span>
+      <span class="subtle"><span class="std-only">Yesterday's close · {{ prior_date_human }}</span><span class="adv-only">Prior session · {{ prior_date_human }}</span></span>
+    </h1>
+    <div class="meta"><span class="std-only">Updated {{ last_updated }} · {{ today_human }}</span><span class="adv-only">Last updated: {{ last_updated }} · Today is {{ today_human }}</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div class="meta">{{ warnings_html }}</div>
+    <div class="mode-toggle" role="group" aria-label="Reading mode">
+      <span class="mt-label">View</span>
+      <button id="mt-std" class="active" onclick="setReadingMode('standard')">Standard</button>
+      <button id="mt-adv" onclick="setReadingMode('advanced')">Advanced</button>
+    </div>
+    <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
+      <span class="spin">&#8635;</span> <span id="refresh-label">Refresh</span>
+    </button>
+    <span id="refresh-status" class="meta"></span>
+  </div>
+</header>
+
+<nav class="sticky-nav">
+  <a href="#live-markets">Live</a>
+  <a href="#briefing"><span class="std-only">Summary</span><span class="adv-only">Briefing</span></a>
+  <a href="#predictions"><span class="std-only">Picks</span><span class="adv-only">Predictions</span></a>
+  <a href="#us-markets"><span class="std-only">U.S.</span><span class="adv-only">US Markets</span></a>
+  <a href="#earnings-cal">Earnings</a>
+  <a href="#global-markets"><span class="std-only">World</span><span class="adv-only">Global</span></a>
+  <a href="#crypto-section">Crypto</a>
+  <a href="#scorecard"><span class="std-only">Track Record</span><span class="adv-only">Scorecard</span></a>
+</nav>
+
+<!-- ===== LIVE MARKETS TICKER ===== -->
+<div class="live-ticker-section" id="live-markets">
+  <div class="live-ticker-label">&#8203; Live Markets</div>
+  <div class="tradingview-widget-container">
+    <div class="tradingview-widget-container__widget"></div>
+    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+    {
+      "symbols": [
+        {"description": "S&P 500",      "proName": "FOREXCOM:SPXUSD"},
+        {"description": "Nasdaq 100",   "proName": "FOREXCOM:NSXUSD"},
+        {"description": "Dow Jones",    "proName": "FOREXCOM:DJI"},
+        {"description": "Russell 2000", "proName": "TVC:US2000"},
+        {"description": "10Y Yield",    "proName": "INDEX:TNX"},
+        {"description": "Gold",         "proName": "TVC:GOLD"},
+        {"description": "Crude Oil",    "proName": "TVC:USOIL"},
+        {"description": "Bitcoin",      "proName": "COINBASE:BTCUSD"},
+        {"description": "Ethereum",     "proName": "COINBASE:ETHUSD"}
+      ],
+      "showSymbolLogo": false,
+      "isTransparent": true,
+      "displayMode": "adaptive",
+      "colorTheme": "dark",
+      "locale": "en"
+    }
+    </script>
+  </div>
+</div>
+
+{{ briefing_block }}
+
+<!-- ===== PREDICTIONS ===== -->
+<details class="section-details setup" id="predictions" open>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">Today's Picks</span><span class="adv-only">Predictions</span> · {{ today_human }}</span></summary>
+{{ outlook_block }}
+{{ scorecard_block }}
+{{ risk_block }}
+</details><!-- /predictions -->
+
+<!-- ===== US MARKETS ===== -->
+<details class="section-details us" id="us-markets" open>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">U.S. Stock Market</span><span class="adv-only">US Markets</span></span></summary>
+
+{{ watchlist_block }}
+
+{{ premarket_block }}
+
+<h2 id="indices"><span class="std-only">How the Whole Market Is Doing</span><span class="adv-only">Indices &amp; Macro</span></h2>
+<div class="index-grid">
+  {{ index_tiles }}
+</div>
+
+{{ sector_heatmap_block }}
+
+{{ sentiment_block }}
+
+<h2 id="movers"><span class="std-only">Yesterday's Biggest Winners &amp; Losers</span><span class="adv-only">Stock Movers</span> · {{ prior_date_human }}</h2>
+<div class="cols">
+  <div class="panel">
+    <div class="panel-head"><h3><span class="std-only">Stocks That Went Up the Most</span><span class="adv-only">Top Gainers</span></h3><div class="sub"><span class="std-only">The biggest gains in price</span><span class="adv-only">Largest % moves up</span></div></div>
+    {{ gainers_rows }}
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3><span class="std-only">Stocks That Went Down the Most</span><span class="adv-only">Top Losers</span></h3><div class="sub"><span class="std-only">The biggest drops in price</span><span class="adv-only">Largest % moves down</span></div></div>
+    {{ losers_rows }}
+  </div>
+</div>
+<div class="cols" style="margin-top: 18px;">
+  <div class="panel">
+    <div class="panel-head"><h3><span class="std-only">Stocks Bought &amp; Sold the Most</span><span class="adv-only">Most Active</span></h3><div class="sub"><span class="std-only">Stocks with the highest trading activity</span><span class="adv-only">Sorted by volume</span></div></div>
+    {{ active_rows }}
+  </div>
+  {{ earnings_reactions_block }}
+</div>
+
+{{ world_news_block }}
+
+{{ earnings_section_block }}
+
+</details><!-- /us-markets -->
+
+<!-- ===== GLOBAL MARKETS ===== -->
+<details class="section-details global" id="global-markets" open>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">Markets Around the World</span><span class="adv-only">Global Markets</span></span></summary>
+{{ global_block }}
+</details><!-- /global-markets -->
+
+<!-- ===== CRYPTO ===== -->
+<details class="section-details crypto" id="crypto-section" open>
+<summary><span class="sg-arrow">▶</span><span>Crypto</span></summary>
+<div class="panel" id="crypto-panel">
+  <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {{ crypto_top_n }}</span></h3><div class="sub"><span class="std-only">Ranked by total value · price change in the last 24 hours</span><span class="adv-only">By market cap · 24h change</span></div></div>
+  {{ crypto_rows }}
+</div>
+{{ crypto_outlook_block }}
+</details><!-- /crypto-section -->
+
+<footer>
+  Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
+  <br/>Not investment advice. Figures may be delayed. Always verify before trading.
+</footer>
+
+</div>
+</div><!-- /main-col -->
+</div><!-- /page-layout -->
+<script>
+// Local file:// previously redirected to the published GitHub Pages copy.
+// That blocks local development (changes to report.html aren't visible
+// because the user gets bounced to the stale hosted version). Now the
+// redirect only fires when explicitly requested with ?live in the URL,
+// so the daily-flow shortcut still works if you want it.
+if (window.location.protocol === 'file:' && /[?&]live\b/.test(window.location.search)) {
+  window.location.replace('https://jackjensen0614.github.io/daily-market-report/');
+}
+
+// Ticker DB used by the watchlist autocomplete (symbol, name pairs).
+var TICKER_DB = {{ ticker_db_json }};
+console.log('[market-report] build ' + '{{ build_id }}' + ' loaded, TICKER_DB has ' + (TICKER_DB ? TICKER_DB.length : 0) + ' symbols');
+
+// ── Reading-mode toggle (Standard / Advanced) ───────────────────────────
+var MODE_KEY = 'mktReadingMode';
+function setReadingMode(mode) {
+  if (mode !== 'standard' && mode !== 'advanced') mode = 'standard';
+  document.body.classList.remove('mode-standard', 'mode-advanced');
+  document.body.classList.add('mode-' + mode);
+  var s = document.getElementById('mt-std');
+  var a = document.getElementById('mt-adv');
+  if (s && a) {
+    s.classList.toggle('active', mode === 'standard');
+    a.classList.toggle('active', mode === 'advanced');
+  }
+  try { localStorage.setItem(MODE_KEY, mode); } catch(e) {}
+}
+(function initReadingMode() {
+  var saved = 'standard';
+  try { saved = localStorage.getItem(MODE_KEY) || 'standard'; } catch(e) {}
+  setReadingMode(saved);
+})();
+
+// ── Watchlist sidebar ────────────────────────────────────────────────────
+var SB_KEY = 'mktSbTickers';
+function getSbTickers() {
+  try { return JSON.parse(localStorage.getItem(SB_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveSbTickers(arr) {
+  try { localStorage.setItem(SB_KEY, JSON.stringify(arr)); } catch(e) {}
+}
+function sbAlreadyWatched(sym) {
+  // True if `sym` is already shown — either in user-added tickers (localStorage)
+  // or on the server-tracked card list rendered into the sidebar.
+  sym = String(sym || '').toUpperCase();
+  if (!sym) return false;
+  var user = getSbTickers();
+  for (var i = 0; i < user.length; i++) { if (user[i].toUpperCase() === sym) return true; }
+  var server = document.querySelectorAll('#sb-server-cards .sb-card[data-symbol]');
+  for (var j = 0; j < server.length; j++) {
+    if ((server[j].getAttribute('data-symbol') || '').toUpperCase() === sym) return true;
+  }
+  return false;
+}
+function sbFlash(msg) {
+  var box = document.getElementById('sb-suggest');
+  if (!box) return;
+  box.innerHTML = '<div class="sb-suggest-empty">' + escapeHtmlJs(msg) + '</div>';
+  box.hidden = false;
+  setTimeout(function() {
+    var inp = document.getElementById('sb-input');
+    if (!inp || !inp.value.trim()) hideSbSuggestions();
+  }, 1200);
+}
+function addSbTicker(forcedSym) {
+  var inp = document.getElementById('sb-input');
+  var raw = forcedSym || (inp.value || '').trim();
+  if (!raw) return;
+
+  function commit(sym) {
+    sym = String(sym || '').toUpperCase().replace(/[^A-Z0-9.\-^]/g,'');
+    if (!sym) return;
+    if (sbAlreadyWatched(sym)) {
+      inp.value = '';
+      sbFlash(sym + ' is already on your watchlist');
+      return;
+    }
+    var arr = getSbTickers();
+    if (!arr.includes(sym)) { arr.unshift(sym); saveSbTickers(arr); }
+    inp.value = '';
+    hideSbSuggestions();
+    loadUserCards();
+  }
+
+  if (forcedSym) { commit(forcedSym); return; }
+
+  // Heuristic: short uppercase-only string is probably a ticker; let it through.
+  var ticker_like = raw.toUpperCase().replace(/[^A-Z0-9.\-^]/g,'');
+  if (ticker_like && ticker_like.length <= 10 && ticker_like === raw.replace(/\s+/g,'').toUpperCase()) {
+    commit(ticker_like);
+    return;
+  }
+
+  // Otherwise look it up — local first, then remote search
+  var local = sbResolveSymbol(raw);
+  if (local) { commit(local); return; }
+  sbRemoteSearch(raw).then(function(pairs) {
+    if (pairs.length) commit(pairs[0][0]);
+    else commit(ticker_like);  // fallback: add raw
+  });
+}
+
+// ── Predictive search (autocomplete) ────────────────────────────────────────
+// TICKER_DB is the curated mega-cap list used as instant fallback. The full
+// universe (~10,000 listed US tickers) comes from Yahoo's search endpoint.
+var sbActiveIdx = -1;
+var sbSearchSeq = 0;
+var sbDebounceTimer = null;
+var sbRemoteCache = {};
+
+function sbResolveSymbol(query) {
+  var matches = sbLocalMatches(query, 1);
+  if (matches.length) return matches[0][0];
+  // No local match — return cached remote first hit if present
+  var key = query.trim().toLowerCase();
+  var cached = sbRemoteCache[key];
+  if (cached && cached.length) return cached[0][0];
+  return '';
+}
+
+function sbLocalMatches(query, limit) {
+  query = (query || '').trim().toLowerCase();
+  if (!query) return [];
+  if (typeof TICKER_DB === 'undefined') return [];
+  var symExact = [], symPrefix = [], namePrefix = [], symSubstr = [], nameSubstr = [];
+  for (var i = 0; i < TICKER_DB.length; i++) {
+    var s = TICKER_DB[i][0], n = TICKER_DB[i][1], t = TICKER_DB[i][2] || 'Stock';
+    var sl = s.toLowerCase(), nl = n.toLowerCase();
+    // Match against the base symbol too (e.g., "btc" → "BTC-USD")
+    var base = sl.split('-')[0];
+    if (sl === query || base === query) { symExact.push([s, n, t]); continue; }
+    if (sl.indexOf(query) === 0 || base.indexOf(query) === 0) { symPrefix.push([s, n, t]); continue; }
+    if (nl.indexOf(query) === 0) { namePrefix.push([s, n, t]); continue; }
+    if (sl.indexOf(query) > 0) { symSubstr.push([s, n, t]); continue; }
+    if (nl.indexOf(query) > 0) { nameSubstr.push([s, n, t]); }
+  }
+  return symExact.concat(symPrefix, namePrefix, symSubstr, nameSubstr).slice(0, limit || 10);
+}
+
+function sbRemoteSearch(query) {
+  // Yahoo Finance search — covers every listed ticker. Mostly CORS-friendly but
+  // can fail from sandboxed origins; failure is silent and we fall back to the
+  // local TICKER_DB, which is already seeded with stocks, ETFs, and major crypto.
+  var key = query.trim().toLowerCase();
+  if (!key) return Promise.resolve([]);
+  if (sbRemoteCache[key]) return Promise.resolve(sbRemoteCache[key]);
+  var url = 'https://query1.finance.yahoo.com/v1/finance/search?q=' +
+            encodeURIComponent(key) + '&quotesCount=10&newsCount=0';
+  return fetch(url).then(function(r) {
+    return r.ok ? r.json() : null;
+  }).then(function(d) {
+    if (!d || !d.quotes) return [];
+    var typeMap = {'EQUITY': 'Stock', 'ETF': 'ETF', 'INDEX': 'Index', 'MUTUALFUND': 'ETF', 'CRYPTOCURRENCY': 'Crypto'};
+    var triples = [];
+    for (var i = 0; i < d.quotes.length; i++) {
+      var q = d.quotes[i];
+      if (!q.symbol) continue;
+      var t = q.quoteType ? typeMap[q.quoteType] : null;
+      if (q.quoteType && !t) continue;
+      var name = q.shortname || q.longname || q.name || q.symbol;
+      triples.push([q.symbol, name, t || 'Stock']);
+    }
+    sbRemoteCache[key] = triples;
+    return triples;
+  }).catch(function(err) {
+    console.warn('[watchlist] remote search failed (using local DB only):', err);
+    return [];
+  });
+}
+
+function renderSbSuggestions(matches, query, isLoading) {
+  var box = document.getElementById('sb-suggest');
+  if (!box) return;
+  sbActiveIdx = -1;
+  if (!matches.length) {
+    if (isLoading) {
+      box.innerHTML = '<div class="sb-suggest-empty">Searching…</div>';
+    } else {
+      box.innerHTML = '<div class="sb-suggest-empty">No results found — press Enter to add "' +
+        escapeHtmlJs((query || '').toUpperCase()) + '" anyway.</div>';
+    }
+    box.hidden = false;
+    return;
+  }
+  box.innerHTML = matches.map(function(m) {
+    var sym = m[0], name = m[1], type = m[2] || 'Stock';
+    var dup = sbAlreadyWatched(sym);
+    var typeClass = type.toLowerCase();
+    return '<div class="sb-suggest-item' + (dup ? ' dup' : '') + '" data-sym="' + escapeHtmlJs(sym) + '">' +
+           '<span class="sb-suggest-sym">' + escapeHtmlJs(sym) + '</span>' +
+           '<span class="sb-suggest-name">' + escapeHtmlJs(name) + '</span>' +
+           '<span class="sb-suggest-type ' + escapeHtmlJs(typeClass) + '">' + escapeHtmlJs(type) + '</span>' +
+           (dup ? '<span class="sb-suggest-dup-note">on list</span>' : '') +
+           '</div>';
+  }).join('');
+  box.hidden = false;
+}
+
+function updateSbSuggestions() {
+  var inp = document.getElementById('sb-input');
+  if (!inp) return;
+  var q = inp.value;
+  if (!q || q.trim().length < 1) { hideSbSuggestions(); return; }
+
+  // Show local matches instantly
+  var local = sbLocalMatches(q, 10);
+  renderSbSuggestions(local, q, local.length === 0);
+
+  // Debounce remote search to avoid hammering on each keystroke
+  var seq = ++sbSearchSeq;
+  if (sbDebounceTimer) clearTimeout(sbDebounceTimer);
+  sbDebounceTimer = setTimeout(function() {
+    sbRemoteSearch(q).then(function(remote) {
+      if (seq !== sbSearchSeq) return;  // stale — newer query in flight
+      // Merge: local matches first, then remote items not already shown
+      var seen = {};
+      for (var i = 0; i < local.length; i++) seen[local[i][0]] = 1;
+      var combined = local.slice();
+      for (var j = 0; j < remote.length; j++) {
+        if (!seen[remote[j][0]]) {
+          seen[remote[j][0]] = 1;
+          combined.push(remote[j]);
+        }
+      }
+      renderSbSuggestions(combined.slice(0, 12), q, false);
+    });
+  }, 200);
+}
+
+// Click handler — use event delegation so symbols with quotes/dashes don't
+// need inline-string escaping. mousedown fires before the input's blur, so
+// hideSbSuggestions doesn't beat us to it.
+(function attachSbSuggestHandler() {
+  var box = document.getElementById('sb-suggest');
+  if (!box) return;
+  box.addEventListener('mousedown', function(e) {
+    var item = e.target;
+    while (item && item !== box && !item.classList.contains('sb-suggest-item')) {
+      item = item.parentNode;
+    }
+    if (item && item.classList && item.classList.contains('sb-suggest-item')) {
+      e.preventDefault();
+      var sym = item.getAttribute('data-sym');
+      if (sym) addSbTicker(sym);
+    }
+  });
+})();
+
+function hideSbSuggestions() {
+  var box = document.getElementById('sb-suggest');
+  if (box) { box.hidden = true; sbActiveIdx = -1; }
+}
+
+function handleSbKey(e) {
+  var box = document.getElementById('sb-suggest');
+  var items = box && !box.hidden ? box.querySelectorAll('.sb-suggest-item') : [];
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    sbActiveIdx = (sbActiveIdx + 1) % items.length;
+    sbHighlight(items);
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    sbActiveIdx = (sbActiveIdx - 1 + items.length) % items.length;
+    sbHighlight(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (sbActiveIdx >= 0 && items[sbActiveIdx]) {
+      addSbTicker(items[sbActiveIdx].getAttribute('data-sym'));
+    } else {
+      addSbTicker();
+    }
+  } else if (e.key === 'Escape') {
+    hideSbSuggestions();
+  }
+}
+function sbHighlight(items) {
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.toggle('active', i === sbActiveIdx);
+  }
+  if (items[sbActiveIdx]) items[sbActiveIdx].scrollIntoView({block: 'nearest'});
+}
+function escapeHtmlJs(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
+}
+function removeSbTicker(sym) {
+  saveSbTickers(getSbTickers().filter(function(s){ return s !== sym; }));
+  loadUserCards();
+}
+function loadUserCards() {
+  var container = document.getElementById('sb-user-cards');
+  if (!container) return;
+  var tickers = getSbTickers();
+  if (!tickers.length) { container.innerHTML = ''; return; }
+  container.innerHTML = '<div class="sb-section-label">My Picks</div>';
+  tickers.forEach(function(sym) {
+    var card = document.createElement('div');
+    card.className = 'sb-user-card';
+    card.style.margin = '0 12px 10px';
+    var tvSym = sym.includes(':') ? sym : 'NASDAQ:' + sym;
+    card.innerHTML =
+      '<div class="sb-user-card-head">' +
+      '  <span class="sb-user-sym">' + sym + '</span>' +
+      '  <button class="sb-user-rm" title="Remove" onclick="removeSbTicker(\'' + sym.replace(/'/g,"\\'") + '\')">✕</button>' +
+      '</div>' +
+      '<div class="tradingview-widget-container" style="height:130px">' +
+      '  <div class="tradingview-widget-container__widget"></div>' +
+      '</div>';
+    container.appendChild(card);
+    // Inject TradingView mini chart
+    var tvDiv = card.querySelector('.tradingview-widget-container');
+    var s = document.createElement('script');
+    s.type = 'text/javascript';
+    s.async = true;
+    s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
+    s.textContent = JSON.stringify({
+      symbol: tvSym, width: '100%', height: 130, locale: 'en',
+      dateRange: '1D', colorTheme: 'dark', isTransparent: true, autosize: false
+    });
+    tvDiv.appendChild(s);
+  });
+}
+loadUserCards(); // sidebar is always visible — populate on page load
+
+// ── Hidden server-side cards ──────────────────────────────────────────────
+var HIDDEN_KEY = 'mktHiddenCards';
+function getHiddenCards() {
+  try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveHiddenCards(arr) {
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(arr)); } catch(e) {}
+}
+function hideServerCard(sym) {
+  var arr = getHiddenCards();
+  if (!arr.includes(sym)) { arr.push(sym); saveHiddenCards(arr); }
+  var el = document.querySelector('.sb-card[data-symbol="' + sym + '"]');
+  if (el) el.style.display = 'none';
+  document.getElementById('sb-restore-btn').style.display = getHiddenCards().length ? 'block' : 'none';
+}
+function restoreServerCards() {
+  saveHiddenCards([]);
+  document.querySelectorAll('.sb-card[data-symbol]').forEach(function(el) {
+    el.style.display = '';
+  });
+  document.getElementById('sb-restore-btn').style.display = 'none';
+}
+(function applyHiddenCards() {
+  var hidden = getHiddenCards();
+  hidden.forEach(function(sym) {
+    var el = document.querySelector('.sb-card[data-symbol="' + sym + '"]');
+    if (el) el.style.display = 'none';
+  });
+  var btn = document.getElementById('sb-restore-btn');
+  if (btn) btn.style.display = hidden.length ? 'block' : 'none';
+})();
+
+// ── Scorecard predictions label (after-hours shift) ──────────────────────
+(function updateScPredLabel() {
+  var el = document.getElementById('sc-preds-label');
+  if (!el) return;
+  var now = new Date();
+  var etStr = now.toLocaleString('en-US', {timeZone: 'America/New_York'});
+  var et = new Date(etStr);
+  var h = et.getHours();
+  // After 8 PM ET or before 4 AM ET = after-hours ended, pivot to next session
+  if (h >= 20 || h < 4) {
+    el.textContent = 'Next Trading Day · Picks';
+    var sub = document.getElementById('sc-preds-sub');
+    if (sub) sub.textContent = 'After-hours complete — forward outlook';
+  }
+})();
+
+// ── Scroll-position preservation across reloads ──────────────────────────
+// Save current scroll before any programmatic reload so the page
+// returns to where the user was, not to whatever hash is in the URL.
+var SCROLL_KEY = '_mktScrollY';
+function saveScroll() {
+  try { sessionStorage.setItem(SCROLL_KEY, window.scrollY); } catch(e) {}
+}
+(function restoreScroll() {
+  var saved = null;
+  try { saved = sessionStorage.getItem(SCROLL_KEY); } catch(e) {}
+  if (saved === null) return;
+  try { sessionStorage.removeItem(SCROLL_KEY); } catch(e) {}
+  var target = parseInt(saved, 10);
+  // Double-rAF beats the browser's own hash-scroll which fires after first paint
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      window.scrollTo(0, target);
+    });
+  });
+})();
+
+function doRefresh() {
+  saveScroll();
+  var btn = document.getElementById('refresh-btn');
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+  location.reload();
+}
+(function(){
+  function isMarketHours() {
+    var now = new Date();
+    var et = new Date(now.toLocaleString('en-US', {timeZone:'America/New_York'}));
+    var day = et.getDay();
+    if (day === 0 || day === 6) return false;
+    var h = et.getHours(), m = et.getMinutes();
+    var mins = h * 60 + m;
+    return mins >= 565 && mins <= 970; // 9:25–4:10 ET
+  }
+  var statusEl = document.getElementById('refresh-status');
+  var labelEl  = document.getElementById('refresh-label');
+  if (isMarketHours()) {
+    var next = 60;
+    function setStatus(s) { if (statusEl) statusEl.textContent = s; }
+    function setLabel(s)  { if (labelEl)  labelEl.textContent  = s; }
+    setStatus('Live · auto-refresh in ' + next + 's');
+    var timer = setInterval(function() {
+      next--;
+      setStatus('Live · auto-refresh in ' + next + 's');
+      setLabel('Refresh (' + next + 's)');
+      if (next <= 0) { saveScroll(); clearInterval(timer); location.reload(); }
+    }, 1000);
+  } else {
+    if (statusEl) statusEl.textContent = 'Market closed';
+  }
+})();
+</script>
+</body>
+</html>

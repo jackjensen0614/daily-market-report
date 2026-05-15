@@ -3,3 +3,4 @@ requests>=2.31
 pandas>=2.0
 lxml>=4.9
 anthropic>=0.40.0
+jinja2>=3.1

@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import textwrap
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
@@ -47,6 +48,12 @@ except ImportError:
     print("ERROR: pandas is not installed. Run `./setup.sh` first.", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from jinja2 import Environment, FileSystemLoader
+except ImportError:
+    print("ERROR: jinja2 is not installed. Run `./run.command` to install dependencies.", file=sys.stderr)
+    sys.exit(1)
+
 # ------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------
@@ -55,6 +62,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 CACHE_DIR = SCRIPT_DIR / ".cache"
 CACHE_DIR.mkdir(exist_ok=True)
 REPORT_PATH = SCRIPT_DIR / "report.html"
+TEMPLATE_DIR = SCRIPT_DIR / "templates"
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(TEMPLATE_DIR)),
+    autoescape=False,
+    keep_trailing_newline=True,
+)
 DATA_SNAPSHOT_PATH = CACHE_DIR / "last_snapshot.json"
 SCORECARD_HISTORY_PATH = SCRIPT_DIR / "scorecard_history.json"
 
@@ -108,6 +121,138 @@ NEWS_PER_TICKER = 3
 
 # Default sidebar watchlist — used when WATCHLIST env var is not set
 DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "JPM"]
+
+# Ticker → company-name lookup used by the watchlist autocomplete. Covers the
+# largest, most-searched US-listed names. Anything missing here still works
+# (the user can type the raw ticker), this just powers name-based search.
+POPULAR_TICKERS: dict[str, str] = {
+    # Mega-cap tech
+    "AAPL": "Apple Inc.", "MSFT": "Microsoft Corporation", "NVDA": "NVIDIA Corporation",
+    "GOOGL": "Alphabet (Google) Class A", "GOOG": "Alphabet (Google) Class C",
+    "AMZN": "Amazon.com", "META": "Meta Platforms (Facebook)", "TSLA": "Tesla",
+    "AVGO": "Broadcom", "ORCL": "Oracle", "ADBE": "Adobe", "CRM": "Salesforce",
+    "NFLX": "Netflix", "CSCO": "Cisco Systems", "AMD": "Advanced Micro Devices",
+    "INTC": "Intel", "QCOM": "Qualcomm", "TXN": "Texas Instruments",
+    "INTU": "Intuit", "IBM": "IBM", "NOW": "ServiceNow", "PANW": "Palo Alto Networks",
+    "CRWD": "CrowdStrike", "SNOW": "Snowflake", "PLTR": "Palantir Technologies",
+    "ARM": "Arm Holdings", "MU": "Micron Technology", "AMAT": "Applied Materials",
+    "LRCX": "Lam Research", "ASML": "ASML Holding", "MRVL": "Marvell Technology",
+    "ADI": "Analog Devices", "KLAC": "KLA Corporation", "NXPI": "NXP Semiconductors",
+    "ON": "ON Semiconductor", "WDC": "Western Digital", "STX": "Seagate",
+    "DDOG": "Datadog", "NET": "Cloudflare", "ZS": "Zscaler", "FTNT": "Fortinet",
+    "WDAY": "Workday", "TEAM": "Atlassian", "ZM": "Zoom Video", "DOCU": "DocuSign",
+    "TWLO": "Twilio", "SHOP": "Shopify", "SQ": "Block (Square)", "PYPL": "PayPal",
+    "CDNS": "Cadence Design Systems", "SNPS": "Synopsys", "ANSS": "ANSYS",
+    "ADSK": "Autodesk", "ROKU": "Roku", "PINS": "Pinterest", "SNAP": "Snap (Snapchat)",
+    "MTCH": "Match Group (Tinder)", "SPOT": "Spotify", "EBAY": "eBay",
+    "ABNB": "Airbnb", "UBER": "Uber", "LYFT": "Lyft", "DASH": "DoorDash",
+    "AFRM": "Affirm Holdings", "UPST": "Upstart", "RBLX": "Roblox",
+    "DKNG": "DraftKings", "COIN": "Coinbase", "HOOD": "Robinhood Markets",
+    "RDDT": "Reddit", "DJT": "Trump Media & Technology Group",
+    "SMCI": "Super Micro Computer", "GFS": "GlobalFoundries",
+
+    # Financials
+    "BRK-B": "Berkshire Hathaway Class B", "BRK-A": "Berkshire Hathaway Class A",
+    "JPM": "JPMorgan Chase", "BAC": "Bank of America", "WFC": "Wells Fargo",
+    "C": "Citigroup", "GS": "Goldman Sachs", "MS": "Morgan Stanley",
+    "BLK": "BlackRock", "SCHW": "Charles Schwab", "USB": "U.S. Bancorp",
+    "TFC": "Truist Financial", "PNC": "PNC Financial Services", "AXP": "American Express",
+    "V": "Visa", "MA": "Mastercard", "FI": "Fiserv", "FIS": "Fidelity National Information Services",
+    "CB": "Chubb", "MMC": "Marsh & McLennan", "AIG": "American International Group",
+    "MET": "MetLife", "PRU": "Prudential Financial", "TRV": "Travelers Companies",
+    "ALL": "Allstate", "AFL": "Aflac", "SPGI": "S&P Global", "MCO": "Moody's",
+    "ICE": "Intercontinental Exchange", "CME": "CME Group", "NDAQ": "Nasdaq Inc.",
+
+    # Healthcare / Pharma
+    "JNJ": "Johnson & Johnson", "LLY": "Eli Lilly", "ABBV": "AbbVie",
+    "MRK": "Merck", "PFE": "Pfizer", "TMO": "Thermo Fisher Scientific",
+    "ABT": "Abbott Laboratories", "DHR": "Danaher", "BMY": "Bristol-Myers Squibb",
+    "AMGN": "Amgen", "GILD": "Gilead Sciences", "REGN": "Regeneron",
+    "VRTX": "Vertex Pharmaceuticals", "MDT": "Medtronic", "ISRG": "Intuitive Surgical",
+    "BSX": "Boston Scientific", "ELV": "Elevance Health", "CVS": "CVS Health",
+    "UNH": "UnitedHealth Group", "ZTS": "Zoetis", "SYK": "Stryker", "BIIB": "Biogen",
+    "GEHC": "GE HealthCare", "DXCM": "DexCom", "MRNA": "Moderna",
+    "NVO": "Novo Nordisk", "AZN": "AstraZeneca",
+
+    # Consumer
+    "WMT": "Walmart", "COST": "Costco", "HD": "Home Depot", "LOW": "Lowe's",
+    "TGT": "Target", "TJX": "TJX Companies (TJ Maxx)", "ROST": "Ross Stores",
+    "DLTR": "Dollar Tree", "DG": "Dollar General", "BBY": "Best Buy",
+    "MCD": "McDonald's", "SBUX": "Starbucks", "CMG": "Chipotle Mexican Grill",
+    "YUM": "Yum! Brands (KFC/Taco Bell)", "BKNG": "Booking Holdings",
+    "MAR": "Marriott International", "HLT": "Hilton Worldwide",
+    "NKE": "Nike", "LULU": "Lululemon Athletica", "F": "Ford Motor", "GM": "General Motors",
+    "RIVN": "Rivian Automotive", "LCID": "Lucid Group", "NIO": "NIO Inc.",
+    "PG": "Procter & Gamble", "KO": "Coca-Cola", "PEP": "PepsiCo",
+    "MDLZ": "Mondelez International (Oreo/Cadbury)", "MNST": "Monster Beverage",
+    "KHC": "Kraft Heinz", "KDP": "Keurig Dr Pepper", "PM": "Philip Morris",
+    "MO": "Altria (Marlboro)", "STZ": "Constellation Brands", "TLRY": "Tilray Brands",
+    "DIS": "Walt Disney Company", "CMCSA": "Comcast", "T": "AT&T",
+    "VZ": "Verizon Communications", "TMUS": "T-Mobile US", "CHTR": "Charter Communications",
+    "WBD": "Warner Bros. Discovery", "PARA": "Paramount Global", "SIRI": "Sirius XM",
+    "AMC": "AMC Entertainment", "GME": "GameStop", "BB": "BlackBerry",
+    "CHWY": "Chewy", "CART": "Instacart (Maplebear)", "ETSY": "Etsy",
+    "PDD": "PDD Holdings (Temu/Pinduoduo)", "MELI": "MercadoLibre",
+    "BABA": "Alibaba Group", "JD": "JD.com",
+
+    # Industrials / Energy / Materials
+    "BA": "Boeing", "CAT": "Caterpillar", "DE": "Deere & Company",
+    "GE": "General Electric", "HON": "Honeywell", "RTX": "RTX (Raytheon)",
+    "LMT": "Lockheed Martin", "NOC": "Northrop Grumman", "GD": "General Dynamics",
+    "MMM": "3M", "ETN": "Eaton", "EMR": "Emerson Electric", "ITW": "Illinois Tool Works",
+    "UPS": "United Parcel Service", "FDX": "FedEx", "CSX": "CSX", "UNP": "Union Pacific",
+    "NSC": "Norfolk Southern", "DAL": "Delta Air Lines", "AAL": "American Airlines",
+    "UAL": "United Airlines", "LUV": "Southwest Airlines", "WM": "Waste Management",
+    "XOM": "ExxonMobil", "CVX": "Chevron", "COP": "ConocoPhillips",
+    "EOG": "EOG Resources", "PSX": "Phillips 66", "VLO": "Valero Energy",
+    "MPC": "Marathon Petroleum", "OXY": "Occidental Petroleum", "SLB": "Schlumberger",
+    "BKR": "Baker Hughes", "HAL": "Halliburton", "FCX": "Freeport-McMoRan",
+    "NEM": "Newmont Mining", "DOW": "Dow Inc.", "DD": "DuPont", "PPG": "PPG Industries",
+    "SHW": "Sherwin-Williams", "LIN": "Linde", "APD": "Air Products",
+
+    # Real Estate / Utilities
+    "PLD": "Prologis", "AMT": "American Tower", "CCI": "Crown Castle",
+    "EQIX": "Equinix", "PSA": "Public Storage", "SPG": "Simon Property Group",
+    "O": "Realty Income", "WELL": "Welltower", "AVB": "AvalonBay Communities",
+    "NEE": "NextEra Energy", "DUK": "Duke Energy", "SO": "Southern Company",
+    "AEP": "American Electric Power", "EXC": "Exelon", "XEL": "Xcel Energy",
+    "ED": "Consolidated Edison", "PEG": "Public Service Enterprise Group",
+
+    # Crypto-equity / miners / fintech
+    "MARA": "Marathon Digital Holdings", "RIOT": "Riot Platforms",
+    "MSTR": "MicroStrategy", "WULF": "TeraWulf", "CLSK": "CleanSpark",
+    "BITO": "ProShares Bitcoin Strategy ETF", "GBTC": "Grayscale Bitcoin Trust",
+    "IBIT": "iShares Bitcoin Trust ETF", "FBTC": "Fidelity Wise Origin Bitcoin Fund",
+
+    # Major ETFs
+    "SPY": "SPDR S&P 500 ETF", "QQQ": "Invesco Nasdaq 100 ETF",
+    "IWM": "iShares Russell 2000 ETF", "DIA": "SPDR Dow Jones ETF",
+    "VOO": "Vanguard S&P 500 ETF", "VTI": "Vanguard Total Stock Market ETF",
+    "EEM": "iShares MSCI Emerging Markets ETF", "EFA": "iShares MSCI EAFE ETF",
+    "GLD": "SPDR Gold Trust", "SLV": "iShares Silver Trust",
+    "USO": "United States Oil Fund", "UNG": "United States Natural Gas Fund",
+    "TLT": "iShares 20+ Year Treasury Bond ETF", "HYG": "iShares High Yield Bond ETF",
+    "ARKK": "ARK Innovation ETF", "TQQQ": "ProShares UltraPro QQQ (3x)",
+    "SQQQ": "ProShares UltraPro Short QQQ (-3x)", "SOXL": "Direxion Daily Semiconductor Bull 3x",
+    "TNA": "Direxion Daily Small Cap Bull 3x",
+    "XLF": "Financials Select Sector SPDR", "XLE": "Energy Select Sector SPDR",
+    "XLK": "Technology Select Sector SPDR", "XLV": "Health Care Select Sector SPDR",
+    "XLY": "Consumer Discretionary Select Sector SPDR",
+    "XLP": "Consumer Staples Select Sector SPDR",
+    "XLI": "Industrials Select Sector SPDR", "XLB": "Materials Select Sector SPDR",
+    "XLRE": "Real Estate Select Sector SPDR", "XLU": "Utilities Select Sector SPDR",
+    "XLC": "Communication Services Select Sector SPDR",
+    "VXX": "iPath Series B S&P 500 VIX Short-Term Futures ETN",
+
+    # Other commonly searched
+    "T": "AT&T", "VOO": "Vanguard S&P 500", "VUG": "Vanguard Growth ETF",
+    "VTV": "Vanguard Value ETF", "SCHD": "Schwab US Dividend Equity ETF",
+    "JEPI": "JPMorgan Equity Premium Income ETF",
+    "ENB": "Enbridge", "BAM": "Brookfield Asset Management", "SU": "Suncor Energy",
+    "TD": "Toronto-Dominion Bank", "RY": "Royal Bank of Canada",
+    "TSM": "Taiwan Semiconductor Manufacturing", "SAP": "SAP SE",
+    "NVS": "Novartis", "RHHBY": "Roche Holding",
+}
 
 # Macro-proxy tickers used to harvest broad economic news headlines
 WORLD_NEWS_TICKERS = [
@@ -274,6 +419,147 @@ class Snapshot:
 # ------------------------------------------------------------------------
 def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+# ------------------------------------------------------------------------
+# All-listed-tickers DB (NASDAQ + NYSE/AMEX/etc.)
+# ------------------------------------------------------------------------
+_TICKERS_CACHE_PATH = Path(__file__).parent / ".cache" / "all_tickers.json"
+_TICKERS_CACHE_TTL_DAYS = 7
+
+# Major cryptocurrencies seeded so autocomplete works even when the Yahoo
+# remote-search endpoint is blocked by CORS. Symbol stored in Yahoo's
+# "<TICKER>-USD" form so the existing watchlist pipeline accepts them.
+CRYPTO_TICKERS: dict[str, str] = {
+    "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum", "USDT-USD": "Tether",
+    "BNB-USD": "BNB", "XRP-USD": "XRP", "USDC-USD": "USD Coin",
+    "SOL-USD": "Solana", "DOGE-USD": "Dogecoin", "ADA-USD": "Cardano",
+    "TRX-USD": "TRON", "AVAX-USD": "Avalanche", "LINK-USD": "Chainlink",
+    "DOT-USD": "Polkadot", "MATIC-USD": "Polygon", "LTC-USD": "Litecoin",
+    "BCH-USD": "Bitcoin Cash", "SHIB-USD": "Shiba Inu", "UNI-USD": "Uniswap",
+    "ATOM-USD": "Cosmos", "XLM-USD": "Stellar", "ETC-USD": "Ethereum Classic",
+    "NEAR-USD": "NEAR Protocol", "APT-USD": "Aptos", "ARB-USD": "Arbitrum",
+    "OP-USD": "Optimism", "FIL-USD": "Filecoin", "ICP-USD": "Internet Computer",
+    "HBAR-USD": "Hedera", "VET-USD": "VeChain", "ALGO-USD": "Algorand",
+    "AAVE-USD": "Aave", "MKR-USD": "Maker", "GRT-USD": "The Graph",
+    "SAND-USD": "The Sandbox", "MANA-USD": "Decentraland", "AXS-USD": "Axie Infinity",
+    "PEPE-USD": "Pepe", "WIF-USD": "dogwifhat", "BONK-USD": "Bonk",
+    "INJ-USD": "Injective", "SUI-USD": "Sui", "SEI-USD": "Sei",
+    "TIA-USD": "Celestia", "HYPE-USD": "Hyperliquid",
+}
+
+_ETF_NAME_HINTS = (
+    "etf", "etn", "trust", "fund", "ishares", "spdr", "vanguard",
+    "proshares", "invesco", "wisdomtree", "first trust", "schwab",
+    "index fund", "portfolio", "treasury", "bond",
+)
+
+def _classify_ticker(symbol: str, name: str) -> str:
+    """Best-effort asset-type tag for a (symbol, name) pair: Stock / ETF / Crypto / Index."""
+    if not symbol:
+        return "Stock"
+    s = symbol.upper()
+    if s.endswith("-USD") or s.endswith("USD=X"):
+        return "Crypto"
+    if s.startswith("^"):
+        return "Index"
+    nl = (name or "").lower()
+    if any(h in nl for h in _ETF_NAME_HINTS):
+        return "ETF"
+    return "Stock"
+
+def _clean_ticker_name(raw: str) -> str:
+    """Strip the boilerplate suffixes Nasdaq Trader appends to security names."""
+    if not raw:
+        return raw
+    n = raw.strip()
+    # Strip boilerplate
+    suffixes = [
+        " - Common Stock", " Common Stock", " - Ordinary Shares", " Ordinary Shares",
+        " - Class A Common Stock", " - Class B Common Stock", " - Class C Common Stock",
+        " - Common Shares", " Common Shares", " - American Depositary Shares",
+        " American Depositary Shares", " - Depositary Shares", " - Warrants", " Warrants",
+        " - Rights", " Rights", " - Units", " Units",
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for s in suffixes:
+            if n.lower().endswith(s.lower()):
+                n = n[: -len(s)].rstrip(" ,;-")
+                changed = True
+    return n
+
+
+def load_all_tickers() -> list[tuple[str, str]]:
+    """Return [(symbol, name), ...] for every NASDAQ + NYSE/AMEX-listed security.
+
+    Cached locally (refreshes weekly) so this is free at build time.
+    Falls back to an empty list if the network is unreachable on first build.
+    """
+    # Try cache first
+    try:
+        if _TICKERS_CACHE_PATH.exists():
+            age_days = (time.time() - _TICKERS_CACHE_PATH.stat().st_mtime) / 86400
+            if age_days < _TICKERS_CACHE_TTL_DAYS:
+                data = json.loads(_TICKERS_CACHE_PATH.read_text())
+                return [(s, n) for s, n in data]
+    except Exception as e:
+        log(f"all-tickers cache read failed: {e}")
+
+    # Fetch fresh
+    try:
+        urls = [
+            "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+            "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
+        ]
+        pairs: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for url in urls:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+            r.raise_for_status()
+            text = r.text
+            lines = text.splitlines()
+            if not lines:
+                continue
+            header = lines[0].split("|")
+            sym_idx  = next((i for i, h in enumerate(header) if h.strip() in ("Symbol", "ACT Symbol")), 0)
+            name_idx = next((i for i, h in enumerate(header) if h.strip() == "Security Name"), 1)
+            test_idx = next((i for i, h in enumerate(header) if h.strip() == "Test Issue"), -1)
+            for line in lines[1:]:
+                if not line or line.startswith("File Creation Time"):
+                    continue
+                parts = line.split("|")
+                if len(parts) <= max(sym_idx, name_idx):
+                    continue
+                sym = parts[sym_idx].strip()
+                if not sym or "$" in sym or "." in sym and len(sym) > 6:
+                    continue
+                if test_idx >= 0 and len(parts) > test_idx and parts[test_idx].strip().upper() == "Y":
+                    continue
+                name = _clean_ticker_name(parts[name_idx])
+                if not name or sym in seen:
+                    continue
+                seen.add(sym)
+                pairs.append((sym, name))
+        # Save to cache
+        try:
+            _TICKERS_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _TICKERS_CACHE_PATH.write_text(json.dumps([[s, n] for s, n in pairs], ensure_ascii=False))
+            log(f"all-tickers cache refreshed: {len(pairs)} symbols")
+        except Exception as e:
+            log(f"all-tickers cache write failed: {e}")
+        return pairs
+    except Exception as e:
+        log(f"all-tickers fetch failed (search will use curated list only): {e}")
+        # Try stale cache as last resort
+        try:
+            if _TICKERS_CACHE_PATH.exists():
+                data = json.loads(_TICKERS_CACHE_PATH.read_text())
+                return [(s, n) for s, n in data]
+        except Exception:
+            pass
+        return []
 
 
 def warn(msg: str, snap: Snapshot | None = None) -> None:
@@ -841,8 +1127,11 @@ BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY 
 {{
   "exec_summary": ["one-line bullet 1", "one-line bullet 2", "one-line bullet 3", "one-line bullet 4", "one-line bullet 5"],
   "session_recap": "3-4 paragraphs. Lead with index moves and VIX, then sector/macro (cite crude, yields, gold), then 2-3 biggest individual stock moves tied to their specific news headline.",
+  "session_recap_plain": "Same content as session_recap but rewritten for someone with NO finance background. Replace every piece of jargon with everyday words. Use short sentences (one idea each). Spell out acronyms on first use ('the Federal Reserve (the U.S. central bank that sets interest rates)', 'the VIX (a measure of how nervous traders are)'). Frame numbers in human terms when helpful ('the S&P 500 went up 1.2%, meaning a $1,000 investment would have gained about $12'). Friendly, conversational tone — like explaining to a curious friend. Keep all the same facts and numbers.",
   "crypto_recap": "1-2 paragraphs. BTC/ETH/XRP levels, top gainer and top loser in the top 20, notable volume or dominance shifts.",
+  "crypto_recap_plain": "Plain-language version of crypto_recap with no jargon. 'Bitcoin' instead of 'BTC' on first mention, 'Ethereum' instead of 'ETH', etc. Conversational tone.",
   "today_setup": "Walk through tonight's/today's earnings (highlight highest-impact names with EPS estimates) and any economic events. For each name give one line on how it could shape the tape.",
+  "today_setup_plain": "Plain-language version of today_setup. 'Earnings reports' = 'company quarterly results — when companies tell investors how much money they made'. 'EPS' = 'earnings per share — how much profit the company made for each share of stock'. Friendly, short sentences.",
   "tickers_to_watch": [
     {{
       "ticker": "XYZ",
@@ -850,17 +1139,22 @@ BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY 
       "risk_level": "low | medium | high",
       "return_estimate": "+3-6% (swing) or -5-10% (short)",
       "rationale": "one-line signal — specific catalyst, level, or technical setup",
-      "analysis": "2-3 sentences: trade thesis, key catalyst or level, primary risk to the thesis"
+      "rationale_plain": "Same rationale but in plain language — no jargon ('catalyst' = 'reason', 'breakout' = 'big move up past a recent high', 'support level' = 'a price the stock has bounced off before'). Friendly tone.",
+      "analysis": "2-3 sentences: trade thesis, key catalyst or level, primary risk to the thesis",
+      "analysis_plain": "Same analysis in plain language. 2-3 short sentences. Explain WHY in human terms ('Nvidia jumped because the company told investors it expects to make more money than people thought'). Conversational tone."
     }},
     ... 6-10 items across all three risk tiers
   ],
   "crypto_outlook": "1-2 paragraphs on crypto positioning for the next 24 hours.",
+  "crypto_outlook_plain": "Plain-language version of crypto_outlook. No jargon. Friendly tone.",
   "risk_notes": ["concrete risk bullet 1", "concrete risk bullet 2", "concrete risk bullet 3"],
+  "risk_notes_plain": ["plain-language version of risk bullet 1 — what could go wrong, in everyday words", "plain version of bullet 2", "plain version of bullet 3"],
   "world_news": [
     {{
       "headline": "verbatim headline from raw_world_news",
       "source": "publisher name",
       "impact_summary": "One sentence: specific market consequence — what instrument moves, which direction, why",
+      "impact_summary_plain": "Same impact in plain language — no jargon. Use everyday words: 'stocks' not 'equities', 'company size' not 'market cap', 'how much prices jump around' not 'volatility'. One short sentence.",
       "affected_tickers": ["TICK1", "TICK2"],
       "affected_markets": ["equities" | "bonds" | "crude oil" | "gold" | "crypto" | "forex" | "rates"],
       "direction": "bullish" | "bearish" | "mixed"
@@ -873,6 +1167,19 @@ Rules for world_news: only use headlines from raw_world_news. Prioritize macro-m
 inflation data, central bank decisions) over company-specific stories. For each, name the most directly
 affected tickers or market (e.g. "XOM, CVX" for an oil story; "TLT, ^TNX" for a rates story).
 Direction = bullish means good for risk assets overall or for the named tickers; bearish means the opposite.
+
+Plain-language rules — the *_plain fields go to readers with no finance background:
+- Replace jargon: "equities"→"stocks", "volatility"→"how much prices are jumping around",
+  "bullish/bearish"→"optimistic/pessimistic" (or "looking up/looking down"), "market cap"→"company size",
+  "P/E ratio"→"price compared to earnings", "yield"→"interest rate", "rally"→"big jump up",
+  "correction"→"meaningful drop", "guidance"→"the company's forecast for future earnings",
+  "consensus"→"what analysts expected".
+- Explain WHY in human terms ("the Fed raised interest rates" → "the Federal Reserve (the U.S. central
+  bank that sets interest rates) made borrowing money more expensive").
+- Spell out acronyms on first use (FOMC, EPS, P/E, ETF, IPO, GDP, CPI, etc.) — define them once.
+- Use short sentences with one idea each.
+- Friendly, conversational tone — like explaining to a curious friend over coffee.
+- Keep ALL the same facts and numbers — only translate the language around them.
 
 Ground every claim in the data. Cite specific numbers. Do not invent tickers or events.
 
@@ -989,1380 +1296,7 @@ def fetch_premarket(snap: Snapshot) -> None:
 # ------------------------------------------------------------------------
 # HTML rendering
 # ------------------------------------------------------------------------
-HTML_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Daily Market Report · {prior_date}</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<style>
-:root {{
-  --bg: #0b0d12;
-  --bg-panel: #12151d;
-  --bg-panel-2: #181c26;
-  --border: #232836;
-  --text: #e6e8ef;
-  --text-dim: #8a92a6;
-  --text-faint: #5a6278;
-  --accent: #6ee7b7;
-  --green: #22c55e;
-  --green-dim: #0f3a22;
-  --red: #ef4444;
-  --red-dim: #3a1414;
-  --yellow: #f59e0b;
-  --blue: #60a5fa;
-  --purple: #a78bfa;
-}}
-* {{ box-sizing: border-box; }}
-html, body {{
-  margin: 0; padding: 0; background: var(--bg); color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-  font-size: 14px; line-height: 1.45;
-}}
-.wrap {{
-  max-width: 1400px; margin: 0 auto; padding: 28px 32px 72px;
-}}
-header {{
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px;
-  flex-wrap: wrap; gap: 12px;
-}}
-h1 {{
-  font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em;
-}}
-h1 .subtle {{ color: var(--text-dim); font-weight: 400; margin-left: 10px; font-size: 15px; }}
-h2 {{
-  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-dim); margin: 32px 0 12px;
-}}
-.meta {{ color: var(--text-faint); font-size: 12px; }}
-.warn {{
-  background: #2a1d08; border: 1px solid #5b3d12; color: #f0c77a;
-  padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px;
-}}
-
-/* Index tiles */
-.index-grid {{
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;
-}}
-.tile {{
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 14px 16px;
-}}
-.tile .label {{ color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }}
-.tile .value {{ font-size: 22px; font-weight: 600; margin-top: 6px; letter-spacing: -0.01em; }}
-.tile .delta {{ font-size: 13px; margin-top: 2px; }}
-
-/* Colored numbers */
-.up   {{ color: var(--green); }}
-.down {{ color: var(--red); }}
-.flat {{ color: var(--text-dim); }}
-.num  {{ font-variant-numeric: tabular-nums; }}
-
-/* Main 2-col grid for mover sections */
-.cols {{
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;
-}}
-@media (max-width: 980px) {{ .cols {{ grid-template-columns: 1fr; }} }}
-.panel {{
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 0; overflow: hidden;
-}}
-.panel-head {{
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
-}}
-.panel-head h3 {{
-  margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.02em;
-}}
-.panel-head .sub {{ color: var(--text-faint); font-size: 12px; }}
-
-/* Mover rows */
-.mover {{
-  display: grid; grid-template-columns: 64px 1fr auto; gap: 10px;
-  padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: start;
-}}
-.mover:last-child {{ border-bottom: none; }}
-.mover .sym {{ font-weight: 700; letter-spacing: 0.02em; }}
-.mover .name {{ color: var(--text-dim); font-size: 12px; margin-top: 2px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-.mover .why {{ color: var(--text); font-size: 12.5px; margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--border); color: #cfd4e3; }}
-.mover .news {{ margin-top: 6px; }}
-.mover .news a {{ display: block; color: #b7c0d6; font-size: 12px; text-decoration: none; margin: 2px 0; }}
-.mover .news a:hover {{ color: #dce3f5; text-decoration: underline; }}
-.mover .news .pub {{ color: var(--text-faint); font-size: 11px; }}
-.mover .right {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
-.mover .right .pct {{ font-weight: 600; font-size: 15px; }}
-.mover .right .px {{ color: var(--text-dim); font-size: 12px; margin-top: 2px; }}
-.pill {{
-  display: inline-block; padding: 2px 8px; border-radius: 999px;
-  background: var(--bg-panel-2); border: 1px solid var(--border);
-  color: var(--text-dim); font-size: 11px; margin-left: 6px;
-}}
-.pill.up {{ background: #0e2a1a; border-color: #1a4c30; color: #6ee7b7; }}
-.pill.down {{ background: #2a0e0e; border-color: #4c1a1a; color: #fca5a5; }}
-
-/* Narrative cards */
-.narr {{
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 18px 20px; margin: 12px 0 8px;
-}}
-.narr p {{ margin: 8px 0; color: #dde2f0; }}
-.narr .label {{
-  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
-  margin-bottom: 6px;
-}}
-.narr.risk {{ border-color: #5b3d12; background: #1f1708; }}
-.narr.risk p {{ color: #f0c77a; }}
-
-/* Morning Briefing — FAB + modal */
-.briefing-fab {{
-  position: fixed; bottom: 28px; right: 28px; z-index: 100;
-  background: var(--accent); color: #0b0d12;
-  border: none; border-radius: 999px; padding: 11px 22px;
-  font-size: 13px; font-weight: 700; cursor: pointer; letter-spacing: 0.02em;
-  box-shadow: 0 4px 20px rgba(110,231,183,0.35);
-  transition: transform 0.15s, box-shadow 0.15s;
-}}
-.briefing-fab:hover {{ transform: translateY(-2px); box-shadow: 0 6px 28px rgba(110,231,183,0.5); }}
-.briefing-backdrop {{
-  display: none; position: fixed; inset: 0; z-index: 200;
-  background: rgba(0,0,0,0.72); backdrop-filter: blur(3px);
-  align-items: flex-start; justify-content: center; padding: 40px 20px;
-  overflow-y: auto;
-}}
-.briefing-backdrop.open {{ display: flex; }}
-.briefing-modal {{
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px;
-  width: 100%; max-width: 820px; flex-shrink: 0;
-  overflow: hidden; margin: auto;
-}}
-.briefing-modal-head {{
-  position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 20px; border-bottom: 1px solid var(--border);
-  background: #111827;
-}}
-.briefing-modal-head h3 {{
-  margin: 0; font-size: 15px; font-weight: 700; color: var(--accent);
-}}
-.briefing-modal-head .bdate {{ color: var(--text-faint); font-size: 12px; margin-left: auto; margin-right: 10px; }}
-.briefing-close {{
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 16px; line-height: 1.4;
-  flex-shrink: 0;
-}}
-.briefing-close:hover {{ color: var(--text); border-color: var(--text-dim); }}
-.exec-bar {{
-  padding: 14px 20px; border-bottom: 1px solid var(--border);
-  background: var(--bg-panel-2);
-}}
-.exec-bar .exec-label {{
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-dim); font-weight: 600; margin-bottom: 8px;
-}}
-.exec-bar ol {{ margin: 0; padding-left: 18px; }}
-.exec-bar li {{ color: var(--text); font-size: 13px; line-height: 1.55; margin: 5px 0; }}
-.briefing-section {{ padding: 16px 20px; border-bottom: 1px solid var(--border); }}
-.briefing-section:last-child {{ border-bottom: none; }}
-.briefing-section .bs-label {{
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-dim); font-weight: 600; margin-bottom: 10px;
-}}
-.briefing-section p {{ margin: 0 0 10px; color: #dde2f0; font-size: 13.5px; line-height: 1.65; }}
-.briefing-section p:last-child {{ margin-bottom: 0; }}
-.briefing-section.crypto .bs-label {{ color: var(--purple); }}
-.briefing-section.crypto p {{ color: #d4cbf8; }}
-.briefing-section.setup .bs-label {{ color: var(--blue); }}
-.briefing-section.setup p {{ color: #c9dbf5; }}
-.briefing-section.risk {{ background: #1a1508; }}
-.briefing-section.risk .bs-label {{ color: var(--yellow); }}
-.briefing-section.risk ul {{ margin: 0; padding-left: 20px; list-style: disc; }}
-.briefing-section.risk li {{ color: #f0c77a; font-size: 13px; line-height: 1.55; margin: 6px 0; }}
-.briefing-watch {{ padding: 16px 20px; border-bottom: 1px solid var(--border); }}
-.briefing-watch .bs-label {{
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-dim); font-weight: 600; margin-bottom: 10px;
-}}
-.b-watch-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }}
-.b-watch-item {{
-  background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 12px;
-}}
-.b-watch-item .sym {{ font-weight: 700; font-size: 13px; }}
-.b-watch-item .why {{ color: var(--text-dim); font-size: 12px; margin-top: 4px; line-height: 1.45; }}
-.b-chip {{ display:inline-flex; gap:4px; padding:2px 8px; border-radius:6px;
-          font-weight:600; font-size:12.5px; margin:0 2px; vertical-align:middle; }}
-.b-chip.up   {{ background:rgba(34,197,94,.15);  color:var(--green); }}
-.b-chip.down {{ background:rgba(239,68,68,.15);  color:var(--red); }}
-.b-chip.flat {{ background:rgba(148,163,184,.12); color:#cbd5e1; }}
-.b-index-row {{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }}
-
-/* Watch list */
-.watch-list {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }}
-.watch-item {{
-  background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 12px 14px;
-}}
-.watch-item .sym {{ font-weight: 700; }}
-.watch-item .why {{ color: var(--text-dim); font-size: 12.5px; margin-top: 4px; }}
-
-/* Table for calendars */
-table {{
-  width: 100%; border-collapse: collapse; font-size: 13px;
-}}
-th, td {{
-  text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}}
-th {{
-  color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-  font-weight: 600;
-}}
-.briefing-modal table th, .briefing-modal table td {{ padding: 5px 8px; }}
-tr:last-child td {{ border-bottom: none; }}
-td.sym {{ font-weight: 600; white-space: nowrap; }}
-td.time {{ color: var(--text-dim); white-space: nowrap; }}
-
-footer {{
-  margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
-  color: var(--text-faint); font-size: 12px; text-align: center;
-}}
-a {{ color: #8ab4f8; }}
-.refresh-btn {{
-  background: #1e2535; border: 1px solid #3d4560; color: #c8cfdf;
-  border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
-  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-  transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
-}}
-.refresh-btn:hover {{ background: #252d42; border-color: var(--accent); color: var(--accent); }}
-.refresh-btn .spin {{ font-size: 15px; line-height: 1; }}
-.refresh-btn.spinning .spin {{ display: inline-block; animation: spin .6s linear infinite; }}
-@keyframes spin {{ to {{ transform: rotate(360deg); }} }}
-.premarket-bar {{ margin-bottom:18px; }}
-.tile.compact {{ padding:10px 12px; }}
-.tile.compact .value {{ font-size:16px; }}
-.tile.compact .label {{ font-size:11px; }}
-.tile.compact .delta {{ font-size:12px; }}
-.pm-grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-bottom:10px; }}
-.pm-section-label {{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin:8px 0 4px; }}
-
-/* ── Scroll offset so sticky nav doesn't hide section headers ── */
-html {{ scroll-padding-top: 64px; }}
-
-/* Sticky nav */
-.sticky-nav {{ position:sticky; top:0; z-index:150;
-  background:rgba(11,13,18,.93); backdrop-filter:blur(8px);
-  border-bottom:1px solid var(--border);
-  display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch;
-  margin:0 0 20px; scrollbar-width:none;
-  scroll-snap-type:x proximity;
-}}
-.sticky-nav::-webkit-scrollbar {{ display:none; }}
-.sticky-nav a {{ color:var(--text-dim); text-decoration:none; font-size:12px; font-weight:500;
-  padding:10px 14px; white-space:nowrap; border-bottom:2px solid transparent;
-  transition:color .15s, border-color .15s; flex-shrink:0;
-  scroll-snap-align:start; }}
-.sticky-nav a:hover {{ color:var(--text); border-bottom-color:var(--accent); }}
-@media (max-width: 720px) {{
-  .sticky-nav {{
-    margin:0 -16px 16px;
-    padding:0 8px;
-    -webkit-mask-image:linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
-            mask-image:linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
-  }}
-  .sticky-nav a {{ padding:10px 11px; font-size:11.5px; }}
-}}
-
-/* Watchlist */
-.wl-row {{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }}
-.wl-tile {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:8px;
-  padding:10px 14px; min-width:100px; }}
-.wl-tile .wl-sym {{ font-weight:700; font-size:13px; letter-spacing:.02em; }}
-.wl-tile .wl-price {{ font-size:11px; color:var(--text-dim); margin-top:2px; font-variant-numeric:tabular-nums; }}
-.wl-tile .wl-pct {{ font-size:13px; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums; }}
-
-/* Sector heatmap */
-.sector-grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin-bottom:8px; }}
-.sector-card {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }}
-.sector-card .s-name {{ font-size:11px; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase;
-  letter-spacing:.04em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
-.sector-card .s-1d {{ font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }}
-.sector-card .s-sub {{ display:flex; gap:10px; margin-top:4px; font-size:11px; color:var(--text-faint); }}
-
-/* Sentiment strip */
-.sentiment-strip {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; margin-bottom:8px; }}
-.st-tile {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }}
-.st-tile .st-label {{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }}
-.st-tile .st-val {{ font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }}
-.st-tile .st-sub {{ font-size:11px; color:var(--text-faint); margin-top:2px; }}
-
-/* Scorecard */
-.scorecard-wrap {{ background:var(--bg-panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:8px; }}
-.scorecard-head {{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); }}
-.scorecard-head h3 {{ margin:0; font-size:14px; font-weight:600; }}
-.scorecard-stats {{ display:flex; gap:14px; font-size:12px; color:var(--text-dim); }}
-.scorecard-stats .hit {{ color:var(--green); font-weight:700; }}
-.scorecard-stats .miss {{ color:var(--red); font-weight:700; }}
-.sc-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-.sc-table th {{ color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-  padding:8px 14px; border-bottom:1px solid var(--border); text-align:left; }}
-.sc-table td {{ padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }}
-.sc-table tr:last-child td {{ border-bottom:none; }}
-.verdict {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; }}
-.verdict.HIT  {{ background:rgba(34,197,94,.18);  color:var(--green); }}
-.verdict.MISS {{ background:rgba(239,68,68,.18);  color:var(--red); }}
-.verdict.FLAT {{ background:rgba(148,163,184,.15); color:#94a3b8; }}
-.verdict.NA   {{ background:rgba(148,163,184,.08); color:var(--text-faint); }}
-/* Collapsible scorecard details wrapper */
-details.scorecard-details {{ margin: 0 0 8px; }}
-details.scorecard-details > summary {{
-  cursor: pointer; list-style: none; display: flex; align-items: center;
-  justify-content: space-between; gap: 10px;
-  padding: 14px 16px; border-radius: 10px;
-  background: var(--bg-panel); border: 1px solid var(--border);
-  user-select: none; transition: background .15s;
-}}
-details.scorecard-details[open] > summary {{
-  border-radius: 10px 10px 0 0; border-bottom: 1px solid var(--border);
-  background: var(--bg-panel-2);
-}}
-details.scorecard-details > summary::-webkit-details-marker {{ display: none; }}
-details.scorecard-details > summary:hover {{ background: var(--bg-panel-2); }}
-.sc-summary-left {{ display: flex; align-items: center; gap: 10px; }}
-.sc-summary-title {{ font-size: 14px; font-weight: 700; color: var(--text); }}
-.sc-summary-arrow {{
-  font-size: 9px; color: var(--accent);
-  display: inline-block; transition: transform .2s;
-}}
-details.scorecard-details[open] .sc-summary-arrow {{ transform: rotate(90deg); }}
-.sc-summary-stats {{ display: flex; gap: 10px; font-size: 11px; flex-wrap: wrap; }}
-.sc-summary-stats .hit {{ color: var(--green); font-weight: 700; }}
-.sc-summary-stats .miss {{ color: var(--red); font-weight: 700; }}
-details.scorecard-details > .scorecard-body {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-top: none; border-radius: 0 0 10px 10px; overflow: hidden;
-}}
-.sc-section-head {{
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px 8px; border-bottom: 1px solid var(--border);
-  background: var(--bg-panel-2);
-}}
-.sc-section-title {{
-  font-size: 12px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text-dim);
-}}
-.sc-section-sub {{ font-size: 11px; color: var(--text-faint); }}
-.sc-picks-wrap {{ padding: 14px 14px 6px; }}
-
-/* A–F grade cards (post-close scorecard) */
-.grade-cards {{
-  display: grid; grid-template-columns: 1fr; gap: 10px;
-  padding: 14px 16px 18px;
-}}
-@media (min-width: 900px) {{ .grade-cards {{ grid-template-columns: 1fr 1fr; }} }}
-.grade-card {{
-  background: var(--bg-panel-2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 14px;
-}}
-.gc-top {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
-.gc-ticker {{ font-weight: 700; letter-spacing: 0.02em; font-size: 15px; flex: 0 0 auto; }}
-.gc-pct {{ font-size: 13px; font-weight: 600; }}
-.gc-bias {{
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-  padding: 2px 8px; border-radius: 999px;
-  background: rgba(148,163,184,.12); color: var(--text-faint);
-  margin-left: auto;
-}}
-.gc-bias-bullish {{ background: rgba(34,197,94,.14); color: var(--green); }}
-.gc-bias-bearish {{ background: rgba(239,68,68,.14); color: var(--red); }}
-.gc-bias-neutral {{ background: rgba(148,163,184,.12); color: var(--text-faint); }}
-.gc-grade {{
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 8px;
-  font-weight: 800; font-size: 18px; flex: 0 0 auto;
-}}
-.gc-grade-A {{ background: rgba(34,197,94,.22);  color: var(--green); }}
-.gc-grade-B {{ background: rgba(110,231,183,.18); color: var(--accent); }}
-.gc-grade-C {{ background: rgba(245,158,11,.20); color: var(--yellow); }}
-.gc-grade-D {{ background: rgba(249,115,22,.22); color: #fb923c; }}
-.gc-grade-F {{ background: rgba(239,68,68,.22);  color: var(--red); }}
-.gc-grade-NA {{ background: rgba(148,163,184,.10); color: var(--text-faint); }}
-.gc-thesis, .gc-reasoning {{
-  font-size: 12.5px; line-height: 1.55; margin-top: 8px;
-  color: var(--text);
-}}
-.gc-thesis {{ color: var(--text-dim); }}
-.gc-label {{
-  display: inline-block; min-width: 52px;
-  font-size: 9.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--text-faint); margin-right: 8px;
-  vertical-align: 1px;
-}}
-
-/* GPA + grade-distribution pills used in section header & summary line */
-.gpa-pill {{
-  display: inline-block; padding: 2px 10px; border-radius: 999px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
-}}
-.gpa-A {{ background: rgba(34,197,94,.18);  color: var(--green); }}
-.gpa-B {{ background: rgba(110,231,183,.18); color: var(--accent); }}
-.gpa-C {{ background: rgba(245,158,11,.18); color: var(--yellow); }}
-.gpa-D {{ background: rgba(249,115,22,.18); color: #fb923c; }}
-.gpa-F {{ background: rgba(239,68,68,.18);  color: var(--red); }}
-.gd-pill {{
-  display: inline-block; padding: 1px 8px; border-radius: 999px;
-  font-size: 11px; font-weight: 700;
-}}
-.gd-A {{ background: rgba(34,197,94,.14);  color: var(--green); }}
-.gd-B {{ background: rgba(110,231,183,.14); color: var(--accent); }}
-.gd-C {{ background: rgba(245,158,11,.14); color: var(--yellow); }}
-.gd-D {{ background: rgba(249,115,22,.14); color: #fb923c; }}
-.gd-F {{ background: rgba(239,68,68,.14);  color: var(--red); }}
-
-/* Earnings time badges */
-.time-badge {{
-  display: inline-block; padding: 2px 9px; border-radius: 999px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
-  background: rgba(148,163,184,.12); color: var(--text-faint);
-  white-space: nowrap;
-}}
-.time-bmo {{ background: rgba(96,165,250,.18); color: var(--blue); }}
-.time-amc {{ background: rgba(167,139,250,.18); color: var(--purple); }}
-.time-tbd {{ background: rgba(148,163,184,.10); color: var(--text-faint); }}
-
-/* Sector horizontal-bar chart */
-.sector-bars {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 10px; padding: 14px 18px 16px; margin: 12px 0 18px;
-}}
-.sb-caption {{
-  font-size: 11px; color: var(--text-faint);
-  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px;
-}}
-.sb-row {{
-  display: grid; grid-template-columns: 180px 1fr 70px;
-  align-items: center; gap: 14px; padding: 4px 0;
-}}
-.sb-name {{ font-size: 13px; color: var(--text); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }}
-.sb-track {{
-  position: relative; height: 14px; background: var(--bg-panel-2);
-  border-radius: 4px; overflow: hidden;
-}}
-.sb-axis {{
-  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-  background: var(--border);
-}}
-.sb-fill {{
-  position: absolute; top: 1px; bottom: 1px; height: 12px; border-radius: 2px;
-}}
-.sb-fill.sb-right {{ left: 50%; }}
-.sb-fill.sb-left  {{ right: 50%; }}
-.sb-fill.up   {{ background: var(--green); }}
-.sb-fill.down {{ background: var(--red); }}
-.sb-fill.flat {{ background: var(--text-faint); }}
-.sb-pct {{ font-size: 12px; text-align: right; font-weight: 600; }}
-@media (max-width: 720px) {{
-  .sb-row {{ grid-template-columns: 120px 1fr 56px; gap: 8px; }}
-  .sb-name {{ font-size: 12px; }}
-  .sb-pct  {{ font-size: 11px; }}
-}}
-
-/* World-news sentiment legend */
-.wn-legend {{
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 10px 14px; margin: 8px 0 4px;
-  border: 1px solid var(--border); background: var(--bg-panel-2);
-  border-radius: 8px; font-size: 12px; color: var(--text-dim);
-}}
-.wn-legend-label {{
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--text-faint);
-}}
-.wn-legend-item {{ display: inline-flex; align-items: center; gap: 6px; }}
-.wn-legend-item .wn-dir {{ font-size: 14px; line-height: 1; }}
-
-/* Multi-day scorecard history + self-calibration */
-.sc-day-stack {{ padding: 6px 16px 14px; display: flex; flex-direction: column; gap: 8px; }}
-details.sc-day {{
-  background: var(--bg-panel-2); border: 1px solid var(--border);
-  border-radius: 8px; overflow: hidden;
-}}
-details.sc-day > summary {{
-  cursor: pointer; list-style: none;
-  padding: 10px 14px;
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; flex-wrap: wrap;
-  user-select: none; transition: background .15s;
-}}
-details.sc-day > summary::-webkit-details-marker {{ display: none; }}
-details.sc-day > summary:hover {{ background: rgba(255,255,255,.02); }}
-details.sc-day[open] > summary {{ border-bottom: 1px solid var(--border); }}
-.sc-day-date {{
-  font-size: 13px; font-weight: 700; color: var(--text);
-  letter-spacing: 0.01em;
-}}
-.sc-day-meta {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11px; }}
-details.sc-day .grade-cards {{ padding: 12px 14px 16px; }}
-
-.sc-calibration {{
-  padding: 14px 16px;
-  background: linear-gradient(180deg, rgba(110,231,183,.04), transparent);
-  border-bottom: 1px solid var(--border);
-}}
-.cal-label {{
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--accent); margin-bottom: 10px;
-}}
-.cal-grid {{
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
-}}
-@media (max-width: 720px) {{ .cal-grid {{ grid-template-columns: repeat(2, minmax(0,1fr)); }} }}
-.cal-tile {{
-  background: var(--bg-panel-2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px;
-}}
-.cal-key {{
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 4px;
-}}
-.cal-val {{ font-size: 18px; font-weight: 700; }}
-.cal-val.gpa-A {{ color: var(--green); }}
-.cal-val.gpa-B {{ color: var(--accent); }}
-.cal-val.gpa-C {{ color: var(--yellow); }}
-.cal-val.gpa-D {{ color: #fb923c; }}
-.cal-val.gpa-F {{ color: var(--red); }}
-.cal-rate {{ color: var(--text); }}
-.cal-n   {{ font-size: 11px; color: var(--text-faint); font-weight: 500; }}
-.cal-na  {{ color: var(--text-faint); font-size: 12px; font-weight: 500; }}
-.cal-sub {{ font-size: 11px; color: var(--text-faint); margin-top: 3px; }}
-
-/* What to Watch Today checklist (briefing card) */
-.b-watchlist {{
-  padding: 12px 20px 16px;
-  border-top: 1px solid var(--border);
-  background: rgba(110,231,183,.04);
-}}
-.bw-label {{
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--accent); margin-bottom: 8px;
-}}
-.bw-list {{ margin: 0; padding: 0; list-style: none; }}
-.bw-list li {{
-  padding: 5px 0 5px 26px; position: relative;
-  font-size: 13px; color: var(--text); line-height: 1.5;
-}}
-.bw-list li::before {{
-  content: '☐'; position: absolute; left: 2px; top: 4px;
-  color: var(--accent); font-size: 14px; font-weight: 700;
-}}
-
-/* Colored left border on tiles for immediate direction signal */
-.tile-up   {{ border-left: 3px solid var(--green); }}
-.tile-down {{ border-left: 3px solid var(--red); }}
-.tile-flat {{ border-left: 3px solid var(--border); }}
-
-/* Market group section wrappers */
-.market-group {{ margin: 40px 0 0; }}
-.market-group-header {{
-  display: flex; align-items: center; gap: 10px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
-  padding: 0 0 10px; margin-bottom: 20px;
-  border-bottom: 2px solid var(--border);
-}}
-.market-group-header.us     {{ border-bottom-color: #3b82f6; color: #60a5fa; }}
-.market-group-header.global {{ border-bottom-color: #a78bfa; color: #c4b5fd; }}
-.market-group-header.crypto {{ border-bottom-color: #f59e0b; color: #fbbf24; }}
-.market-group-header.setup  {{ border-bottom-color: var(--accent); color: var(--accent); }}
-
-/* Collapsible top-level sections (Predictions, US Markets, Global, Crypto) */
-details.section-details {{ margin: 40px 0 0; }}
-details.section-details > summary {{
-  list-style: none; cursor: pointer;
-  display: flex; align-items: center; gap: 10px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
-  padding: 0 0 10px; margin-bottom: 20px;
-  border-bottom: 2px solid var(--border);
-  transition: background 0.12s;
-}}
-details.section-details > summary::-webkit-details-marker {{ display: none; }}
-details.section-details > summary:hover {{ background: rgba(255,255,255,0.015); }}
-details.section-details.us     > summary {{ border-bottom-color: #3b82f6; color: #60a5fa; }}
-details.section-details.global > summary {{ border-bottom-color: #a78bfa; color: #c4b5fd; }}
-details.section-details.crypto > summary {{ border-bottom-color: #f59e0b; color: #fbbf24; }}
-details.section-details.setup  > summary {{ border-bottom-color: var(--accent); color: var(--accent); }}
-.sg-arrow {{
-  font-size: 11px; color: var(--text-faint);
-  transition: transform 0.2s; width: 10px; display: inline-block;
-}}
-details.section-details[open] > summary .sg-arrow {{ transform: rotate(90deg); }}
-
-/* Inline Morning Briefing card (replaces FAB + modal) */
-.briefing-inline {{
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
-  overflow: hidden; margin-bottom: 28px;
-}}
-.briefing-inline-head {{
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-  padding: 12px 20px; border-bottom: 1px solid var(--border);
-  background: var(--bg-panel-2);
-}}
-.bi-title {{ font-weight: 700; color: var(--accent); font-size: 14px; letter-spacing: .01em; }}
-.bi-source {{ color: var(--text-faint); font-size: 11px; }}
-details.briefing-details {{ }}
-details.briefing-details > summary {{
-  padding: 10px 20px; cursor: pointer; color: var(--text-dim);
-  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
-  list-style: none; display: flex; align-items: center; gap: 6px;
-  border-top: 1px solid var(--border); user-select: none;
-  transition: color .15s; background: var(--bg-panel-2);
-}}
-details.briefing-details > summary::-webkit-details-marker {{ display: none; }}
-details.briefing-details > summary:hover {{ color: var(--text); }}
-details.briefing-details > summary::before {{ content: '▶'; font-size: 8px; display:inline-block; transition: transform .2s; }}
-details.briefing-details[open] > summary::before {{ transform: rotate(90deg); }}
-
-/* ── Live ticker banner ── */
-.live-ticker-section {{
-  margin: 0 0 24px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}}
-.live-ticker-label {{
-  padding: 8px 14px 4px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-faint);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}}
-.live-ticker-label::before {{
-  content: '';
-  display: inline-block;
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 6px #22c55e;
-  animation: pulse-dot 2s ease-in-out infinite;
-}}
-.live-ticker-section .tradingview-widget-container {{
-  margin: 0; padding: 0;
-}}
-@keyframes pulse-dot {{
-  0%, 100% {{ opacity: 1; box-shadow: 0 0 6px #22c55e; }}
-  50%       {{ opacity: .5; box-shadow: 0 0 2px #22c55e; }}
-}}
-
-/* ── Earnings section ── */
-.earnings-section {{ margin: 28px 0 0; }}
-.earnings-section-label {{
-  font-size: 13px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-dim);
-  padding: 0 0 10px; border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
-}}
-.earnings-featured {{
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px; margin-bottom: 14px;
-}}
-.ef-card {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 11px 13px;
-  border-left: 3px solid var(--border);
-}}
-.ef-card.bmo {{ border-left-color: #60a5fa; }}
-.ef-card.amc {{ border-left-color: #a78bfa; }}
-.ef-card.beat {{ border-left-color: var(--green); }}
-.ef-card.miss {{ border-left-color: var(--red); }}
-.ef-card.inline {{ border-left-color: #94a3b8; }}
-.ef-sym-row {{ display: flex; align-items: center; gap: 7px; margin-bottom: 2px; }}
-.ef-sym  {{ font-size: 14px; font-weight: 700; color: var(--text); }}
-.ef-verdict {{
-  display: inline-block; padding: 1px 7px; border-radius: 999px;
-  font-size: 10px; font-weight: 700; letter-spacing: .04em;
-}}
-.ef-verdict.BEAT    {{ background: rgba(34,197,94,.18);  color: var(--green); }}
-.ef-verdict.MISS    {{ background: rgba(239,68,68,.18);  color: var(--red); }}
-.ef-verdict.IN-LINE {{ background: rgba(148,163,184,.15); color: #94a3b8; }}
-.ef-result {{
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 6px; margin: 5px 0 4px; flex-wrap: wrap;
-}}
-.ef-eps {{ font-size: 11px; color: var(--text-dim); }}
-.ef-move {{ font-size: 12px; font-weight: 700; }}
-.ef-summary {{
-  font-size: 11px; color: var(--text-dim); line-height: 1.5;
-  border-top: 1px solid var(--border); padding-top: 6px; margin-top: 6px;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-  overflow: hidden;
-}}
-.ef-name {{ font-size: 11px; color: var(--text-dim); margin: 2px 0 5px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.ef-name a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
-.ef-meta {{ display: flex; gap: 6px; flex-wrap: wrap; }}
-.ef-badge {{
-  font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
-  background: var(--bg-panel-2); color: var(--text-faint);
-}}
-.ef-badge.bmo {{ color: #60a5fa; background: #1e3a5f44; }}
-.ef-badge.amc {{ color: #a78bfa; background: #3b1f6044; }}
-
-details.earnings-extra {{ margin-top: 4px; }}
-details.earnings-extra > summary {{
-  cursor: pointer; list-style: none;
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; font-weight: 600; color: var(--text-faint);
-  padding: 8px 0; user-select: none; transition: color .15s;
-}}
-details.earnings-extra > summary::-webkit-details-marker {{ display: none; }}
-details.earnings-extra > summary:hover {{ color: var(--text-dim); }}
-details.earnings-extra > summary::before {{
-  content: '▶'; font-size: 8px; display: inline-block; transition: transform .2s;
-}}
-details.earnings-extra[open] > summary::before {{ transform: rotate(90deg); }}
-details.earnings-extra > .cols {{ margin-top: 12px; }}
-
-/* ── Economic events + news ── */
-.econ-section {{ display: flex; flex-direction: column; gap: 10px; }}
-.econ-event-card {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 14px;
-  border-left: 3px solid var(--text-faint);
-}}
-.econ-event-card.high-impact {{ border-left-color: #ef4444; }}
-.econ-event-card.med-impact  {{ border-left-color: #f59e0b; }}
-.econ-event-card.low-impact  {{ border-left-color: var(--border); }}
-.econ-ev-top {{
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; margin-bottom: 4px; flex-wrap: wrap;
-}}
-.econ-ev-time  {{ font-size: 11px; font-weight: 600; color: var(--text-faint); flex-shrink: 0; }}
-.econ-ev-name  {{ font-size: 13px; font-weight: 700; color: var(--text); }}
-.econ-ev-extra {{ font-size: 11px; color: var(--text-dim); margin: 2px 0 8px; }}
-.econ-ev-news  {{ display: flex; flex-direction: column; gap: 5px; margin-top: 8px;
-                  border-top: 1px solid var(--border); padding-top: 8px; }}
-.econ-news-item {{
-  display: flex; gap: 8px; align-items: flex-start;
-  font-size: 12px; color: var(--text-dim); line-height: 1.5;
-}}
-.econ-news-item::before {{
-  content: '·'; color: var(--text-faint); flex-shrink: 0; padding-top: 1px;
-}}
-.econ-news-item a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
-.econ-news-item a:hover {{ color: var(--text); }}
-.econ-news-src {{ color: var(--text-faint); font-size: 10px; white-space: nowrap; }}
-
-/* ── Page layout: main content + persistent sidebar ── */
-.page-layout {{
-  display: flex;
-  align-items: flex-start;
-  min-height: 100vh;
-}}
-.main-col {{
-  flex: 1;
-  min-width: 0;
-  overflow: clip;
-}}
-/* ── Watchlist sidebar ── */
-.sidebar {{
-  width: 300px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--bg-panel);
-  border-left: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}}
-.sidebar::-webkit-scrollbar {{ width: 4px; }}
-.sidebar::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 2px; }}
-@media (max-width: 920px) {{ .sidebar {{ display: none; }} }}
-.sb-head {{
-  padding: 14px 14px 10px; border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 5;
-  background: var(--bg-panel);
-  box-shadow: 0 4px 6px -4px rgba(0,0,0,0.4);
-}}
-.sb-title {{ font-size: 13px; font-weight: 700; color: var(--text); }}
-.sb-subtitle {{ font-size: 10px; color: var(--text-faint); margin-top: 2px; }}
-.sb-add {{
-  display: flex; gap: 6px; padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-}}
-.sb-add input {{
-  flex: 1; background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 6px; padding: 7px 10px; color: var(--text);
-  font-size: 12px; font-family: inherit; outline: none;
-}}
-.sb-add input:focus {{ border-color: var(--accent); }}
-.sb-add button {{
-  background: var(--accent); border: none; border-radius: 6px;
-  color: #fff; font-size: 14px; font-weight: 700;
-  padding: 7px 12px; cursor: pointer; transition: opacity .15s;
-}}
-.sb-add button:hover {{ opacity: .85; }}
-.sb-section-label {{
-  font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--text-faint);
-  padding: 10px 12px 4px;
-}}
-.sb-cards {{ padding: 6px 10px 40px; display: flex; flex-direction: column; gap: 8px; }}
-.sb-card {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 9px; padding: 12px 13px;
-  border-left: 3px solid var(--border);
-}}
-.sb-card.up   {{ border-left-color: var(--up); }}
-.sb-card.down {{ border-left-color: var(--down); }}
-.sb-card.flat {{ border-left-color: var(--text-faint); }}
-.sb-card-top {{
-  display: flex; align-items: flex-start;
-  justify-content: space-between; gap: 6px; margin-bottom: 3px;
-}}
-.sb-sym {{ font-size: 15px; font-weight: 700; color: var(--text); }}
-.sb-pct {{ font-size: 13px; font-weight: 700; }}
-.sb-name {{ font-size: 11px; color: var(--text-faint); margin-bottom: 6px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.sb-price {{ font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }}
-.sb-badges {{ display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }}
-.sb-badge {{
-  font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px;
-  background: var(--bg-panel-2); color: var(--text-faint);
-}}
-.sb-badge.earnings {{ color: #fbbf24; background: #78350f33; }}
-.sb-badge.bull {{ color: var(--up); background: #16a34a22; }}
-.sb-badge.bear {{ color: var(--down); background: #dc262622; }}
-.sb-pred {{ font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 6px; }}
-.sb-news {{
-  font-size: 11px; color: var(--text-faint); line-height: 1.4;
-  border-top: 1px solid var(--border); padding-top: 6px;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
-}}
-.sb-news a {{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }}
-/* user-added TV charts */
-.sb-user-card {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 9px; overflow: hidden; margin: 0;
-}}
-.sb-user-card-head {{
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px 4px;
-}}
-.sb-user-sym {{ font-size: 13px; font-weight: 700; color: var(--text); }}
-.sb-user-rm {{
-  background: none; border: none; color: var(--text-faint);
-  cursor: pointer; font-size: 14px; padding: 0 2px;
-}}
-.sb-user-rm:hover {{ color: var(--down); }}
-
-/* ── World news section ── */
-details.world-news-details {{ margin: 28px 0 0; }}
-details.world-news-details > summary {{
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-dim);
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-  user-select: none;
-  transition: color .15s;
-}}
-details.world-news-details > summary::-webkit-details-marker {{ display: none; }}
-details.world-news-details > summary:hover {{ color: var(--text); }}
-details.world-news-details > summary::before {{
-  content: '▶';
-  font-size: 9px;
-  color: var(--accent);
-  display: inline-block;
-  transition: transform .2s;
-  flex-shrink: 0;
-}}
-details.world-news-details[open] > summary::before {{ transform: rotate(90deg); }}
-details.world-news-details > summary .expand-hint {{
-  font-size: 11px; font-weight: 400; color: var(--text-faint); margin-left: 4px;
-}}
-details.world-news-details[open] > summary .expand-hint {{ display: none; }}
-
-.wn-grid {{ display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }}
-.wn-item {{
-  display: flex; gap: 14px;
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 14px;
-  border-left-width: 3px;
-}}
-.wn-item.wn-bullish {{ border-left-color: var(--up); }}
-.wn-item.wn-bearish {{ border-left-color: var(--down); }}
-.wn-item.wn-mixed   {{ border-left-color: var(--text-faint); }}
-.wn-dir {{
-  font-size: 16px; font-weight: 700; flex-shrink: 0;
-  width: 20px; text-align: center; padding-top: 1px;
-}}
-.wn-dir.up   {{ color: var(--up); }}
-.wn-dir.down {{ color: var(--down); }}
-.wn-dir.flat {{ color: var(--text-faint); }}
-.wn-body {{ flex: 1; min-width: 0; }}
-.wn-headline {{
-  font-size: 14px; font-weight: 600; color: var(--text);
-  line-height: 1.4; margin-bottom: 4px;
-}}
-.wn-headline a {{ color: inherit; text-decoration: none; }}
-.wn-headline a:hover {{ text-decoration: underline; color: var(--accent); }}
-.wn-meta {{ font-size: 11px; color: var(--text-faint); margin-bottom: 6px; }}
-.wn-impact {{ font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; }}
-.wn-chips {{ display: flex; flex-wrap: wrap; gap: 5px; }}
-.wn-chip {{
-  font-size: 11px; font-weight: 600; padding: 2px 7px;
-  border-radius: 4px; background: var(--bg-panel-2);
-  color: var(--text-dim); border: 1px solid var(--border);
-}}
-.wn-chip.market {{ color: var(--text-faint); font-weight: 400; }}
-
-/* ── Risk-tier ticker cards ── */
-.risk-tier {{ margin: 20px 0 0; }}
-.risk-tier-header {{
-  display: flex; align-items: center; gap: 10px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--text-faint);
-  padding: 8px 0 8px; border-bottom: 1px solid var(--border);
-  margin-bottom: 12px;
-}}
-.risk-dot {{
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-}}
-.risk-dot.low    {{ background: #22c55e; box-shadow: 0 0 6px #22c55e55; }}
-.risk-dot.medium {{ background: #f59e0b; box-shadow: 0 0 6px #f59e0b55; }}
-.risk-dot.high   {{ background: #ef4444; box-shadow: 0 0 6px #ef444455; }}
-.risk-tier-header.low    {{ color: #4ade80; }}
-.risk-tier-header.medium {{ color: #fbbf24; }}
-.risk-tier-header.high   {{ color: #f87171; }}
-.ticker-cards {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }}
-.ticker-card {{
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 9px; padding: 14px 16px;
-  border-left-width: 3px;
-}}
-.ticker-card.low    {{ border-left-color: #22c55e; }}
-.ticker-card.medium {{ border-left-color: #f59e0b; }}
-.ticker-card.high   {{ border-left-color: #ef4444; }}
-.tc-top {{
-  display: flex; align-items: baseline; justify-content: space-between;
-  margin-bottom: 4px;
-}}
-.tc-symbol {{ font-size: 16px; font-weight: 700; color: var(--text); }}
-.tc-bias {{
-  font-size: 11px; font-weight: 600; padding: 2px 8px;
-  border-radius: 4px;
-}}
-.tc-bias.bullish {{ color: var(--up);   background: #16a34a22; }}
-.tc-bias.bearish {{ color: var(--down); background: #dc262622; }}
-.tc-bias.neutral {{ color: var(--text-faint); background: var(--bg-panel-2); }}
-.tc-return {{
-  font-size: 12px; font-weight: 600; color: var(--text-dim);
-  margin-bottom: 6px;
-}}
-.tc-rationale {{
-  font-size: 12px; color: var(--text-dim); margin-bottom: 8px;
-  line-height: 1.5;
-}}
-.tc-analysis {{
-  font-size: 12px; color: var(--text-faint); line-height: 1.6;
-  border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;
-}}
-
-/* Reading-mode toggle */
-body.mode-standard .adv-only {{ display: none !important; }}
-body.mode-advanced .std-only {{ display: none !important; }}
-.mode-toggle {{
-  display: inline-flex; align-items: center;
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 999px; padding: 2px; font-size: 11px;
-  user-select: none;
-}}
-.mode-toggle .mt-label {{
-  font-size: 10px; color: var(--text-faint); text-transform: uppercase;
-  letter-spacing: 0.05em; padding: 0 8px; margin-right: 2px;
-}}
-.mode-toggle button {{
-  appearance: none; background: transparent; border: 0;
-  color: var(--text-dim); padding: 5px 12px; border-radius: 999px;
-  cursor: pointer; font: inherit; font-size: 11px; font-weight: 500;
-  transition: background 0.15s, color 0.15s;
-}}
-.mode-toggle button:hover {{ color: var(--text); }}
-.mode-toggle button.active {{
-  background: var(--bg-panel-2); color: var(--text); font-weight: 600;
-}}
-</style>
-</head>
-<body class="mode-standard">
-
-<div class="page-layout">
-
-<!-- ── Watchlist sidebar (always visible) ── -->
-<div class="sidebar" id="sidebar">
-  <div class="sb-head">
-    <div class="sb-title">★ My Watchlist</div>
-    <div class="sb-subtitle">Prior session · refreshes every 5 min</div>
-    <button id="sb-restore-btn" onclick="restoreServerCards()" style="display:none;margin-top:6px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-faint);font-size:10px;padding:3px 8px;cursor:pointer;width:100%">Restore hidden tickers</button>
-  </div>
-  <div class="sb-add">
-    <input type="text" id="sb-input" placeholder="Add ticker…" maxlength="10"
-           onkeydown="if(event.key==='Enter')addSbTicker()" />
-    <button onclick="addSbTicker()">+</button>
-  </div>
-  <div id="sb-user-cards"></div>
-  <div class="sb-section-label">Tracked</div>
-  <div class="sb-cards" id="sb-server-cards">
-    {sidebar_block}
-  </div>
-</div>
-
-<!-- ── Main content ── -->
-<div class="main-col">
-<div class="wrap">
-
-<header>
-  <div>
-    <h1>Daily Market Report
-      <span class="subtle">Prior session · {prior_date_human}</span>
-    </h1>
-    <div class="meta">Last updated: {last_updated} · Today is {today_human}</div>
-  </div>
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-    <div class="meta">{warnings_html}</div>
-    <div class="mode-toggle" role="group" aria-label="Reading mode">
-      <span class="mt-label">View</span>
-      <button id="mt-std" class="active" onclick="setReadingMode('standard')">Standard</button>
-      <button id="mt-adv" onclick="setReadingMode('advanced')">Advanced</button>
-    </div>
-    <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
-      <span class="spin">&#8635;</span> <span id="refresh-label">Refresh</span>
-    </button>
-    <span id="refresh-status" class="meta"></span>
-  </div>
-</header>
-
-<nav class="sticky-nav">
-  <a href="#live-markets">Live</a>
-  <a href="#briefing"><span class="std-only">Summary</span><span class="adv-only">Briefing</span></a>
-  <a href="#predictions"><span class="std-only">Picks</span><span class="adv-only">Predictions</span></a>
-  <a href="#us-markets"><span class="std-only">U.S.</span><span class="adv-only">US Markets</span></a>
-  <a href="#earnings-cal">Earnings</a>
-  <a href="#global-markets"><span class="std-only">World</span><span class="adv-only">Global</span></a>
-  <a href="#crypto-section">Crypto</a>
-  <a href="#scorecard"><span class="std-only">Track Record</span><span class="adv-only">Scorecard</span></a>
-</nav>
-
-<!-- ===== LIVE MARKETS TICKER ===== -->
-<div class="live-ticker-section" id="live-markets">
-  <div class="live-ticker-label">&#8203; Live Markets</div>
-  <div class="tradingview-widget-container">
-    <div class="tradingview-widget-container__widget"></div>
-    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
-    {{
-      "symbols": [
-        {{"description": "S&P 500",      "proName": "FOREXCOM:SPXUSD"}},
-        {{"description": "Nasdaq 100",   "proName": "FOREXCOM:NSXUSD"}},
-        {{"description": "Dow Jones",    "proName": "FOREXCOM:DJI"}},
-        {{"description": "Russell 2000", "proName": "TVC:US2000"}},
-        {{"description": "10Y Yield",    "proName": "INDEX:TNX"}},
-        {{"description": "Gold",         "proName": "TVC:GOLD"}},
-        {{"description": "Crude Oil",    "proName": "TVC:USOIL"}},
-        {{"description": "Bitcoin",      "proName": "COINBASE:BTCUSD"}},
-        {{"description": "Ethereum",     "proName": "COINBASE:ETHUSD"}}
-      ],
-      "showSymbolLogo": false,
-      "isTransparent": true,
-      "displayMode": "adaptive",
-      "colorTheme": "dark",
-      "locale": "en"
-    }}
-    </script>
-  </div>
-</div>
-
-{briefing_block}
-
-<!-- ===== PREDICTIONS ===== -->
-<details class="section-details setup" id="predictions" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">Today's Picks</span><span class="adv-only">Predictions</span> · {today_human}</span></summary>
-{outlook_block}
-{scorecard_block}
-{risk_block}
-</details><!-- /predictions -->
-
-<!-- ===== US MARKETS ===== -->
-<details class="section-details us" id="us-markets" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">U.S. Stock Market</span><span class="adv-only">US Markets</span></span></summary>
-
-{watchlist_block}
-
-{premarket_block}
-
-<h2 id="indices"><span class="std-only">How the Whole Market Is Doing</span><span class="adv-only">Indices &amp; Macro</span></h2>
-<div class="index-grid">
-  {index_tiles}
-</div>
-
-{analysis_block}
-
-{sector_heatmap_block}
-
-{sentiment_block}
-
-<h2 id="movers"><span class="std-only">Yesterday's Biggest Winners &amp; Losers</span><span class="adv-only">Stock Movers</span> · {prior_date_human}</h2>
-<div class="cols">
-  <div class="panel">
-    <div class="panel-head"><h3><span class="std-only">Stocks That Went Up the Most</span><span class="adv-only">Top Gainers</span></h3><div class="sub"><span class="std-only">The biggest gains in price</span><span class="adv-only">Largest % moves up</span></div></div>
-    {gainers_rows}
-  </div>
-  <div class="panel">
-    <div class="panel-head"><h3><span class="std-only">Stocks That Went Down the Most</span><span class="adv-only">Top Losers</span></h3><div class="sub"><span class="std-only">The biggest drops in price</span><span class="adv-only">Largest % moves down</span></div></div>
-    {losers_rows}
-  </div>
-</div>
-<div class="cols" style="margin-top: 18px;">
-  <div class="panel">
-    <div class="panel-head"><h3><span class="std-only">Stocks Bought &amp; Sold the Most</span><span class="adv-only">Most Active</span></h3><div class="sub"><span class="std-only">Stocks with the highest trading activity</span><span class="adv-only">Sorted by volume</span></div></div>
-    {active_rows}
-  </div>
-  {earnings_reactions_block}
-</div>
-
-{world_news_block}
-
-{earnings_section_block}
-
-</details><!-- /us-markets -->
-
-<!-- ===== GLOBAL MARKETS ===== -->
-<details class="section-details global" id="global-markets" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">Markets Around the World</span><span class="adv-only">Global Markets</span></span></summary>
-{global_block}
-</details><!-- /global-markets -->
-
-<!-- ===== CRYPTO ===== -->
-<details class="section-details crypto" id="crypto-section" open>
-<summary><span class="sg-arrow">▶</span><span>Crypto</span></summary>
-<div class="panel" id="crypto-panel">
-  <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {crypto_top_n}</span></h3><div class="sub"><span class="std-only">Ranked by total value · price change in the last 24 hours</span><span class="adv-only">By market cap · 24h change</span></div></div>
-  {crypto_rows}
-</div>
-{crypto_outlook_block}
-</details><!-- /crypto-section -->
-
-<footer>
-  Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
-  <br/>Not investment advice. Figures may be delayed. Always verify before trading.
-</footer>
-
-</div>
-</div><!-- /main-col -->
-</div><!-- /page-layout -->
-<script>
-// If opened as a local file, go to the live hosted version instead
-if (window.location.protocol === 'file:') {{
-  window.location.replace('https://jackjensen0614.github.io/daily-market-report/');
-}}
-
-// ── Reading-mode toggle (Standard / Advanced) ───────────────────────────
-var MODE_KEY = 'mktReadingMode';
-function setReadingMode(mode) {{
-  if (mode !== 'standard' && mode !== 'advanced') mode = 'standard';
-  document.body.classList.remove('mode-standard', 'mode-advanced');
-  document.body.classList.add('mode-' + mode);
-  var s = document.getElementById('mt-std');
-  var a = document.getElementById('mt-adv');
-  if (s && a) {{
-    s.classList.toggle('active', mode === 'standard');
-    a.classList.toggle('active', mode === 'advanced');
-  }}
-  try {{ localStorage.setItem(MODE_KEY, mode); }} catch(e) {{}}
-}}
-(function initReadingMode() {{
-  var saved = 'standard';
-  try {{ saved = localStorage.getItem(MODE_KEY) || 'standard'; }} catch(e) {{}}
-  setReadingMode(saved);
-}})();
-
-// ── Watchlist sidebar ────────────────────────────────────────────────────
-var SB_KEY = 'mktSbTickers';
-function getSbTickers() {{
-  try {{ return JSON.parse(localStorage.getItem(SB_KEY) || '[]'); }} catch(e) {{ return []; }}
-}}
-function saveSbTickers(arr) {{
-  try {{ localStorage.setItem(SB_KEY, JSON.stringify(arr)); }} catch(e) {{}}
-}}
-function addSbTicker() {{
-  var inp = document.getElementById('sb-input');
-  var sym = (inp.value || '').trim().toUpperCase().replace(/[^A-Z0-9.\-^]/g,'');
-  if (!sym) return;
-  var arr = getSbTickers();
-  if (!arr.includes(sym)) {{ arr.unshift(sym); saveSbTickers(arr); }}
-  inp.value = '';
-  loadUserCards();
-}}
-function removeSbTicker(sym) {{
-  saveSbTickers(getSbTickers().filter(function(s){{ return s !== sym; }}));
-  loadUserCards();
-}}
-function loadUserCards() {{
-  var container = document.getElementById('sb-user-cards');
-  if (!container) return;
-  var tickers = getSbTickers();
-  if (!tickers.length) {{ container.innerHTML = ''; return; }}
-  container.innerHTML = '<div class="sb-section-label">My Picks</div>';
-  tickers.forEach(function(sym) {{
-    var card = document.createElement('div');
-    card.className = 'sb-user-card';
-    card.style.margin = '0 12px 10px';
-    var tvSym = sym.includes(':') ? sym : 'NASDAQ:' + sym;
-    card.innerHTML =
-      '<div class="sb-user-card-head">' +
-      '  <span class="sb-user-sym">' + sym + '</span>' +
-      '  <button class="sb-user-rm" title="Remove" onclick="removeSbTicker(\'' + sym.replace(/'/g,"\\'") + '\')">✕</button>' +
-      '</div>' +
-      '<div class="tradingview-widget-container" style="height:130px">' +
-      '  <div class="tradingview-widget-container__widget"></div>' +
-      '</div>';
-    container.appendChild(card);
-    // Inject TradingView mini chart
-    var tvDiv = card.querySelector('.tradingview-widget-container');
-    var s = document.createElement('script');
-    s.type = 'text/javascript';
-    s.async = true;
-    s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
-    s.textContent = JSON.stringify({{
-      symbol: tvSym, width: '100%', height: 130, locale: 'en',
-      dateRange: '1D', colorTheme: 'dark', isTransparent: true, autosize: false
-    }});
-    tvDiv.appendChild(s);
-  }});
-}}
-loadUserCards(); // sidebar is always visible — populate on page load
-
-// ── Hidden server-side cards ──────────────────────────────────────────────
-var HIDDEN_KEY = 'mktHiddenCards';
-function getHiddenCards() {{
-  try {{ return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); }} catch(e) {{ return []; }}
-}}
-function saveHiddenCards(arr) {{
-  try {{ localStorage.setItem(HIDDEN_KEY, JSON.stringify(arr)); }} catch(e) {{}}
-}}
-function hideServerCard(sym) {{
-  var arr = getHiddenCards();
-  if (!arr.includes(sym)) {{ arr.push(sym); saveHiddenCards(arr); }}
-  var el = document.querySelector('.sb-card[data-symbol="' + sym + '"]');
-  if (el) el.style.display = 'none';
-  document.getElementById('sb-restore-btn').style.display = getHiddenCards().length ? 'block' : 'none';
-}}
-function restoreServerCards() {{
-  saveHiddenCards([]);
-  document.querySelectorAll('.sb-card[data-symbol]').forEach(function(el) {{
-    el.style.display = '';
-  }});
-  document.getElementById('sb-restore-btn').style.display = 'none';
-}}
-(function applyHiddenCards() {{
-  var hidden = getHiddenCards();
-  hidden.forEach(function(sym) {{
-    var el = document.querySelector('.sb-card[data-symbol="' + sym + '"]');
-    if (el) el.style.display = 'none';
-  }});
-  var btn = document.getElementById('sb-restore-btn');
-  if (btn) btn.style.display = hidden.length ? 'block' : 'none';
-}})();
-
-// ── Scorecard predictions label (after-hours shift) ──────────────────────
-(function updateScPredLabel() {{
-  var el = document.getElementById('sc-preds-label');
-  if (!el) return;
-  var now = new Date();
-  var etStr = now.toLocaleString('en-US', {{timeZone: 'America/New_York'}});
-  var et = new Date(etStr);
-  var h = et.getHours();
-  // After 8 PM ET or before 4 AM ET = after-hours ended, pivot to next session
-  if (h >= 20 || h < 4) {{
-    el.textContent = 'Next Trading Day · Picks';
-    var sub = document.getElementById('sc-preds-sub');
-    if (sub) sub.textContent = 'After-hours complete — forward outlook';
-  }}
-}})();
-
-// ── Scroll-position preservation across reloads ──────────────────────────
-// Save current scroll before any programmatic reload so the page
-// returns to where the user was, not to whatever hash is in the URL.
-var SCROLL_KEY = '_mktScrollY';
-function saveScroll() {{
-  try {{ sessionStorage.setItem(SCROLL_KEY, window.scrollY); }} catch(e) {{}}
-}}
-(function restoreScroll() {{
-  var saved = null;
-  try {{ saved = sessionStorage.getItem(SCROLL_KEY); }} catch(e) {{}}
-  if (saved === null) return;
-  try {{ sessionStorage.removeItem(SCROLL_KEY); }} catch(e) {{}}
-  var target = parseInt(saved, 10);
-  // Double-rAF beats the browser's own hash-scroll which fires after first paint
-  requestAnimationFrame(function() {{
-    requestAnimationFrame(function() {{
-      window.scrollTo(0, target);
-    }});
-  }});
-}})();
-
-function doRefresh() {{
-  saveScroll();
-  var btn = document.getElementById('refresh-btn');
-  if (btn) {{ btn.classList.add('spinning'); btn.disabled = true; }}
-  location.reload();
-}}
-(function(){{
-  function isMarketHours() {{
-    var now = new Date();
-    var et = new Date(now.toLocaleString('en-US', {{timeZone:'America/New_York'}}));
-    var day = et.getDay();
-    if (day === 0 || day === 6) return false;
-    var h = et.getHours(), m = et.getMinutes();
-    var mins = h * 60 + m;
-    return mins >= 565 && mins <= 970; // 9:25–4:10 ET
-  }}
-  var statusEl = document.getElementById('refresh-status');
-  var labelEl  = document.getElementById('refresh-label');
-  if (isMarketHours()) {{
-    var next = 60;
-    function setStatus(s) {{ if (statusEl) statusEl.textContent = s; }}
-    function setLabel(s)  {{ if (labelEl)  labelEl.textContent  = s; }}
-    setStatus('Live · auto-refresh in ' + next + 's');
-    var timer = setInterval(function() {{
-      next--;
-      setStatus('Live · auto-refresh in ' + next + 's');
-      setLabel('Refresh (' + next + 's)');
-      if (next <= 0) {{ saveScroll(); clearInterval(timer); location.reload(); }}
-    }}, 1000);
-  }} else {{
-    if (statusEl) statusEl.textContent = 'Market closed';
-  }}
-}})();
-</script>
-</body>
-</html>
-"""
+# HTML template moved to templates/base.html
 
 
 def fmt_pct(x: float) -> str:
@@ -2402,13 +1336,9 @@ def render_index_tile(q: Quote) -> str:
     cls = cls_for(q.change_pct)
     price = fmt_num(q.price)
     delta = f"{'+' if q.change >= 0 else ''}{q.change:,.2f} ({fmt_pct(q.change_pct)})"
-    return f"""
-    <div class="tile tile-{cls}">
-      <div class="label">{q.name}</div>
-      <div class="value num">{price}</div>
-      <div class="delta num {cls}">{delta}</div>
-    </div>
-    """
+    return _jinja_env.get_template("_tile.html").render(
+        cls=cls, q=q, price=price, delta=delta
+    )
 
 
 def escape_html(s: str) -> str:
@@ -2433,6 +1363,61 @@ def mode_pair(std: str, adv: str) -> str:
 def mode_pair_text(std: str, adv: str) -> str:
     """Like mode_pair() but escapes both inputs first (use for plain text)."""
     return f'<span class="std-only">{escape_html(std)}</span><span class="adv-only">{escape_html(adv)}</span>'
+
+
+# Plain-language labels for the directional bias classifications used throughout
+# the report. The first element is the std-view label; the second is the adv-view.
+_BIAS_LABELS = {
+    "bullish": ("Looking Up",   "Bullish"),
+    "bearish": ("Looking Down", "Bearish"),
+    "neutral": ("Mixed",        "Neutral"),
+}
+
+
+def humanize_bias_label(bias: str) -> tuple[str, str]:
+    """Return (plain, advanced) labels for a bias key. Falls back to title-cased input."""
+    return _BIAS_LABELS.get(bias, (bias.title(), bias.title()))
+
+
+def prose_block_pair(plain: str, advanced: str) -> str:
+    """Render two paragraph blocks — one for std view, one for adv view.
+
+    Each input is split on double-newlines into <p> tags. Both inputs are
+    escape_html'd. If either side is empty the other is shown to both modes.
+    """
+    plain    = (plain or "").strip()
+    advanced = (advanced or "").strip()
+    if not plain and not advanced:
+        return ""
+    if not plain:
+        plain = advanced
+    if not advanced:
+        advanced = plain
+
+    def _to_paras(text: str) -> str:
+        return "".join(
+            f"<p>{escape_html(p.strip())}</p>"
+            for p in text.split("\n\n") if p.strip()
+        )
+
+    return (
+        f'<div class="std-only">{_to_paras(plain)}</div>'
+        f'<div class="adv-only">{_to_paras(advanced)}</div>'
+    )
+
+
+def text_pair(plain: str, advanced: str) -> str:
+    """Inline text variant — wraps each in a span and escapes."""
+    plain    = (plain or "").strip()
+    advanced = (advanced or "").strip()
+    if not plain:
+        plain = advanced
+    if not advanced:
+        advanced = plain
+    return (
+        f'<span class="std-only">{escape_html(plain)}</span>'
+        f'<span class="adv-only">{escape_html(advanced)}</span>'
+    )
 
 
 def fmt_mcap_compact(value) -> str:
@@ -2466,12 +1451,24 @@ def time_badge(t: str) -> str:
     raw = (t or "").strip().lower()
     if raw in ("", "—", "-") or "not-supplied" in raw or "not_supplied" in raw \
        or "tbd" in raw or "high-potential" in raw:
-        return '<span class="time-badge time-tbd">TBD</span>'
+        return f'<span class="time-badge time-tbd">{mode_pair("Time TBD", "TBD")}</span>'
     if any(x in raw for x in ("pre-market", "premarket", "before", "bmo", "pre")):
-        return '<span class="time-badge time-bmo">Pre-Market</span>'
+        return f'<span class="time-badge time-bmo">{mode_pair("Before Market Opens", "Pre-Market")}</span>'
     if any(x in raw for x in ("after-hours", "afterhours", "after", "amc", "post")):
-        return '<span class="time-badge time-amc">After Hours</span>'
+        return f'<span class="time-badge time-amc">{mode_pair("After Market Closes", "After Hours")}</span>'
     return f'<span class="time-badge">{escape_html(t)}</span>'
+
+
+def humanize_time_token(t: str) -> str:
+    """Convert raw API time tokens like 'time-pre-market' into a readable phrase."""
+    raw = (t or "").strip().lower()
+    if not raw or raw in ("—", "-") or "not-supplied" in raw or "not_supplied" in raw or "tbd" in raw:
+        return "at a time not yet announced"
+    if any(x in raw for x in ("pre-market", "premarket", "before", "bmo", "pre")):
+        return "before the market opens"
+    if any(x in raw for x in ("after-hours", "afterhours", "after", "amc", "post")):
+        return "after the market closes"
+    return t
 
 
 def render_mover_row(m: MoverWithNews, ai_why: dict[str, str] | None = None) -> str:
@@ -2492,22 +1489,15 @@ def render_mover_row(m: MoverWithNews, ai_why: dict[str, str] | None = None) -> 
             items.append(f'<a href="{escape_html(link)}" target="_blank" rel="noopener">{title}{pub_html}</a>')
         news_html = '<div class="news">' + "".join(items) + '</div>'
 
-    return f"""
-    <div class="mover">
-      <div>
-        <div class="sym">{escape_html(q.symbol)}</div>
-      </div>
-      <div>
-        <div class="name">{escape_html(q.name)}</div>
-        {why}
-        {news_html}
-      </div>
-      <div class="right">
-        <div class="pct num {cls}">{fmt_pct(q.change_pct)}</div>
-        <div class="px num">{fmt_usd(q.price)}</div>
-      </div>
-    </div>
-    """
+    return _jinja_env.get_template("_mover.html").render(
+        symbol=escape_html(q.symbol),
+        name=escape_html(q.name),
+        why=why,
+        news_html=news_html,
+        cls=cls,
+        pct=fmt_pct(q.change_pct),
+        price=fmt_usd(q.price),
+    )
 
 
 def render_movers_block(movers: list[MoverWithNews], ai_why: dict[str, str] | None, empty_msg: str) -> str:
@@ -2519,19 +1509,18 @@ def render_movers_block(movers: list[MoverWithNews], ai_why: dict[str, str] | No
 def render_calendar_table(events: list[CalendarEvent], empty_msg: str) -> str:
     if not events:
         return f'<div style="padding: 16px; color: var(--text-faint);">{empty_msg}</div>'
+    row_tpl = _jinja_env.get_template("_calendar_row.html")
     rows = []
     for e in events:
         name = escape_html(e.description)
         if e.url:
             name = f'<a href="{escape_html(e.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-underline-offset:3px;">{name}</a>'
-        rows.append(f"""
-        <tr>
-          <td class="time">{time_badge(e.time)}</td>
-          <td class="sym">{escape_html(e.symbol_or_event)}</td>
-          <td>{name}</td>
-          <td style="color: var(--text-dim)">{escape_html(e.extra)}</td>
-        </tr>
-        """)
+        rows.append(row_tpl.render(
+            time=time_badge(e.time),
+            symbol_or_event=escape_html(e.symbol_or_event),
+            name=name,
+            extra=escape_html(e.extra),
+        ))
     return f"""
     <table>
       <thead><tr><th>Time</th><th>Symbol / Region</th><th>Event</th><th>Details</th></tr></thead>
@@ -2680,7 +1669,8 @@ def render_earnings_section(snap: Snapshot) -> str:
 
     return (
         f'<div class="earnings-section" id="earnings-cal">'
-        f'<div class="earnings-section-label">Earnings &amp; Events · '
+        f'<div class="earnings-section-label">'
+        f'{mode_pair("Companies Sharing Profits &amp; Government Reports", "Earnings &amp; Events")} · '
         f'{datetime.fromisoformat(snap.generated_at[:10]).strftime("%B %-d, %Y")}'
         f'</div>'
         + featured_html
@@ -2825,12 +1815,11 @@ def render_narrative(ai: dict) -> str:
     text = ai.get("market_narrative", "")
     if not text:
         return ""
-    return f"""
-    <div class="narr">
-      <div class="label">Market Narrative · Yesterday</div>
-      <p>{escape_html(text)}</p>
-    </div>
-    """
+    return _jinja_env.get_template("_narr.html").render(
+        extra="",
+        label="Market Narrative · Yesterday",
+        body=f"<p>{escape_html(text)}</p>",
+    )
 
 
 def render_today_outlook(ai: dict) -> str:
@@ -2839,48 +1828,49 @@ def render_today_outlook(ai: dict) -> str:
     text = ai.get("today_outlook", "")
     if not text:
         return ""
-    return f"""
-    <div class="narr">
-      <div class="label">{mode_pair("What might happen today", "Today's Outlook")}</div>
-      <p>{escape_html(text)}</p>
-    </div>
-    """
+    return _jinja_env.get_template("_narr.html").render(
+        extra="",
+        label=mode_pair("What might happen today", "Today's Outlook"),
+        body=f"<p>{escape_html(text)}</p>",
+    )
 
 
 def render_crypto_outlook(ai: dict) -> str:
     if not ai or "_skipped" in ai or "_error" in ai:
         return ""
-    text = ai.get("crypto_outlook", "")
+    text       = ai.get("crypto_outlook", "")
+    text_plain = ai.get("crypto_outlook_plain", "") or text
     if not text:
         return ""
-    return f"""
-    <div class="narr">
-      <div class="label">{mode_pair("What might happen with cryptocurrency today", "Crypto Outlook")}</div>
-      <p>{escape_html(text)}</p>
-    </div>
-    """
+    return _jinja_env.get_template("_narr.html").render(
+        extra="",
+        label=mode_pair("What might happen with cryptocurrency today", "Crypto Outlook"),
+        body=prose_block_pair(text_plain, text),
+    )
 
 
 def render_risk_block(ai: dict) -> str:
     if not ai or "_skipped" in ai or "_error" in ai:
         return ""
-    text = ai.get("risk_notes", "")
+    raw       = ai.get("risk_notes", "")
+    raw_plain = ai.get("risk_notes_plain", "") or raw
+    text       = "\n\n".join(raw)       if isinstance(raw, list)       else (raw or "")
+    text_plain = "\n\n".join(raw_plain) if isinstance(raw_plain, list) else (raw_plain or text)
     if not text:
         return ""
-    return f"""
-    <div class="narr risk">
-      <div class="label">{mode_pair("What could cause problems today", "Risk Notes")}</div>
-      <p>{escape_html(text)}</p>
-    </div>
-    """
+    return _jinja_env.get_template("_narr.html").render(
+        extra=" risk",
+        label=mode_pair("What could cause problems today", "Risk Notes"),
+        body=prose_block_pair(text_plain, text),
+    )
 
 
 def _ticker_cards_html(picks: list[dict]) -> str:
     """Render a risk-tiered grid of ticker prediction cards."""
     tiers = [
-        ("low",    "Low Risk"),
-        ("medium", "Medium Risk"),
-        ("high",   "High Risk"),
+        ("low",    mode_pair("Safer Bets",      "Low Risk")),
+        ("medium", mode_pair("Medium-Risk Bets", "Medium Risk")),
+        ("high",   mode_pair("Riskier Bets",    "High Risk")),
     ]
     bias_arrow = {"bullish": "▲", "bearish": "▼", "neutral": "—"}
     out = []
@@ -2893,19 +1883,51 @@ def _ticker_cards_html(picks: list[dict]) -> str:
             bias = p.get("bias", "neutral")
             arrow = bias_arrow.get(bias, "—")
             ret   = escape_html(p.get("return_estimate", ""))
-            rat   = escape_html(p.get("rationale", ""))
-            ana   = escape_html(p.get("analysis", ""))
+            rat_adv   = p.get("rationale", "")
+            rat_plain = p.get("rationale_plain") or rat_adv
+            ana_adv   = p.get("analysis", "")
+            ana_plain = p.get("analysis_plain") or ana_adv
             sym   = escape_html(str(p.get("ticker", "")))
-            ret_html = f'<div class="tc-return">Est. return: {ret}</div>' if ret else ""
-            ana_html = f'<div class="tc-analysis">{ana}</div>' if ana else ""
+            bias_plain, bias_adv_label = humanize_bias_label(bias)
+            # Strip jargon like "(gap risk)" for the std variant
+            ret_plain = ret.replace("(gap risk)", "(could swing either way)").replace("(short)", "(betting it goes down)").replace("(swing)", "(short-term trade)")
+            if ret:
+                ret_html = (
+                    f'<div class="tc-return">'
+                    f'<span class="std-only">What we think it could move: {ret_plain}</span>'
+                    f'<span class="adv-only">Est. return: {ret}</span>'
+                    f'</div>'
+                )
+            else:
+                ret_html = ""
+
+            rat_html = (
+                f'<div class="tc-rationale">'
+                f'<span class="std-only">{escape_html(rat_plain)}</span>'
+                f'<span class="adv-only">{escape_html(rat_adv)}</span>'
+                f'</div>'
+            )
+            if ana_adv or ana_plain:
+                ana_html = (
+                    f'<div class="tc-analysis">'
+                    f'<span class="std-only">{escape_html(ana_plain)}</span>'
+                    f'<span class="adv-only">{escape_html(ana_adv)}</span>'
+                    f'</div>'
+                )
+            else:
+                ana_html = ""
+
             cards.append(
                 f'<div class="ticker-card {tier_key}">'
                 f'  <div class="tc-top">'
                 f'    <span class="tc-symbol">{sym}</span>'
-                f'    <span class="tc-bias {bias}">{arrow} {bias.title()}</span>'
+                f'    <span class="tc-bias {bias}">{arrow} '
+                f'<span class="std-only">{escape_html(bias_plain)}</span>'
+                f'<span class="adv-only">{escape_html(bias_adv_label)}</span>'
+                f'</span>'
                 f'  </div>'
                 f'  {ret_html}'
-                f'  <div class="tc-rationale">{rat}</div>'
+                f'  {rat_html}'
                 f'  {ana_html}'
                 f'</div>'
             )
@@ -3171,46 +2193,69 @@ def _b_setup(snap: Snapshot) -> str:
 
 
 def _b_risks(snap: Snapshot) -> str:
-    risks: list[str] = []
+    risks_adv:   list[str] = []
+    risks_plain: list[str] = []
     big_names = {"AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA", "JPM", "BAC", "NFLX"}
     big_earnings = [e for e in snap.earnings_today if e.symbol_or_event in big_names]
     if big_earnings:
         tickers = ", ".join(e.symbol_or_event for e in big_earnings[:5])
-        risks.append(f"High-impact earnings today ({tickers}) — misses or cautious guidance can gap indices at open.")
+        risks_adv.append(f"High-impact earnings today ({tickers}) — misses or cautious guidance can gap indices at open.")
+        risks_plain.append(
+            f"Big companies report their quarterly results today ({tickers}). If they earned less than expected — or warn that future results will be weaker — the whole market can drop right at the open."
+        )
 
     vix = next((q for q in snap.indices if q.symbol == "^VIX"), None)
     if vix and vix.price > 20:
-        risks.append(f"VIX elevated at {vix.price:.2f} — options market pricing above-average volatility.")
+        risks_adv.append(f"VIX elevated at {vix.price:.2f} — options market pricing above-average volatility.")
+        risks_plain.append(
+            f"The fear gauge (called the VIX) is high at {vix.price:.2f}. That means traders are paying more to protect their bets — they expect bigger price swings than usual."
+        )
 
     crude = next((q for q in snap.macro if "Crude" in q.name), None)
     if crude and abs(crude.change_pct) > 3:
         dir_ = "surge" if crude.change_pct > 0 else "drop"
-        risks.append(f"WTI crude {dir_} {crude.change_pct:+.1f}% to {fmt_usd(crude.price)} — watch macro read-through to consumer and transport names.")
+        risks_adv.append(f"WTI crude {dir_} {crude.change_pct:+.1f}% to {fmt_usd(crude.price)} — watch macro read-through to consumer and transport names.")
+        word = "jumped" if crude.change_pct > 0 else "dropped"
+        risks_plain.append(
+            f"Oil prices {word} {abs(crude.change_pct):.1f}% to {fmt_usd(crude.price)} a barrel. That ripples into gas prices, airline costs, and what shoppers spend on everything else."
+        )
 
     tnx = next((q for q in snap.macro if "10Y" in q.name), None)
     if tnx and tnx.price > 4.5:
-        risks.append(f"10Y yield at {tnx.price:.2f}% — elevated rates a headwind for growth and rate-sensitive equities.")
+        risks_adv.append(f"10Y yield at {tnx.price:.2f}% — elevated rates a headwind for growth and rate-sensitive equities.")
+        risks_plain.append(
+            f"Long-term U.S. government interest rates are high ({tnx.price:.2f}%). When rates are this high, borrowing is expensive, and that hurts fast-growing companies and anything sensitive to interest rates."
+        )
 
     fed_evts = [e for e in snap.econ_events_today if any(
         kw in (e.description or "").upper() for kw in ["FOMC", "FEDERAL RESERVE", "POWELL", "RATE DECISION"]
     )]
     if fed_evts:
-        risks.append("FOMC/Fed event today — any surprise on rates or tone could trigger outsized moves across asset classes.")
+        risks_adv.append("FOMC/Fed event today — any surprise on rates or tone could trigger outsized moves across asset classes.")
+        risks_plain.append(
+            "The Federal Reserve (the U.S. central bank that sets interest rates) is making news today. Any surprise about interest rates — or even how they word things — can cause big swings in stocks and bonds."
+        )
 
     if snap.global_indices:
         weak = [q for q in snap.global_indices if q.change_pct < -1.5]
         if weak:
             names = ", ".join(q.name.split("(")[0].strip() for q in weak[:3])
-            risks.append(f"Global market weakness ({names}) may weigh on pre-market sentiment.")
+            risks_adv.append(f"Global market weakness ({names}) may weigh on pre-market sentiment.")
+            risks_plain.append(
+                f"Markets in other countries had a rough day ({names}). That negative mood often carries into the U.S. opening."
+            )
 
-    if not risks:
-        risks.append("No major elevated risk signals detected in today's data.")
+    if not risks_adv:
+        risks_adv.append("No major elevated risk signals detected in today's data.")
+        risks_plain.append("Nothing scary stands out in today's data — looks like a normal trading day.")
 
-    lis = "".join(f"<li>{escape_html(r)}</li>" for r in risks[:4])
+    lis_adv = "".join(f"<li>{escape_html(r)}</li>" for r in risks_adv[:4])
+    lis_std = "".join(f"<li>{escape_html(r)}</li>" for r in risks_plain[:4])
     return (
         '<div class="briefing-section risk">'
         '<div class="bs-label"><span class="std-only">What could cause problems today</span><span class="adv-only">Risk Notes</span></div>'
-        f'<ul>{lis}</ul>'
+        f'<ul class="std-only">{lis_std}</ul>'
+        f'<ul class="adv-only">{lis_adv}</ul>'
         '</div>'
     )
 
@@ -3222,21 +2267,36 @@ def _b_session_narrative(snap: Snapshot) -> str:
     dji = idx.get("^DJI")
     ixic = idx.get("^IXIC")
     vix = idx.get("^VIX")
-    sentences: list[str] = []
+    adv_sentences:   list[str] = []
+    plain_sentences: list[str] = []
     if sp:
         dir_ = "gained" if sp.change_pct > 0 else ("lost" if sp.change_pct < 0 else "closed flat at")
         if sp.change_pct != 0:
-            sentences.append(
+            adv_sentences.append(
                 f"The S&P 500 {dir_} {abs(sp.change_pct):.2f}% to {sp.price:,.2f}"
                 + (f", while the Nasdaq {'+' if (ixic and ixic.change_pct >= 0) else ''}{ixic.change_pct:.2f}% and Dow {'+' if (dji and dji.change_pct >= 0) else ''}{dji.change_pct:.2f}%." if ixic and dji else ".")
             )
+            move_word = "went up" if sp.change_pct > 0 else "went down"
+            example_dollars = abs(sp.change_pct) * 10
+            plain_sentences.append(
+                f"The S&P 500 (the index that tracks 500 of the biggest U.S. companies) {move_word} {abs(sp.change_pct):.2f}% — meaning if you had $1,000 invested, you'd have about ${example_dollars:.2f} {'more' if sp.change_pct > 0 else 'less'}."
+            )
+            if ixic and dji:
+                plain_sentences.append(
+                    f"The Nasdaq (more tech-heavy) {'rose' if ixic.change_pct >= 0 else 'fell'} {abs(ixic.change_pct):.2f}% and the Dow Jones (30 large blue-chip companies) {'rose' if dji.change_pct >= 0 else 'fell'} {abs(dji.change_pct):.2f}%."
+                )
     if snap.gainers and snap.losers:
         g, l = snap.gainers[0].quote, snap.losers[0].quote
         news_g = snap.gainers[0].news[0].title[:60] if snap.gainers[0].news else ""
-        sentences.append(
+        adv_sentences.append(
             f"Top mover: {g.symbol} +{g.change_pct:.1f}% to {fmt_usd(g.price)}"
             + (f" ({news_g})" if news_g else "")
             + f". Largest decline: {l.symbol} {l.change_pct:.1f}% to {fmt_usd(l.price)}."
+        )
+        plain_sentences.append(
+            f"The biggest winner was {g.symbol}, whose stock jumped {g.change_pct:.1f}% to {fmt_usd(g.price)}"
+            + (f" ({news_g.lower() if news_g else ''})" if news_g else "")
+            + f". The biggest loser was {l.symbol}, down {abs(l.change_pct):.1f}% to {fmt_usd(l.price)}."
         )
     crude = next((q for q in snap.macro if "Crude" in q.name), None)
     tnx   = next((q for q in snap.macro if "10Y"   in q.name), None)
@@ -3245,13 +2305,23 @@ def _b_session_narrative(snap: Snapshot) -> str:
         if crude: parts.append(f"WTI crude {'+' if crude.change_pct >= 0 else ''}{crude.change_pct:.2f}% to {fmt_usd(crude.price)}")
         if tnx:   parts.append(f"10Y yield {tnx.price:.2f}%")
         if vix:   parts.append(f"VIX {'+' if vix.change_pct >= 0 else ''}{vix.change_pct:.2f}% to {vix.price:.2f}")
-        sentences.append(" · ".join(parts) + ".")
-    if not sentences:
+        adv_sentences.append(" · ".join(parts) + ".")
+
+        plain_parts = []
+        if crude:
+            plain_parts.append(f"oil prices {'rose' if crude.change_pct >= 0 else 'fell'} {abs(crude.change_pct):.2f}% to {fmt_usd(crude.price)} a barrel")
+        if tnx:
+            plain_parts.append(f"the 10-year Treasury rate (a key long-term U.S. interest rate) sat at {tnx.price:.2f}%")
+        if vix:
+            plain_parts.append(f"the VIX 'fear gauge' was at {vix.price:.2f}")
+        if plain_parts:
+            plain_sentences.append("Elsewhere: " + ", and ".join(plain_parts) + ".")
+    if not adv_sentences:
         return ""
     return (
         '<div class="briefing-section">'
         '<div class="bs-label"><span class="std-only">What happened in the market yesterday</span><span class="adv-only">Yesterday\'s Session</span></div>'
-        f'<p>{escape_html(" ".join(sentences))}</p>'
+        + prose_block_pair(" ".join(plain_sentences), " ".join(adv_sentences)) +
         '</div>'
     )
 
@@ -3261,12 +2331,17 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
     picks: list[dict] = []
     seen: set[str] = set()
 
-    def add(ticker: str, bias: str, risk: str, ret: str, rationale: str, analysis: str) -> None:
+    def add(ticker: str, bias: str, risk: str, ret: str,
+            rationale: str, analysis: str,
+            rationale_plain: str = "", analysis_plain: str = "") -> None:
         if ticker and ticker not in seen and len(picks) < 10:
             seen.add(ticker)
             picks.append({
                 "ticker": ticker, "bias": bias, "risk_level": risk,
-                "return_estimate": ret, "rationale": rationale, "analysis": analysis,
+                "return_estimate": ret,
+                "rationale": rationale, "analysis": analysis,
+                "rationale_plain": rationale_plain or rationale,
+                "analysis_plain":  analysis_plain  or analysis,
             })
 
     # 1. Earnings reporters — binary gap risk = HIGH
@@ -3274,11 +2349,17 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
         sym = e.symbol_or_event
         if sym and sym.isalpha() and len(sym) <= 5:
             detail = f" ({e.extra})" if e.extra else ""
+            human_time = humanize_time_token(e.time) if e.time else "today"
             add(sym, "neutral", "high", "±5-15% (gap risk)",
                 f"Reporting {e.time or 'today'}{detail}.",
                 f"Earnings prints create binary gap risk — a beat typically gaps +5-15% at open while a miss or guidance cut can produce the reverse. "
                 f"Enter only with defined risk via options or tight stops. "
-                f"Monitor pre-market tape for whisper numbers and institutional flow before committing size.")
+                f"Monitor pre-market tape for whisper numbers and institutional flow before committing size.",
+                rationale_plain=f"Sharing quarterly results {human_time}{detail}.",
+                analysis_plain=(
+                    f"When a company tells investors how much it earned, the stock often jumps or drops sharply — sometimes 5-15% — depending on whether the numbers beat or missed expectations. "
+                    f"This is risky because the move happens fast. Watch carefully before placing any trade."
+                ))
 
     # 2. Biggest gainer — continuation
     if snap.gainers:
@@ -3291,7 +2372,13 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
                 f"Led gainers at +{mag:.1f}% to {fmt_usd(g.price)} yesterday.",
                 f"Large single-session moves in high-volume names often see partial continuation into the following session as momentum traders add and short-sellers cover. "
                 f"The primary risk is a mean-reversion fade if yesterday's move was news-driven without a fundamental repricing. "
-                f"Watch for volume confirmation in the first 30 minutes — low open volume is an early fade signal.")
+                f"Watch for volume confirmation in the first 30 minutes — low open volume is an early fade signal.",
+                rationale_plain=f"Was yesterday's biggest winner — up {mag:.1f}% to {fmt_usd(g.price)}.",
+                analysis_plain=(
+                    f"When a stock has a really strong day, it often keeps going up the next day too — other traders see the gain and pile in. "
+                    f"The risk: if yesterday's jump was just from one piece of news, the stock could give some of those gains back. "
+                    f"Watch the first 30 minutes of trading — if not many people are buying, it might fade."
+                ))
 
     # 3. Biggest loser — bounce or continuation
     if snap.losers:
@@ -3304,7 +2391,13 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
                 f"Led losers at {l.change_pct:.1f}% to {fmt_usd(l.price)} yesterday.",
                 f"High-volume declines frequently see follow-through selling as institutional holders reposition and stop-losses trigger below the prior close. "
                 f"A dead-cat bounce is possible intraday but the path of least resistance is lower until a fundamental catalyst appears. "
-                f"Short thesis is best expressed intraday given elevated borrow costs after large single-day drops.")
+                f"Short thesis is best expressed intraday given elevated borrow costs after large single-day drops.",
+                rationale_plain=f"Was yesterday's biggest loser — down {abs(l.change_pct):.1f}% to {fmt_usd(l.price)}.",
+                analysis_plain=(
+                    f"When a stock falls hard, it often keeps falling the next day — big investors keep selling, and automatic 'sell' orders kick in. "
+                    f"It might bounce briefly during the day, but the overall direction is usually down until something good happens. "
+                    f"Betting on further declines gets expensive after a big drop, so this is best played carefully and quickly."
+                ))
 
     # 4. Crypto equity proxy — HIGH risk
     btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
@@ -3319,7 +2412,13 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
                 f"BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.1f}% — crypto equity proxy.",
                 f"Crypto equities trade at a 2-3× beta to spot Bitcoin moves, amplifying both upside and downside. "
                 f"{proxy.quote.symbol} is currently the highest-volume proxy, making it the fastest vehicle for this directional thesis. "
-                f"Risk is elevated: crypto equities are subject to equity-market correlation during risk-off sessions that may override the spot BTC signal.")
+                f"Risk is elevated: crypto equities are subject to equity-market correlation during risk-off sessions that may override the spot BTC signal.",
+                rationale_plain=f"Bitcoin moved {btc.change_pct:+.1f}% — this stock tends to move with it.",
+                analysis_plain=(
+                    f"Stocks tied to crypto, like {proxy.quote.symbol}, tend to swing 2-3× harder than Bitcoin itself — bigger gains when Bitcoin's up, bigger losses when it's down. "
+                    f"This is a fast way to bet on Bitcoin's direction without buying Bitcoin directly. "
+                    f"It's risky: if the broader stock market has a bad day, this could fall too — even if Bitcoin holds up."
+                ))
 
     # 5. Most-active fill — MEDIUM risk
     for m in snap.most_active:
@@ -3332,41 +2431,61 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
             f"Most active at {vol_str} dollar volume — elevated institutional flow.",
             f"High-dollar-volume sessions signal institutional participation that often sustains directional moves into the next open. "
             f"The elevated activity makes this name more sensitive to broad market direction — a weak tape will weigh on even fundamentally sound names. "
-            f"Set alerts at yesterday's high and low as breakout/breakdown triggers.")
+            f"Set alerts at yesterday's high and low as breakout/breakdown triggers.",
+            rationale_plain=f"One of the most heavily traded stocks ({vol_str} changed hands) — big investors are paying attention.",
+            analysis_plain=(
+                f"When huge amounts of money trade in a stock in one day, it usually means big institutional investors are taking positions. "
+                f"That tends to keep the stock moving the same direction the next day. "
+                f"The downside: stocks like this swing harder when the overall market has a good or bad day."
+            ))
 
     return picks
 
 
 def _b_coming_day(snap: Snapshot) -> str:
     """Brief synopsis of what to watch in the coming trading session."""
-    lines: list[str] = []
+    adv_lines:   list[str] = []
+    plain_lines: list[str] = []
 
     sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name or "Fut" in q.name), None)
     if sp_fut:
         dir_ = "pointing higher" if sp_fut.change_pct > 0.1 else ("pointing lower" if sp_fut.change_pct < -0.1 else "flat")
-        lines.append(f"S&P futures are {dir_} pre-market ({sp_fut.change_pct:+.2f}%), setting the early directional bias.")
+        adv_lines.append(f"S&P futures are {dir_} pre-market ({sp_fut.change_pct:+.2f}%), setting the early directional bias.")
+        plain_word = "higher" if sp_fut.change_pct > 0.1 else ("lower" if sp_fut.change_pct < -0.1 else "about even")
+        plain_lines.append(
+            f"Before the U.S. stock market opens, early bets on the S&P 500 are pointing {plain_word} ({sp_fut.change_pct:+.2f}%). That gives an early hint at how the day might start."
+        )
 
     if snap.earnings_today:
         tickers = [e.symbol_or_event for e in snap.earnings_today[:6] if e.symbol_or_event]
         n = len(snap.earnings_today)
-        lines.append(f"{n} companies report today — key names: {', '.join(tickers[:5])}{'…' if n > 5 else ''}. Expect elevated volatility around open and post-market.")
+        adv_lines.append(f"{n} companies report today — key names: {', '.join(tickers[:5])}{'…' if n > 5 else ''}. Expect elevated volatility around open and post-market.")
+        plain_lines.append(
+            f"{n} companies share their quarterly results today — including {', '.join(tickers[:5])}{', and others' if n > 5 else ''}. Expect bigger price swings around the open and after the market closes."
+        )
 
     if snap.econ_events_today:
         evts = [e.description for e in snap.econ_events_today[:3] if e.description]
         if evts:
-            lines.append(f"Economic events to watch: {'; '.join(evts)}.")
+            adv_lines.append(f"Economic events to watch: {'; '.join(evts)}.")
+            plain_lines.append(f"Government economic reports out today: {'; '.join(evts)}.")
 
     btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
     if btc and abs(btc.change_pct) > 2:
-        lines.append(f"Crypto: BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.2f}% — monitor for crypto-equity spillover into COIN, MSTR, and related names.")
+        adv_lines.append(f"Crypto: BTC {'+' if btc.change_pct >= 0 else ''}{btc.change_pct:.2f}% — monitor for crypto-equity spillover into COIN, MSTR, and related names.")
+        word = "up" if btc.change_pct > 0 else "down"
+        plain_lines.append(
+            f"Bitcoin is {word} {abs(btc.change_pct):.2f}%. Big bitcoin moves often spill into stocks tied to crypto — like Coinbase (COIN) and MicroStrategy (MSTR)."
+        )
 
-    if not lines:
-        lines.append("No major pre-market catalysts identified. Monitor the open for directional clues and watch for news flow around major sector movers.")
+    if not adv_lines:
+        adv_lines.append("No major pre-market catalysts identified. Monitor the open for directional clues and watch for news flow around major sector movers.")
+        plain_lines.append("No major news before the market opens. Watch the first hour to see which way things are heading, and keep an eye on news about the day's biggest movers.")
 
     return (
         '<div class="briefing-section setup">'
         '<div class="bs-label"><span class="std-only">When the market is open today</span><span class="adv-only">Coming Trading Day</span></div>'
-        f'<p>{escape_html(" ".join(lines))}</p>'
+        + prose_block_pair(" ".join(plain_lines), " ".join(adv_lines)) +
         '</div>'
     )
 
@@ -3379,7 +2498,7 @@ def _build_data_briefing(snap: Snapshot) -> str:
         lis = "".join(f"<li>{escape_html(b)}</li>" for b in exec_bullets)
         exec_html = (
             '<div class="exec-bar">'
-            '<div class="exec-label">Market Summary</div>'
+            f'<div class="exec-label">{mode_pair("The Big Picture in 5 Bullets", "Market Summary")}</div>'
             f'<ol>{lis}</ol>'
             '</div>'
         )
@@ -3408,6 +2527,81 @@ _MACRO_KEYWORDS = {
     "treasury", "powell", "yellen", "jobs report", "nonfarm", "unemployment",
     "election", "earnings miss", "guidance cut", "layoff", "bankruptcy",
 }
+
+
+def _build_session_text_plain(snap: Snapshot) -> str:
+    """Plain-language session narrative for std view."""
+    idx = {q.symbol: q for q in snap.indices}
+    sp   = idx.get("^GSPC")
+    dji  = idx.get("^DJI")
+    ixic = idx.get("^IXIC")
+    rut  = idx.get("^RUT")
+    vix  = idx.get("^VIX")
+    if not sp:
+        return ""
+
+    sentences: list[str] = []
+
+    # Overall market tone — friendly summary
+    if sp.change_pct > 1.5:
+        tone = "had a strong day"
+    elif sp.change_pct > 0.5:
+        tone = "had a decent day"
+    elif sp.change_pct > 0:
+        tone = "had a mildly positive day"
+    elif sp.change_pct > -0.5:
+        tone = "had a mildly negative day"
+    elif sp.change_pct > -1.5:
+        tone = "had a rough day"
+    else:
+        tone = "had a really rough day"
+
+    move_word = "rose" if sp.change_pct > 0 else "fell"
+    example = abs(sp.change_pct) * 10
+    sentence = (
+        f"Stocks {tone} yesterday. The S&P 500 (the index that tracks 500 of the biggest U.S. companies) "
+        f"{move_word} {abs(sp.change_pct):.2f}% to {sp.price:,.2f} — meaning a $1,000 investment would have "
+        f"{'gained' if sp.change_pct > 0 else 'lost'} about ${example:.2f}."
+    )
+    pieces = []
+    if dji:  pieces.append(f"the Dow Jones (30 large companies) {'rose' if dji.change_pct >= 0 else 'fell'} {abs(dji.change_pct):.2f}%")
+    if ixic: pieces.append(f"the Nasdaq (more tech-heavy) {'rose' if ixic.change_pct >= 0 else 'fell'} {abs(ixic.change_pct):.2f}%")
+    if rut:  pieces.append(f"the Russell 2000 (smaller companies) {'rose' if rut.change_pct >= 0 else 'fell'} {abs(rut.change_pct):.2f}%")
+    if pieces:
+        sentence += f" For comparison, {'; '.join(pieces)}."
+    sentences.append(sentence)
+
+    # VIX
+    if vix:
+        if vix.change_pct > 5:
+            sentences.append(
+                f"The 'fear gauge' (called the VIX) jumped {vix.change_pct:.1f}% to {vix.price:.2f}. "
+                f"That means traders are nervous and paying more to protect their bets. "
+                f"When this number goes above 20, it usually means people are worried about something bad happening soon."
+            )
+        elif vix.change_pct < -5:
+            sentences.append(
+                f"The 'fear gauge' (the VIX) dropped {abs(vix.change_pct):.1f}% to {vix.price:.2f}. "
+                f"That means traders are more relaxed than yesterday — they're not paying as much to protect their bets. "
+                f"That's typically a good sign for the stock market."
+            )
+
+    # Sector leadership
+    if snap.sectors:
+        leader = snap.sectors[0]
+        lagger = snap.sectors[-1]
+        if leader.name in ("Technology", "Consumer Discretionary", "Communication Services"):
+            mood = "Investors are feeling optimistic and willing to take risks for bigger potential rewards."
+        elif leader.name in ("Utilities", "Consumer Staples", "Real Estate"):
+            mood = "Investors are playing it safe — buying boring, steady companies that pay reliable dividends."
+        else:
+            mood = "Specific company news is driving things, rather than a big shift in mood."
+        sentences.append(
+            f"The strongest part of the economy was {leader.name} (up {abs(leader.pct_1d):.2f}%), "
+            f"while {lagger.name} stocks did the worst ({lagger.pct_1d:+.2f}%). {mood}"
+        )
+
+    return " ".join(sentences)
 
 
 def _build_session_text(snap: Snapshot) -> str:
@@ -3503,6 +2697,50 @@ def _build_movers_reasoning(snap: Snapshot) -> str:
             s += f" — {headline}" if headline else ""
             act_parts.append(s + ".")
         parts.append(" ".join(act_parts))
+
+    return "\n\n".join(parts)
+
+
+def _build_movers_reasoning_plain(snap: Snapshot) -> str:
+    """Plain-language version of mover reasoning for the std view."""
+    parts: list[str] = []
+
+    # Gainers
+    gain_parts: list[str] = []
+    for m in snap.gainers[:3]:
+        q = m.quote
+        headline = m.news[0].title if m.news else None
+        s = f"{q.symbol}'s stock jumped {q.change_pct:+.1f}% to {fmt_usd(q.price)}"
+        s += f" — the news: \"{headline}\"" if headline else " on heavy trading"
+        gain_parts.append(s + ".")
+    if gain_parts:
+        parts.append("Biggest winners: " + " ".join(gain_parts))
+
+    # Losers
+    loss_parts: list[str] = []
+    for m in snap.losers[:3]:
+        q = m.quote
+        headline = m.news[0].title if m.news else None
+        s = f"{q.symbol}'s stock dropped {abs(q.change_pct):.1f}% to {fmt_usd(q.price)}"
+        s += f" — the news: \"{headline}\"" if headline else " on heavy trading"
+        loss_parts.append(s + ".")
+    if loss_parts:
+        parts.append("Biggest losers: " + " ".join(loss_parts))
+
+    # Most active (where move > 2%)
+    active_notable = [m for m in snap.most_active if abs(m.quote.change_pct) > 2][:2]
+    if active_notable:
+        act_parts = []
+        for m in active_notable:
+            q = m.quote
+            headline = m.news[0].title if m.news else None
+            vol = fmt_usd(q.dollar_volume) if q.dollar_volume else "a lot of money"
+            direction = "up" if q.change_pct > 0 else "down"
+            s = (f"{q.symbol} had heavy trading ({vol} changed hands) and moved {direction} "
+                 f"{abs(q.change_pct):.1f}%")
+            s += f" — the news: \"{headline}\"" if headline else ""
+            act_parts.append(s + ".")
+        parts.append("Stocks people were really paying attention to: " + " ".join(act_parts))
 
     return "\n\n".join(parts)
 
@@ -3621,8 +2859,117 @@ def _build_macro_world_text(snap: Snapshot) -> str:
     return "\n\n".join(sentences)
 
 
+def _build_macro_world_text_plain(snap: Snapshot) -> str:
+    """Plain-language version of macro/world commentary for the std view."""
+    sentences: list[str] = []
+
+    crude  = next((q for q in snap.macro if "Crude"   in q.name), None)
+    gold   = next((q for q in snap.macro if "Gold"    in q.name), None)
+    tnx    = next((q for q in snap.macro if "10Y"     in q.name), None)
+    dxy    = next((q for q in snap.macro if "Dollar"  in q.name), None)
+
+    if crude:
+        if abs(crude.change_pct) > 3:
+            why = ("possibly because of fighting somewhere in the world, supply disruptions, or oil-producing countries cutting production"
+                   if crude.change_pct > 0 else
+                   "possibly because of weaker demand, more oil being produced than needed, or fewer geopolitical worries")
+            word = "jumped" if crude.change_pct > 0 else "dropped"
+            sentences.append(
+                f"Oil prices {word} sharply {abs(crude.change_pct):.2f}% to {fmt_usd(crude.price)} a barrel — {why}. "
+                f"Big oil moves affect a lot of things: energy companies, airlines, what shoppers pay for everyday goods, and how worried people are about prices going up overall."
+            )
+        elif abs(crude.change_pct) > 1:
+            word = "rose" if crude.change_pct > 0 else "fell"
+            sentences.append(f"Oil prices {word} {abs(crude.change_pct):.2f}% to {fmt_usd(crude.price)} a barrel.")
+
+    if gold and abs(gold.change_pct) > 0.5:
+        if gold.change_pct > 1.5:
+            extra = " The matching jump in oil prices suggests people are worried about something happening in the world." if crude and crude.change_pct > 3 else ""
+            sentences.append(
+                f"Gold rose {gold.change_pct:+.2f}% to {fmt_usd(gold.price)}. "
+                f"Gold is what investors usually buy when they're worried — about war, rising prices, or the dollar losing value. "
+                f"A move up means people are looking for a safer place to put their money.{extra}"
+            )
+        elif gold.change_pct < -1:
+            sentences.append(
+                f"Gold fell {abs(gold.change_pct):.2f}% to {fmt_usd(gold.price)}. "
+                f"That usually means investors are feeling braver — they're moving money out of 'safe' bets like gold and into riskier things like stocks."
+            )
+        else:
+            sentences.append(f"Gold moved {gold.change_pct:+.2f}% to {fmt_usd(gold.price)}.")
+
+    if tnx:
+        if tnx.price > 4.5:
+            sentences.append(
+                f"The 10-year Treasury rate (a key long-term U.S. interest rate) sits at {tnx.price:.2f}% — that's high. "
+                f"When this rate is high, fast-growing companies (especially tech) are worth less to investors, mortgages get more expensive, and banks have a harder time making money. "
+                f"Anything the Federal Reserve says today about future rates will be watched closely."
+            )
+        elif abs(tnx.change_pct) > 2:
+            dir_ = "rose" if tnx.change_pct > 0 else "fell"
+            implication = ("which puts pressure on stocks that are sensitive to interest rates, like real estate companies, utilities, and high-growth tech"
+                           if tnx.change_pct > 0 else
+                           "which gives a bit of relief to interest-rate-sensitive stocks and growth companies")
+            sentences.append(f"The 10-year U.S. Treasury rate {dir_} to {tnx.price:.2f}%, {implication}.")
+
+    if dxy and abs(dxy.change_pct) > 0.5:
+        dir_ = "got stronger" if dxy.change_pct > 0 else "got weaker"
+        explain = ("A stronger dollar makes American exports more expensive abroad and hurts U.S. companies that earn money overseas."
+                   if dxy.change_pct > 0 else
+                   "A weaker dollar usually pushes up the price of things like oil and gold, and helps big U.S. companies that sell abroad.")
+        sentences.append(
+            f"The U.S. dollar {dir_} compared to other currencies ({dxy.change_pct:+.2f}%). {explain}"
+        )
+
+    fed_evts = [e for e in snap.econ_events_today if any(
+        kw in (e.description or "").upper()
+        for kw in ["FOMC", "FEDERAL RESERVE", "POWELL", "RATE DECISION", "FED MEETING"]
+    )]
+    if fed_evts:
+        sentences.append(
+            f"The Federal Reserve (the U.S. central bank that sets interest rates) is making news today: {fed_evts[0].description}. "
+            f"These meetings cause some of the biggest market swings — every word about future rate cuts, prices, or jobs gets analyzed."
+        )
+
+    if snap.global_indices:
+        weak   = [q for q in snap.global_indices if q.change_pct < -1.5]
+        strong = [q for q in snap.global_indices if q.change_pct >  1.5]
+        if weak:
+            names = ", ".join(q.name.split("(")[0].strip() for q in weak[:3])
+            sentences.append(
+                f"Stock markets in other countries had a rough day ({names}). "
+                f"That can mean investors are nervous globally, there's regional trouble, or currency moves are hurting investors. "
+                f"When other countries' markets fall hard, U.S. stocks often open lower too."
+            )
+        elif strong:
+            names = ", ".join(q.name.split("(")[0].strip() for q in strong[:2])
+            sentences.append(
+                f"Stock markets in other countries had a strong day ({names}), which gives U.S. stocks a positive backdrop heading into trading."
+            )
+
+    world_headlines: list[str] = []
+    seen_keys: set[str] = set()
+    for mover_list in [snap.gainers, snap.losers, snap.most_active]:
+        for m in mover_list[:6]:
+            for n in m.news:
+                tl = n.title.lower()
+                if any(kw in tl for kw in _MACRO_KEYWORDS):
+                    key = tl[:45]
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        world_headlines.append(n.title)
+    if world_headlines:
+        sentences.append(
+            "Headlines that matter for markets: "
+            + " | ".join(f'"{h}"' for h in world_headlines[:3])
+            + "."
+        )
+
+    return "\n\n".join(sentences)
+
+
 def _build_outlook_text(snap: Snapshot) -> str:
-    """Data-driven predictions paragraph for the coming session."""
+    """Data-driven predictions paragraph for the coming session (advanced view)."""
     parts: list[str] = []
 
     sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name), None)
@@ -3687,6 +3034,76 @@ def _build_outlook_text(snap: Snapshot) -> str:
         parts.append(
             f"With VIX at {vix.price:.2f}, options markets are pricing above-average volatility — "
             f"keep position sizing in check and watch for intraday reversals."
+        )
+
+    return "\n\n".join(parts)
+
+
+def _build_outlook_text_plain(snap: Snapshot) -> str:
+    """Plain-language version of the data-driven outlook for the std view."""
+    parts: list[str] = []
+
+    sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name), None)
+    if sp_fut:
+        word = "higher" if sp_fut.change_pct > 0.1 else ("lower" if sp_fut.change_pct < -0.1 else "about even")
+        if sp_fut.change_pct > 0.4:
+            why = "Big investors look like they're buying early — a positive sign for the open."
+        elif sp_fut.change_pct < -0.4:
+            why = "Traders look cautious before the market opens."
+        else:
+            why = "There's no clear direction yet — watch how the first 30 minutes go."
+        parts.append(
+            f"Before the U.S. market opens, early bets on the S&P 500 are pointing {word} ({sp_fut.change_pct:+.2f}%). {why}"
+        )
+
+    if snap.earnings_today:
+        mega = [e for e in snap.earnings_today
+                if e.symbol_or_event in {"AAPL","MSFT","GOOGL","GOOG","AMZN","META","NVDA","TSLA","JPM","NFLX","AMD"}]
+        if mega:
+            names = ", ".join(e.symbol_or_event for e in mega[:5])
+            parts.append(
+                f"Big-name companies — {names} — share their quarterly results today. "
+                f"Because these companies are so huge, if they all disappoint, the whole market can drop 1-2% right at the open. If they do well, the opposite happens. "
+                f"Pay close attention to what they say about future months — that often matters more than the current results."
+            )
+        else:
+            n = len(snap.earnings_today)
+            tks = ", ".join(e.symbol_or_event for e in snap.earnings_today[:5] if e.symbol_or_event)
+            suffix = f", and {n-5} more" if n > 5 else ""
+            parts.append(
+                f"{n} companies share their quarterly results today — including {tks}{suffix}. "
+                f"In today's market, what companies say about their future is moving stocks more than the actual numbers they just reported."
+            )
+
+    # Sector momentum prediction
+    if snap.sectors and len(snap.sectors) >= 2:
+        leader = snap.sectors[0]
+        lagger = snap.sectors[-1]
+        if abs(leader.pct_1d) > 0.8:
+            parts.append(
+                f"The {leader.name} part of the economy was the strongest yesterday "
+                f"(up {abs(leader.pct_1d):.2f}% in one day, {abs(leader.pct_1w):.2f}% over the week) and will likely keep leading. "
+                f"Meanwhile, {lagger.name} stocks lagged ({lagger.pct_1d:+.2f}%) — money may flow back there if traders feel braver later."
+            )
+
+    # Crypto read-through
+    btc = next((m.quote for m in snap.crypto if m.quote.symbol.upper() == "BTC"), None)
+    if btc:
+        if btc.change_pct > 3:
+            parts.append(
+                f"Bitcoin is up {btc.change_pct:.1f}%. That's good news for stocks tied to crypto — like Coinbase (COIN), MicroStrategy (MSTR), and crypto miners like MARA and RIOT — when the market opens."
+            )
+        elif btc.change_pct < -3:
+            parts.append(
+                f"Bitcoin is down {abs(btc.change_pct):.1f}%. Stocks tied to crypto, like Coinbase (COIN) and MARA, may open lower as a result."
+            )
+
+    # Key risk to watch
+    vix = next((q for q in snap.indices if q.symbol == "^VIX"), None)
+    if vix and vix.price > 20:
+        parts.append(
+            f"The fear gauge (VIX) is high at {vix.price:.2f}. Traders are bracing for bigger price swings than normal — "
+            f"so keep your bet sizes smaller and watch for sudden reversals during the day."
         )
 
     return "\n\n".join(parts)
@@ -3763,8 +3180,17 @@ def render_world_news_block(snap: Snapshot, briefing: dict | None = None) -> str
         age    = _age(item.get("published", ""))
         meta   = " · ".join(filter(None, [source, age]))
 
-        impact = escape_html(item.get("impact_summary", ""))
-        impact_html = f'<div class="wn-impact">{impact}</div>' if impact else ""
+        impact_adv   = item.get("impact_summary", "") or ""
+        impact_plain = item.get("impact_summary_plain", "") or impact_adv
+        if impact_adv or impact_plain:
+            impact_html = (
+                f'<div class="wn-impact">'
+                f'<span class="std-only">{escape_html(impact_plain)}</span>'
+                f'<span class="adv-only">{escape_html(impact_adv)}</span>'
+                f'</div>'
+            )
+        else:
+            impact_html = ""
 
         ticker_chips = "".join(
             f'<span class="wn-chip">{escape_html(t)}</span>'
@@ -3792,15 +3218,15 @@ def render_world_news_block(snap: Snapshot, briefing: dict | None = None) -> str
     grid = '<div class="wn-grid">' + "\n".join(cards) + '</div>'
     legend = (
         '<div class="wn-legend">'
-        '<span class="wn-legend-label">Sentiment:</span>'
-        '<span class="wn-legend-item"><span class="wn-dir up">↑</span> Bullish</span>'
-        '<span class="wn-legend-item"><span class="wn-dir down">↓</span> Bearish</span>'
-        '<span class="wn-legend-item"><span class="wn-dir flat">↔</span> Mixed / Neutral</span>'
+        f'<span class="wn-legend-label">{mode_pair("Direction:", "Sentiment:")}</span>'
+        f'<span class="wn-legend-item"><span class="wn-dir up">↑</span> {mode_pair("Good for stocks", "Bullish")}</span>'
+        f'<span class="wn-legend-item"><span class="wn-dir down">↓</span> {mode_pair("Bad for stocks", "Bearish")}</span>'
+        f'<span class="wn-legend-item"><span class="wn-dir flat">↔</span> {mode_pair("Could go either way", "Mixed / Neutral")}</span>'
         '</div>'
     )
     return (
         '<details class="world-news-details" id="world-news">'
-        '<summary>Global News &amp; Market Impact'
+        f'<summary>{mode_pair("World News &amp; What It Means for Markets", "Global News &amp; Market Impact")}'
         '<span class="expand-hint"> — click to expand</span>'
         '</summary>'
         + legend + grid +
@@ -3815,33 +3241,45 @@ def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
     2. Key movers + reasoning from news headlines
     3. Macro, world news & geopolitical context
     """
-    cards: list[tuple[str, str]] = []
+    cards: list[tuple[str, str, str]] = []  # (title_pair_html, text_plain, text_adv)
 
     # Card 1 — Session recap
-    session_text = (briefing or {}).get("session_recap") or _build_session_text(snap)
+    session_text       = (briefing or {}).get("session_recap")       or _build_session_text(snap)
+    session_text_plain = (briefing or {}).get("session_recap_plain") or _build_session_text_plain(snap) or session_text
     if session_text:
-        cards.append(("Yesterday's Session — What Happened & Why", session_text))
+        title = mode_pair_text(
+            "Yesterday's Market — What Happened, Explained Simply",
+            "Yesterday's Session — What Happened & Why",
+        )
+        cards.append((title, session_text_plain, session_text))
 
     # Card 2 — Mover reasoning (always data-driven for freshness)
-    movers_text = _build_movers_reasoning(snap)
+    movers_text       = _build_movers_reasoning(snap)
+    movers_text_plain = _build_movers_reasoning_plain(snap) or movers_text
     if movers_text:
-        cards.append(("Key Movers — Gainers, Losers & the Reasons Behind the Moves", movers_text))
+        title = mode_pair_text(
+            "Why Certain Stocks Moved — The Stories Behind the Numbers",
+            "Key Movers — Gainers, Losers & the Reasons Behind the Moves",
+        )
+        cards.append((title, movers_text_plain, movers_text))
 
     # Card 3 — Macro & world news
-    macro_text = _build_macro_world_text(snap)
+    macro_text       = _build_macro_world_text(snap)
+    macro_text_plain = _build_macro_world_text_plain(snap) or macro_text
     if macro_text:
-        cards.append(("Macro & Global Context — World Events Affecting Markets", macro_text))
+        title = mode_pair_text(
+            "World Events That Are Affecting the Market",
+            "Macro & Global Context — World Events Affecting Markets",
+        )
+        cards.append((title, macro_text_plain, macro_text))
 
     if not cards:
         return ""
 
     html = '<h2 id="analysis"><span class="std-only">What\'s Happening in the Market</span><span class="adv-only">Market Analysis</span></h2>'
-    for title, text in cards:
-        paragraphs = "".join(
-            f"<p>{escape_html(s.strip())}</p>"
-            for s in text.split("\n\n") if s.strip()
-        )
-        html += f'<div class="narr"><div class="label">{escape_html(title)}</div>{paragraphs}</div>'
+    for title, text_plain, text_adv in cards:
+        body = prose_block_pair(text_plain, text_adv)
+        html += f'<div class="narr"><div class="label">{title}</div>{body}</div>'
     return html
 
 
@@ -3851,31 +3289,37 @@ def render_outlook_block(snap: Snapshot, briefing: dict | None = None) -> str:
     Uses AI today_setup text when available; falls back to data-driven.
     """
     # Main outlook text
-    outlook_text = (briefing or {}).get("today_setup") or _build_outlook_text(snap)
+    outlook_text       = (briefing or {}).get("today_setup")       or _build_outlook_text(snap)
+    outlook_text_plain = (briefing or {}).get("today_setup_plain") or _build_outlook_text_plain(snap) or outlook_text
 
     # Risk notes (AI if available, otherwise data-driven)
-    risk_items = (briefing or {}).get("risk_notes", [])
-    if risk_items and isinstance(risk_items, list):
-        risk_text = "\n\n".join(risk_items)
-    elif risk_items:
-        risk_text = str(risk_items)
-    else:
-        risk_text = ""
+    risk_items       = (briefing or {}).get("risk_notes", [])
+    risk_items_plain = (briefing or {}).get("risk_notes_plain", []) or risk_items
+
+    def _to_text(items) -> str:
+        if isinstance(items, list):
+            return "\n\n".join(items)
+        return str(items) if items else ""
+
+    risk_text       = _to_text(risk_items)
+    risk_text_plain = _to_text(risk_items_plain) or risk_text
 
     html = ""
     if outlook_text:
-        paragraphs = "".join(
-            f"<p>{escape_html(s.strip())}</p>"
-            for s in outlook_text.split("\n\n") if s.strip()
+        label = mode_pair(
+            "What Today Could Bring — Our Best Guesses",
+            "Today's Outlook &amp; Predictions",
         )
-        html += f'<div class="narr"><div class="label">Today&#39;s Outlook &amp; Predictions</div>{paragraphs}</div>'
+        body = prose_block_pair(outlook_text_plain, outlook_text)
+        html += f'<div class="narr"><div class="label">{label}</div>{body}</div>'
 
     if risk_text:
-        paragraphs = "".join(
-            f"<p>{escape_html(s.strip())}</p>"
-            for s in risk_text.split("\n\n") if s.strip()
+        label = mode_pair(
+            "Things That Could Go Wrong",
+            "Key Risks to Watch",
         )
-        html += f'<div class="narr risk"><div class="label">Key Risks to Watch</div>{paragraphs}</div>'
+        body = prose_block_pair(risk_text_plain, risk_text)
+        html += f'<div class="narr risk"><div class="label">{label}</div>{body}</div>'
 
     return html
 
@@ -3884,46 +3328,60 @@ def render_outlook_block(snap: Snapshot, briefing: dict | None = None) -> str:
 
 def _what_to_watch_html(snap: Snapshot | None, briefing: dict | None) -> str:
     """Build a 3-bullet 'What to Watch Today' checklist from snapshot + briefing data."""
-    items: list[str] = []
+    items_adv:   list[str] = []
+    items_plain: list[str] = []
 
     # 1) Top earnings reporters today (by market cap)
     if snap and snap.earnings_today:
         big = sorted(snap.earnings_today, key=lambda e: e.market_cap, reverse=True)
         names = [e.symbol_or_event for e in big[:3] if e.symbol_or_event]
         if names:
-            label = "Earnings on deck"
-            items.append(f"{label}: {', '.join(names)}")
+            items_adv.append(f"Earnings on deck: {', '.join(names)}")
+            items_plain.append(f"Quarterly results out today: {', '.join(names)}")
 
     # 2) Biggest pre-market mover (futures or single-name pre-market)
     if snap and snap.premarket_us:
         biggest = max(snap.premarket_us, key=lambda q: abs(q.change_pct or 0.0), default=None)
         if biggest and abs(biggest.change_pct or 0.0) >= 0.05:
             sign = "+" if (biggest.change_pct or 0.0) >= 0 else ""
-            items.append(f"Pre-market: {biggest.name} {sign}{biggest.change_pct:.2f}%")
+            items_adv.append(f"Pre-market: {biggest.name} {sign}{biggest.change_pct:.2f}%")
+            items_plain.append(f"Before the market opens: {biggest.name} is {sign}{biggest.change_pct:.2f}%")
 
     # 3) Risk note from AI briefing, or first economic event of the day
     if briefing:
-        risks = briefing.get("risk_notes")
+        risks       = briefing.get("risk_notes")
+        risks_plain = briefing.get("risk_notes_plain") or risks
         if isinstance(risks, list) and risks:
             first = str(risks[0]).split(".")[0].strip()
             if first:
-                items.append(f"Watch: {first[:140]}")
-    if len(items) < 3 and snap and snap.econ_events_today:
+                items_adv.append(f"Watch: {first[:140]}")
+        if isinstance(risks_plain, list) and risks_plain:
+            first = str(risks_plain[0]).split(".")[0].strip()
+            if first:
+                items_plain.append(f"Watch: {first[:140]}")
+    if len(items_adv) < 3 and snap and snap.econ_events_today:
         ev = snap.econ_events_today[0]
-        items.append(f"Macro: {ev.description} ({ev.time or 'today'})")
+        items_adv.append(f"Macro: {ev.description} ({ev.time or 'today'})")
+        items_plain.append(f"Economic report: {ev.description} ({ev.time or 'today'})")
 
-    if not items:
+    if not items_adv:
         return ""
-    bullets = "".join(f"<li>{escape_html(b)}</li>" for b in items[:3])
+    # Pad plain to match adv length
+    while len(items_plain) < len(items_adv):
+        items_plain.append(items_adv[len(items_plain)])
+    bullets_adv = "".join(f"<li>{escape_html(b)}</li>" for b in items_adv[:3])
+    bullets_std = "".join(f"<li>{escape_html(b)}</li>" for b in items_plain[:3])
     return (
         '<div class="b-watchlist">'
-        '<div class="bw-label">What to Watch Today</div>'
-        f'<ul class="bw-list">{bullets}</ul>'
+        f'<div class="bw-label">{mode_pair("Things to Watch Today", "What to Watch Today")}</div>'
+        f'<ul class="bw-list std-only">{bullets_std}</ul>'
+        f'<ul class="bw-list adv-only">{bullets_adv}</ul>'
         '</div>'
     )
 
 
-def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -> str:
+def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None,
+                          analysis_html: str = "") -> str:
     """Render the Morning Briefing as an inline card at the top of the page.
 
     Uses AI-generated JSON if available; otherwise builds from snapshot data.
@@ -3950,7 +3408,7 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
         lis = "".join(f"<li>{escape_html(b)}</li>" for b in briefing["exec_summary"])
         exec_html = (
             '<div class="exec-bar">'
-            '<div class="exec-label">Executive Summary</div>'
+            f'<div class="exec-label">{mode_pair("The Big Picture in 5 Bullets", "Executive Summary")}</div>'
             f'<ol>{lis}</ol></div>'
         )
     elif snap:
@@ -3959,32 +3417,38 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
             lis = "".join(f"<li>{escape_html(b)}</li>" for b in bullets)
             exec_html = (
                 '<div class="exec-bar">'
-                '<div class="exec-label">Market Summary</div>'
+                f'<div class="exec-label">{mode_pair("The Big Picture in 5 Bullets", "Market Summary")}</div>'
                 f'<ol>{lis}</ol></div>'
             )
 
     # Detailed sections — inside <details> expander
     if briefing:
         source = "Claude AI"
-        session_text = briefing.get("session_recap", "")
+        session_text       = briefing.get("session_recap", "")
+        session_text_plain = briefing.get("session_recap_plain", "") or session_text
         session_html = (
             '<div class="briefing-section">'
             '<div class="bs-label"><span class="std-only">What happened in the market yesterday</span><span class="adv-only">Yesterday\'s Session</span></div>'
-            f'{_paras(session_text)}</div>'
+            + prose_block_pair(session_text_plain, session_text) +
+            '</div>'
         ) if session_text else ""
 
-        crypto_recap = briefing.get("crypto_recap", "")
+        crypto_recap       = briefing.get("crypto_recap", "")
+        crypto_recap_plain = briefing.get("crypto_recap_plain", "") or crypto_recap
         crypto_recap_html = (
             '<div class="briefing-section crypto">'
             '<div class="bs-label"><span class="std-only">What happened with cryptocurrency</span><span class="adv-only">Crypto Recap</span></div>'
-            f'{_paras(crypto_recap)}</div>'
+            + prose_block_pair(crypto_recap_plain, crypto_recap) +
+            '</div>'
         ) if crypto_recap else ""
 
-        setup_text = briefing.get("today_setup", "")
+        setup_text       = briefing.get("today_setup", "")
+        setup_text_plain = briefing.get("today_setup_plain", "") or setup_text
         setup_html = (
             '<div class="briefing-section setup">'
             '<div class="bs-label"><span class="std-only">What to watch for today</span><span class="adv-only">Today\'s Setup</span></div>'
-            f'{_paras(setup_text)}</div>'
+            + prose_block_pair(setup_text_plain, setup_text) +
+            '</div>'
         ) if setup_text else ""
 
         watch = briefing.get("tickers_to_watch", [])
@@ -3993,7 +3457,10 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
             cards = "".join(
                 f'<div class="b-watch-item">'
                 f'<div class="sym">{escape_html(str(w.get("ticker", "")))}</div>'
-                f'<div class="why">{escape_html(str(w.get("rationale", "")))}</div>'
+                f'<div class="why">'
+                f'<span class="std-only">{escape_html(str(w.get("rationale_plain") or w.get("rationale", "")))}</span>'
+                f'<span class="adv-only">{escape_html(str(w.get("rationale", "")))}</span>'
+                f'</div>'
                 f'</div>'
                 for w in watch
             )
@@ -4004,28 +3471,38 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
                 '</div>'
             )
 
-        crypto_out = briefing.get("crypto_outlook", "")
+        crypto_out       = briefing.get("crypto_outlook", "")
+        crypto_out_plain = briefing.get("crypto_outlook_plain", "") or crypto_out
         crypto_out_html = (
             '<div class="briefing-section crypto">'
             '<div class="bs-label"><span class="std-only">What to watch for in crypto</span><span class="adv-only">Crypto Outlook</span></div>'
-            f'{_paras(crypto_out)}</div>'
+            + prose_block_pair(crypto_out_plain, crypto_out) +
+            '</div>'
         ) if crypto_out else ""
 
-        risk_items = briefing.get("risk_notes", [])
+        risk_items       = briefing.get("risk_notes", [])
+        risk_items_plain = briefing.get("risk_notes_plain", []) or risk_items
         risk_html = ""
         if risk_items:
             if isinstance(risk_items, list):
-                lis = "".join(f"<li>{escape_html(r)}</li>" for r in risk_items)
+                lis_adv = "".join(f"<li>{escape_html(r)}</li>" for r in risk_items)
+                if isinstance(risk_items_plain, list) and risk_items_plain:
+                    lis_std = "".join(f"<li>{escape_html(r)}</li>" for r in risk_items_plain)
+                else:
+                    lis_std = lis_adv
                 risk_html = (
                     '<div class="briefing-section risk">'
                     '<div class="bs-label"><span class="std-only">What could cause problems today</span><span class="adv-only">Risk Notes</span></div>'
-                    f'<ul>{lis}</ul></div>'
+                    f'<ul class="std-only">{lis_std}</ul>'
+                    f'<ul class="adv-only">{lis_adv}</ul></div>'
                 )
             else:
+                plain_text = str(risk_items_plain) if risk_items_plain else str(risk_items)
                 risk_html = (
                     '<div class="briefing-section risk">'
                     '<div class="bs-label"><span class="std-only">What could cause problems today</span><span class="adv-only">Risk Notes</span></div>'
-                    f'{_paras(str(risk_items))}</div>'
+                    + prose_block_pair(plain_text, str(risk_items)) +
+                    '</div>'
                 )
 
         global_html = _b_global_markets(snap) if snap else ""
@@ -4037,24 +3514,44 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None) -
             _b_crypto(snap) + _b_setup(snap) + _b_risks(snap)
         )
 
+    # Wrap the analysis block (if any) so it lives inside the briefing card.
+    # We pull it out of the inner <h2> shell and just include the .narr cards.
+    analysis_inner = ""
+    if analysis_html:
+        # Drop the leading <h2>...</h2> from render_analysis_block — replace with our own label
+        import re as _re
+        body_only = _re.sub(r'^<h2[^>]*>.*?</h2>', '', analysis_html, count=1)
+        analysis_inner = (
+            '<div class="briefing-section">'
+            '<div class="bs-label">'
+            f'{mode_pair("What\'s Happening in the Market", "Market Analysis")}'
+            '</div>'
+            f'{body_only}'
+            '</div>'
+        )
+
     details_block = ""
-    if detailed_html.strip():
+    if detailed_html.strip() or analysis_inner:
         details_block = (
-            f'<details class="briefing-details">'
-            f'<summary>Full Briefing</summary>'
+            f'<details class="briefing-details" open>'
+            f'<summary>{mode_pair("See the Full Summary", "Full Briefing")}</summary>'
+            f'{analysis_inner}'
             f'{detailed_html}'
             f'</details>'
         )
 
+    # Order: lead with what to watch + the prose summary, push the dense
+    # index/exec numbers below. The full briefing (with the analysis cards)
+    # comes last and is expanded by default.
     return (
         f'<div class="briefing-inline" id="briefing">'
         f'<div class="briefing-inline-head">'
-        f'<span class="bi-title">Morning Briefing</span>'
+        f'<span class="bi-title">{mode_pair("Today\'s Market Summary", "Morning Briefing")}</span>'
         f'<span class="bi-source">{source} · {gen_date}</span>'
         f'</div>'
-        f'{index_row_html}'
-        f'{exec_html}'
         f'{watch_html}'
+        f'{exec_html}'
+        f'{index_row_html}'
         f'{details_block}'
         f'</div>'
     )
@@ -4095,20 +3592,20 @@ def render_premarket_strips(snap: Snapshot) -> str:
     ts = (datetime.fromisoformat(snap.premarket_fetched_at).strftime("%I:%M %p ET")
           if snap.premarket_fetched_at else "—")
 
-    def group(label: str, quotes: list[Quote]) -> str:
+    def group(std_label: str, adv_label: str, quotes: list[Quote]) -> str:
         if not quotes:
             return ""
-        return (f'<div class="pm-section-label">{escape_html(label)}</div>'
+        return (f'<div class="pm-section-label">{mode_pair(std_label, adv_label)}</div>'
                 f'<div class="pm-grid">{"".join(_pm_tile(q) for q in quotes)}</div>')
 
     strip_a = (
         f'<div class="premarket-bar" id="premarket">'
-        f'<h2>Pre-Market'
+        f'<h2>{mode_pair("Before the Market Opens", "Pre-Market")}'
         f'<span style="font-weight:400;text-transform:none;font-size:11px;color:var(--text-faint);margin-left:10px">'
         f'{ts} · {bell}</span></h2>'
-        + group("US Futures", snap.premarket_us)
-        + group("Macro", snap.premarket_macro)
-        + group("Crypto", snap.premarket_crypto)
+        + group("Early bets on U.S. stock indexes", "US Futures",     snap.premarket_us)
+        + group("Oil, gold, interest rates",         "Macro",          snap.premarket_macro)
+        + group("Cryptocurrency",                    "Crypto",         snap.premarket_crypto)
         + '</div>'
     )
     return strip_a
@@ -4173,7 +3670,44 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
     gen_dt_et = datetime.fromisoformat(snap.generated_at).astimezone(ET)
     last_updated = gen_dt_et.strftime("%-I:%M %p ET")
 
-    html = HTML_TEMPLATE.format(
+    # Build the autocomplete ticker DB: curated mega-caps first (so they
+    # surface for partial queries), then every NASDAQ + NYSE-listed security,
+    # then any snapshot symbols not already covered. Insertion order is
+    # preserved into the JS, so the JS pickup-by-prefix returns the largest
+    # companies first.
+    ticker_pairs: dict[str, str] = dict(POPULAR_TICKERS)
+    for sym, name in load_all_tickers():
+        if sym and name and sym not in ticker_pairs:
+            ticker_pairs[sym] = name
+    for src in (snap.gainers, snap.losers, snap.most_active, snap.watchlist_news):
+        for m in src or []:
+            q = m.quote if hasattr(m, "quote") else m
+            if q.symbol and q.name and q.symbol not in ticker_pairs:
+                ticker_pairs[q.symbol] = q.name
+    for q in snap.watchlist or []:
+        if q.symbol and q.name and q.symbol not in ticker_pairs:
+            ticker_pairs[q.symbol] = q.name
+    # Seed crypto so autocomplete works without a remote-search round-trip
+    crypto_overrides: dict[str, str] = {}
+    for sym, name in CRYPTO_TICKERS.items():
+        if sym not in ticker_pairs:
+            ticker_pairs[sym] = name
+        crypto_overrides[sym] = "Crypto"
+    for m in snap.crypto or []:
+        q = m.quote
+        if q.symbol and q.name and q.symbol not in ticker_pairs:
+            ticker_pairs[q.symbol] = q.name
+        if q.symbol:
+            crypto_overrides[q.symbol] = "Crypto"
+    ticker_db_json = json.dumps(
+        [[s, n, crypto_overrides.get(s) or _classify_ticker(s, n)] for s, n in ticker_pairs.items()],
+        ensure_ascii=False,
+    )
+
+    build_id = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    html = _jinja_env.get_template("base.html").render(
+        build_id=build_id,
+        ticker_db_json=ticker_db_json,
         prior_date=prior_date,
         prior_date_human=prior_dt.strftime("%A, %B %-d, %Y"),
         generated_human=gen_dt_et.strftime("%Y-%m-%d %H:%M %Z"),
@@ -4181,14 +3715,13 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         today_human=today_dt.strftime("%A, %B %-d, %Y"),
         warnings_html=warnings_html,
         index_tiles=index_tiles,
-        briefing_block=render_briefing_block(briefing, snap),
+        briefing_block=render_briefing_block(briefing, snap, analysis_html=render_analysis_block(snap, briefing)),
         premarket_block=render_premarket_strips(snap),
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
         scorecard_block=render_scorecard(snap, briefing, eod=eod, history=history),
         earnings_reactions_block=render_earnings_reactions(snap),
-        analysis_block=render_analysis_block(snap, briefing),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
         active_rows=render_movers_block(snap.most_active, why_a, "No active data."),
@@ -4264,18 +3797,18 @@ def render_sector_heatmap(snap: Snapshot) -> str:
         '</div>'
     )
 
+    card_tpl = _jinja_env.get_template("_sector_tile.html")
     cards = []
     for s in sectors_sorted:
-        cls = cls_for(s.pct_1d)
-        cards.append(
-            f'<div class="sector-card">'
-            f'<div class="s-name">{escape_html(s.name)}</div>'
-            f'<div class="s-1d {cls} num">{fmt_pct(s.pct_1d)}</div>'
-            f'<div class="s-sub">'
-            f'<span>1W <span class="num {cls_for(s.pct_1w)}">{fmt_pct(s.pct_1w)}</span></span>'
-            f'<span>YTD <span class="num {cls_for(s.pct_ytd)}">{fmt_pct(s.pct_ytd)}</span></span>'
-            f'</div></div>'
-        )
+        cards.append(card_tpl.render(
+            name=escape_html(s.name),
+            cls=cls_for(s.pct_1d),
+            pct_1d=fmt_pct(s.pct_1d),
+            cls_1w=cls_for(s.pct_1w),
+            pct_1w=fmt_pct(s.pct_1w),
+            cls_ytd=cls_for(s.pct_ytd),
+            pct_ytd=fmt_pct(s.pct_ytd),
+        ))
     return (
         f'<h2 id="sectors"><span class="std-only">How Each Part of the Economy Is Doing</span><span class="adv-only">Sector Performance</span></h2>'
         f'{bars_html}'
@@ -4926,16 +4459,16 @@ def render_watchlist(snap: Snapshot) -> str:
     """Compact tile row — kept for any legacy callers."""
     if not snap.watchlist:
         return ""
+    tpl = _jinja_env.get_template("_watch_item.html")
     tiles = []
     for q in snap.watchlist:
         cls = cls_for(q.change_pct)
-        tiles.append(
-            f'<div class="wl-tile">'
-            f'<div class="wl-sym">{escape_html(q.symbol)}</div>'
-            f'<div class="wl-price">{fmt_usd(q.price)}</div>'
-            f'<div class="wl-pct {cls}">{fmt_pct(q.change_pct)}</div>'
-            f'</div>'
-        )
+        tiles.append(tpl.render(
+            symbol=escape_html(q.symbol),
+            price=fmt_usd(q.price),
+            cls=cls,
+            pct=fmt_pct(q.change_pct),
+        ))
     return f'<div class="wl-row" id="watchlist">{"".join(tiles)}</div>'
 
 
@@ -4947,23 +4480,40 @@ def render_sidebar_block(snap: Snapshot) -> str:
 
     earnings_syms = {e.symbol_or_event for e in snap.earnings_today}
 
-    def _prediction(q: Quote) -> tuple[str, str, str]:
-        """Returns (bias_class, label, one-line analysis)."""
+    def _prediction(q: Quote) -> tuple[str, str, str, str, str]:
+        """Returns (bias_class, label_adv, label_std, analysis_adv, analysis_std)."""
         pct = q.change_pct
         if pct > 3:
-            return "bull", f"▲ Strong Momentum +{pct:.1f}%", \
-                "Significant prior-session gain. Momentum plays often see continuation in the opening hour — watch for volume confirmation above yesterday's close."
+            return ("bull",
+                f"▲ Strong Momentum +{pct:.1f}%",
+                f"▲ Big jump +{pct:.1f}%",
+                "Significant prior-session gain. Momentum plays often see continuation in the opening hour — watch for volume confirmation above yesterday's close.",
+                "Had a really strong day. When stocks jump this much, they often keep going up the next morning — but watch closely: if not many people are buying, it could fade.")
         if pct > 1:
-            return "bull", f"▲ Bullish +{pct:.1f}%", \
-                f"Mild upside last session. Near-term bias positive while price holds above prior close of {fmt_usd(q.price / (1 + pct/100))}."
+            prior = fmt_usd(q.price / (1 + pct/100))
+            return ("bull",
+                f"▲ Bullish +{pct:.1f}%",
+                f"▲ Up +{pct:.1f}%",
+                f"Mild upside last session. Near-term bias positive while price holds above prior close of {prior}.",
+                f"Rose nicely. Likely to keep edging up as long as the price stays above {prior} (where it closed the day before).")
         if pct < -3:
-            return "bear", f"▼ Selling Pressure {pct:.1f}%", \
-                "Sharp prior-session decline. Path of least resistance lower until a catalyst or support level holds. Risk elevated — position sizing matters."
+            return ("bear",
+                f"▼ Selling Pressure {pct:.1f}%",
+                f"▼ Big drop {pct:.1f}%",
+                "Sharp prior-session decline. Path of least resistance lower until a catalyst or support level holds. Risk elevated — position sizing matters.",
+                "Took a hard hit yesterday. The path of least resistance is more downside until something positive comes along — be careful with how much you put in.")
         if pct < -1:
-            return "bear", f"▼ Bearish {pct:.1f}%", \
-                f"Modest prior-session loss. Watch for bounce off {fmt_usd(q.price * 0.98)} or continuation below prior low."
-        return "flat", "— Neutral", \
-            "Tight prior-session range. Likely to follow the broader tape direction today. Catalyst-driven — monitor news flow."
+            bounce = fmt_usd(q.price * 0.98)
+            return ("bear",
+                f"▼ Bearish {pct:.1f}%",
+                f"▼ Down {pct:.1f}%",
+                f"Modest prior-session loss. Watch for bounce off {fmt_usd(q.price * 0.98)} or continuation below prior low.",
+                f"Slipped a bit. Watch to see if it bounces back from around {bounce} — or keeps falling.")
+        return ("flat",
+            "— Neutral",
+            "— Quiet day",
+            "Tight prior-session range. Likely to follow the broader tape direction today. Catalyst-driven — monitor news flow.",
+            "Didn't move much yesterday. Will likely follow whatever the broader market does today — keep an eye on the news for surprises.")
 
     cards_html = ""
     for mw in source:
@@ -4972,7 +4522,7 @@ def render_sidebar_block(snap: Snapshot) -> str:
         pct_sign = "+" if q.change_pct >= 0 else ""
         pct_color = "var(--up)" if q.change_pct > 0 else ("var(--down)" if q.change_pct < 0 else "var(--text-faint)")
 
-        bias_cls, bias_label, analysis = _prediction(q)
+        bias_cls, bias_label_adv, bias_label_std, analysis_adv, analysis_std = _prediction(q)
         name = escape_html(q.name or q.symbol)
 
         # Earnings badge
@@ -4980,7 +4530,12 @@ def render_sidebar_block(snap: Snapshot) -> str:
             '<span class="sb-badge earnings">⚡ Earnings Today</span>'
             if q.symbol in earnings_syms else ""
         )
-        bias_badge = f'<span class="sb-badge {bias_cls}">{escape_html(bias_label)}</span>'
+        bias_badge = (
+            f'<span class="sb-badge {bias_cls}">'
+            f'<span class="std-only">{escape_html(bias_label_std)}</span>'
+            f'<span class="adv-only">{escape_html(bias_label_adv)}</span>'
+            f'</span>'
+        )
 
         # Top news headline
         news_html = ""
@@ -5005,7 +4560,10 @@ def render_sidebar_block(snap: Snapshot) -> str:
             f'  <div class="sb-name">{name}</div>'
             f'  <div class="sb-price">{fmt_usd(q.price)}</div>'
             f'  <div class="sb-badges">{earn_badge}{bias_badge}</div>'
-            f'  <div class="sb-pred">{escape_html(analysis)}</div>'
+            f'  <div class="sb-pred">'
+            f'    <span class="std-only">{escape_html(analysis_std)}</span>'
+            f'    <span class="adv-only">{escape_html(analysis_adv)}</span>'
+            f'  </div>'
             f'  {news_html}'
             f'</div>'
         )
@@ -5489,7 +5047,9 @@ def main():
     if not args.no_open:
         try:
             import webbrowser
-            webbrowser.open(out.as_uri())
+            # Append a timestamp so the browser can't serve a stale cached copy
+            cache_bust = f"?v={int(time.time())}"
+            webbrowser.open(out.as_uri() + cache_bust)
         except Exception as e:
             log(f"Could not open browser automatically: {e}")
 
