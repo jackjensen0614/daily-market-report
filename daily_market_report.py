@@ -1057,6 +1057,44 @@ def get_anthropic_client():
 # on purpose so it reads honestly when nothing else can be said.
 _DEFAULT_RATIONALE = "Moved with broader sector flow; no single-stock catalyst."
 
+# Number of crypto rows the AI is asked to explain. Capped so we don't burn
+# tokens on stablecoins or quiet tickers; the remaining rows render without a
+# rationale (the template hides empty .why divs cleanly).
+_CRYPTO_AI_RATIONALE_TOP_N = 10
+
+
+def _top_crypto_movers(snap: Snapshot, n: int = _CRYPTO_AI_RATIONALE_TOP_N) -> list[MoverWithNews]:
+    """Return the n crypto rows with the largest absolute 24h price change.
+
+    Independent of snap.crypto's display order (which has BTC/ETH pinned).
+    """
+    return sorted(
+        snap.crypto or [],
+        key=lambda m: abs(m.quote.change_pct),
+        reverse=True,
+    )[:n]
+
+
+def _apply_crypto_display_order(snap: Snapshot) -> None:
+    """Reorder snap.crypto for the main crypto panel.
+
+    BTC and ETH come first when present; the rest are sorted by abs(24h %
+    change) desc so the most interesting moves surface near the top and
+    stablecoins fall to the bottom. Called right before render so it covers
+    both fresh-fetch and --offline cached-snapshot paths.
+    """
+    if not snap.crypto:
+        return
+    pinned_syms = ("BTC", "ETH")
+    pinned: list[MoverWithNews] = []
+    for sym in pinned_syms:
+        match = next((m for m in snap.crypto if m.quote.symbol.upper() == sym), None)
+        if match is not None:
+            pinned.append(match)
+    others = [m for m in snap.crypto if m not in pinned]
+    others.sort(key=lambda m: abs(m.quote.change_pct), reverse=True)
+    snap.crypto = pinned + others
+
 
 def _log_missing_rationales(snap: Snapshot, briefing: dict | None) -> None:
     """Walk rendered tickers and log any with missing AI rationale.
@@ -1069,10 +1107,10 @@ def _log_missing_rationales(snap: Snapshot, briefing: dict | None) -> None:
     if "_skipped" in ai or "_error" in ai:
         return  # AI unavailable; nothing to validate.
     sources = [
-        ("gainers",     snap.gainers,     ai.get("why_gainers") or {}),
-        ("losers",      snap.losers,      ai.get("why_losers")  or {}),
-        ("most_active", snap.most_active, ai.get("why_active")  or {}),
-        ("crypto",      snap.crypto,      ai.get("why_crypto")  or {}),
+        ("gainers",     snap.gainers,            ai.get("why_gainers") or {}),
+        ("losers",      snap.losers,             ai.get("why_losers")  or {}),
+        ("most_active", snap.most_active,        ai.get("why_active")  or {}),
+        ("crypto",      _top_crypto_movers(snap),ai.get("why_crypto")  or {}),
     ]
     missing: list[str] = []
     for label, items, bucket in sources:
@@ -1130,11 +1168,14 @@ def _fill_missing_mover_rationales(ai: dict, snap: Snapshot) -> None:
     """
     if not ai or "_skipped" in ai or "_error" in ai or "_raw" in ai:
         return
+    # For crypto we only ever ask the AI about the top movers (see
+    # _top_crypto_movers + build_ai_context), so fallback also targets only
+    # that set. The other rows render without a rationale on purpose.
     sources = [
         ("why_gainers", snap.gainers, "gainer"),
         ("why_losers",  snap.losers,  "loser"),
         ("why_active",  snap.most_active, "most-active"),
-        ("why_crypto",  snap.crypto, "crypto"),
+        ("why_crypto",  _top_crypto_movers(snap), "crypto"),
     ]
     for key, items, label in sources:
         bucket = ai.get(key)
@@ -1168,7 +1209,7 @@ def build_ai_context(snap: Snapshot) -> dict:
         "top_gainers": [mw_brief(m) for m in snap.gainers[:8]],
         "top_losers": [mw_brief(m) for m in snap.losers[:8]],
         "most_active": [mw_brief(m) for m in snap.most_active[:8]],
-        "crypto_top": [mw_brief(m) for m in snap.crypto[:10]],
+        "crypto_top": [mw_brief(m) for m in _top_crypto_movers(snap)],
         "earnings_today": [
             {"sym": e.symbol_or_event, "name": e.description, "time": e.time, "extra": e.extra}
             for e in snap.earnings_today[:30]
@@ -2233,13 +2274,17 @@ def _b_global_markets(snap: Snapshot) -> str:
 def _b_crypto(snap: Snapshot) -> str:
     if not snap.crypto:
         return ""
+    # The label here says "Top 10 by Market Cap" — snap.crypto's display order
+    # has BTC/ETH pinned and the rest by move size, so re-sort locally to keep
+    # this section honest.
+    by_mcap = sorted(snap.crypto, key=lambda m: m.quote.market_cap or 0, reverse=True)
     rows = "".join(
         f'<tr><td style="font-weight:700">{escape_html(m.quote.symbol)}</td>'
         f'<td style="color:#8a92a6;font-size:11px">{escape_html(m.quote.name)}</td>'
         f'<td class="num" style="text-align:right">{fmt_usd(m.quote.price)}</td>'
         f'<td class="num" style="text-align:right">{_pct_span(m.quote.change_pct)}</td>'
         f'<td class="num" style="text-align:right;color:#8a92a6">{fmt_usd(m.quote.dollar_volume) if m.quote.dollar_volume else "—"}</td></tr>'
-        for m in snap.crypto[:10]
+        for m in by_mcap[:10]
     )
     return (
         '<div class="briefing-section crypto">'
@@ -4902,7 +4947,8 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     if not crypto_q:
         warn("No crypto data — CoinGecko may be rate-limited.", snap)
     snap.crypto = attach_crypto_news(crypto_q)
-    # sort for gainer/loser subsets
+    # sort for gainer/loser subsets (display ordering is applied later at
+    # render time, so it also covers the --offline cached-snapshot path)
     sorted_c = sorted(crypto_q, key=lambda q: q.change_pct, reverse=True)
     snap.crypto_gainers = [MoverWithNews(quote=q) for q in sorted_c[:5]]
     snap.crypto_losers = [MoverWithNews(quote=q) for q in sorted_c[-5:][::-1]]
@@ -5155,6 +5201,7 @@ def main():
     log("Backfilling scorecard history from briefing files…")
     history = backfill_scorecard_history()
 
+    _apply_crypto_display_order(snap)
     _log_missing_rationales(snap, briefing)
     log("Rendering HTML…")
     html = render_report(snap, briefing=briefing, eod=args.eod, history=history)

@@ -164,9 +164,9 @@
 <!-- ===== CRYPTO ===== -->
 <details class="section-details crypto" id="crypto-section" open>
 <summary><span class="sg-arrow">▶</span><span>Crypto</span></summary>
-<div class="panel" id="crypto-panel">
-  <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {{ crypto_top_n }}</span></h3><div class="sub"><span class="std-only">Ranked by total value · price change in the last 24 hours</span><span class="adv-only">By market cap · 24h change</span></div></div>
-  {{ crypto_rows }}
+<div class="panel collapsed" id="crypto-panel">
+  <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {{ crypto_top_n }}</span></h3><div class="panel-head-right"><div class="sub"><span class="std-only">BTC &amp; ETH first, then biggest 24h moves</span><span class="adv-only">BTC/ETH pinned · then by abs(24h Δ)</span></div><button type="button" class="crypto-toggle" data-collapsed-label="Show all {{ crypto_top_n }}" data-expanded-label="Show top 5">Show all {{ crypto_top_n }}</button></div></div>
+  <div class="crypto-rows">{{ crypto_rows }}</div>
 </div>
 {{ crypto_outlook_block }}
 </details><!-- /crypto-section -->
@@ -606,6 +606,19 @@ function doRefresh() {
   } else {
     if (statusEl) statusEl.textContent = 'Market closed';
   }
+})();
+
+(function () {
+  var panel = document.getElementById('crypto-panel');
+  if (!panel) return;
+  var btn = panel.querySelector('.crypto-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var collapsed = panel.classList.toggle('collapsed');
+    btn.textContent = collapsed
+      ? btn.getAttribute('data-collapsed-label')
+      : btn.getAttribute('data-expanded-label');
+  });
 })();
 </script>
 </body>

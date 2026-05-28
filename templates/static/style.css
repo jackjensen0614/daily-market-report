@@ -72,12 +72,22 @@ h2 {
 }
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  padding: 14px 16px; border-bottom: 1px solid var(--border); gap: 12px;
 }
 .panel-head h3 {
   margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.02em;
 }
 .panel-head .sub { color: var(--text-faint); font-size: 12px; }
+.panel-head-right { display: flex; align-items: center; gap: 12px; }
+
+#crypto-panel .crypto-toggle {
+  font: inherit; font-size: 11px; color: var(--text-dim);
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 10px; cursor: pointer;
+  white-space: nowrap;
+}
+#crypto-panel .crypto-toggle:hover { color: var(--text); border-color: var(--text-faint); }
+#crypto-panel.collapsed .crypto-rows .mover:nth-child(n+6) { display: none; }
 
 /* Mover rows */
 .mover {
