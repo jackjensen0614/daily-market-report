@@ -2483,13 +2483,12 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
             human_time = humanize_time_token(e.time) if e.time else "today"
             add(sym, "neutral", "high", "±5-15% (gap risk)",
                 f"Reporting {e.time or 'today'}{detail}.",
-                f"Earnings prints create binary gap risk — a beat typically gaps +5-15% at open while a miss or guidance cut can produce the reverse. "
-                f"Enter only with defined risk via options or tight stops. "
-                f"Monitor pre-market tape for whisper numbers and institutional flow before committing size.",
+                f"{sym} reports {human_time} — a beat typically gaps it +5-15% at the open, a miss or guidance cut the reverse. "
+                f"Size with defined risk (options or tight stops) and watch the pre-market tape.",
                 rationale_plain=f"Sharing quarterly results {human_time}{detail}.",
                 analysis_plain=(
-                    f"When a company tells investors how much it earned, the stock often jumps or drops sharply — sometimes 5-15% — depending on whether the numbers beat or missed expectations. "
-                    f"This is risky because the move happens fast. Watch carefully before placing any trade."
+                    f"{sym}'s results land {human_time}. The stock can jump or drop 5-15% fast depending on whether the numbers beat expectations — "
+                    f"risky because it happens in seconds, so watch carefully before trading."
                 ))
 
     # 2. Biggest gainer — continuation
@@ -2558,16 +2557,15 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
         vol_str = fmt_usd(q.dollar_volume) if q.dollar_volume else "high"
         mag = abs(q.change_pct)
         ret_est = f"+{mag*0.2:.1f}-{mag*0.4:.1f}%" if mag > 1 else "+1-3%"
+        moved = f"{q.change_pct:+.1f}%" if abs(q.change_pct) >= 0.1 else "little"
         add(q.symbol, bias, "medium", ret_est,
             f"Most active at {vol_str} dollar volume — elevated institutional flow.",
-            f"High-dollar-volume sessions signal institutional participation that often sustains directional moves into the next open. "
-            f"The elevated activity makes this name more sensitive to broad market direction — a weak tape will weigh on even fundamentally sound names. "
-            f"Set alerts at yesterday's high and low as breakout/breakdown triggers.",
+            f"{q.symbol} traded {vol_str} ({moved} on the session) — heavy institutional flow that tends to extend the move, "
+            f"but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
             rationale_plain=f"One of the most heavily traded stocks ({vol_str} changed hands) — big investors are paying attention.",
             analysis_plain=(
-                f"When huge amounts of money trade in a stock in one day, it usually means big institutional investors are taking positions. "
-                f"That tends to keep the stock moving the same direction the next day. "
-                f"The downside: stocks like this swing harder when the overall market has a good or bad day."
+                f"{q.symbol} saw {vol_str} change hands ({moved} on the day) — that much money usually means big investors are active, "
+                f"which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
             ))
 
     return picks
@@ -2940,9 +2938,8 @@ def _build_macro_world_text(snap: Snapshot) -> str:
                        if crude.change_pct > 0 else
                        "reflecting demand concerns, a supply glut, or easing geopolitical risk")
             sentences.append(
-                f"WTI crude oil moved sharply {crude.change_pct:+.2f}% to {fmt_usd(crude.price)}, {context}. "
-                f"A move of this magnitude in oil typically has read-through effects on energy companies, "
-                f"airlines, consumer staples, and the broader inflation narrative."
+                f"WTI crude moved sharply {crude.change_pct:+.2f}% to {fmt_usd(crude.price)}, {context} — "
+                f"a read-through for energy names, airlines, and the inflation narrative."
             )
         elif abs(crude.change_pct) > 1:
             sentences.append(f"Oil prices shifted {crude.change_pct:+.2f}% to {fmt_usd(crude.price)}.")
@@ -2965,9 +2962,8 @@ def _build_macro_world_text(snap: Snapshot) -> str:
     if tnx:
         if tnx.price > 4.5:
             sentences.append(
-                f"The 10-year Treasury yield sits at {tnx.price:.2f}% — an elevated level that continues to compress "
-                f"valuations on growth stocks, widen mortgage spreads, and squeeze bank net interest margins. "
-                f"Any Fed commentary today on the rate path will be closely watched."
+                f"The 10-year Treasury yield sits at {tnx.price:.2f}% — elevated enough to pressure growth valuations, "
+                f"mortgage spreads, and bank margins; watch any Fed commentary on the path."
             )
         elif abs(tnx.change_pct) > 2:
             dir_ = "rose" if tnx.change_pct > 0 else "fell"
@@ -2992,9 +2988,8 @@ def _build_macro_world_text(snap: Snapshot) -> str:
     )]
     if fed_evts:
         sentences.append(
-            f"The Federal Reserve is on today's calendar ({fed_evts[0].description}). "
-            f"FOMC decisions and Powell press conferences are among the highest-volatility macro events — "
-            f"watch for language on the pace of rate cuts, inflation tolerance, and any mentions of employment conditions."
+            f"The Fed is on today's calendar ({fed_evts[0].description}) — among the highest-volatility macro events; "
+            f"watch the language on rate-cut pace, inflation, and jobs."
         )
 
     # Global weakness / strength as geopolitical proxy
@@ -3004,9 +2999,7 @@ def _build_macro_world_text(snap: Snapshot) -> str:
         if weak:
             names = ", ".join(q.name.split("(")[0].strip() for q in weak[:3])
             sentences.append(
-                f"Notable weakness in global markets ({names}) may reflect risk-off sentiment, "
-                f"regional geopolitical concerns, or spillover from currency moves. "
-                f"Broad international declines often set a cautious tone for US pre-market futures."
+                f"Notable weakness abroad ({names}) is a risk-off tell that often sets a cautious tone for US futures."
             )
         elif strong:
             names = ", ".join(q.name.split("(")[0].strip() for q in strong[:2])
@@ -3054,7 +3047,7 @@ def _build_macro_world_text_plain(snap: Snapshot) -> str:
             word = "jumped" if crude.change_pct > 0 else "dropped"
             sentences.append(
                 f"Oil prices {word} sharply {abs(crude.change_pct):.2f}% to {fmt_usd(crude.price)} a barrel — {why}. "
-                f"Big oil moves affect a lot of things: energy companies, airlines, what shoppers pay for everyday goods, and how worried people are about prices going up overall."
+                f"Big oil moves ripple into energy stocks, airlines, and the prices shoppers pay."
             )
         elif abs(crude.change_pct) > 1:
             word = "rose" if crude.change_pct > 0 else "fell"
@@ -3080,8 +3073,7 @@ def _build_macro_world_text_plain(snap: Snapshot) -> str:
         if tnx.price > 4.5:
             sentences.append(
                 f"The 10-year Treasury rate (a key long-term U.S. interest rate) sits at {tnx.price:.2f}% — that's high. "
-                f"When this rate is high, fast-growing companies (especially tech) are worth less to investors, mortgages get more expensive, and banks have a harder time making money. "
-                f"Anything the Federal Reserve says today about future rates will be watched closely."
+                f"High rates make fast-growing tech worth less, push up mortgages, and squeeze banks; watch what the Fed says about the path."
             )
         elif abs(tnx.change_pct) > 2:
             dir_ = "rose" if tnx.change_pct > 0 else "fell"
@@ -3116,8 +3108,7 @@ def _build_macro_world_text_plain(snap: Snapshot) -> str:
             names = ", ".join(q.name.split("(")[0].strip() for q in weak[:3])
             sentences.append(
                 f"Stock markets in other countries had a rough day ({names}). "
-                f"That can mean investors are nervous globally, there's regional trouble, or currency moves are hurting investors. "
-                f"When other countries' markets fall hard, U.S. stocks often open lower too."
+                f"When markets abroad fall hard, U.S. stocks often open lower too."
             )
         elif strong:
             names = ", ".join(q.name.split("(")[0].strip() for q in strong[:2])
@@ -3416,14 +3407,73 @@ def render_world_news_block(snap: Snapshot, briefing: dict | None = None) -> str
     )
 
 
+def _mv_reason(m) -> str:
+    """Short 'why' clause for a mover row — trimmed news headline, else volume note."""
+    headline = m.news[0].title if getattr(m, "news", None) else None
+    if not headline:
+        return ""
+    headline = headline.strip()
+    return headline if len(headline) <= 92 else headline[:90].rstrip(" ,.;:—-") + "…"
+
+
+def _mv_rows(movers: list, limit: int) -> str:
+    rows = ""
+    for m in movers[:limit]:
+        q = m.quote
+        cls = cls_for(q.change_pct)
+        arrow = "▲" if q.change_pct >= 0 else "▼"
+        reason = _mv_reason(m)
+        reason_html = f'<span class="mv-why">{escape_html(reason)}</span>' if reason else ""
+        rows += (
+            f'<li class="mv-row">'
+            f'<span class="mv-dir {cls}">{arrow}</span>'
+            f'<span class="mv-sym">{escape_html(q.symbol)}</span>'
+            f'<span class="mv-pct {cls} num">{fmt_pct(q.change_pct)}</span>'
+            f'<span class="mv-px num">{escape_html(fmt_usd(q.price))}</span>'
+            f'{reason_html}'
+            f'</li>'
+        )
+    return rows
+
+
+def render_movers_digest(snap: Snapshot) -> str:
+    """Scannable, structured replacement for the prose 'why stocks moved' card:
+    one tight row per mover (arrow · ticker · % · price · short reason)."""
+    groups: list[str] = []
+
+    if snap.gainers:
+        groups.append(
+            '<div class="mv-group"><span class="std-only">Biggest gainers</span>'
+            '<span class="adv-only">Top gainers</span></div>'
+            f'<ul class="mv-list">{_mv_rows(snap.gainers, 3)}</ul>'
+        )
+    if snap.losers:
+        groups.append(
+            '<div class="mv-group"><span class="std-only">Biggest losers</span>'
+            '<span class="adv-only">Top losers</span></div>'
+            f'<ul class="mv-list">{_mv_rows(snap.losers, 3)}</ul>'
+        )
+    active_notable = [m for m in snap.most_active if abs(m.quote.change_pct) > 2][:2]
+    if active_notable:
+        groups.append(
+            '<div class="mv-group"><span class="std-only">Most heavily traded</span>'
+            '<span class="adv-only">Most active</span></div>'
+            f'<ul class="mv-list">{_mv_rows(active_notable, 2)}</ul>'
+        )
+
+    if not groups:
+        return ""
+    return f'<div class="mv-digest">{"".join(groups)}</div>'
+
+
 def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
     """
     Always-visible section with 3 narrative cards:
     1. Session recap (AI text if available, otherwise data-driven)
-    2. Key movers + reasoning from news headlines
+    2. Key movers — scannable structured digest (arrow · ticker · % · reason)
     3. Macro, world news & geopolitical context
     """
-    cards: list[tuple[str, str, str]] = []  # (title_pair_html, text_plain, text_adv)
+    cards: list[tuple[str, str]] = []  # (title_pair_html, body_html)
 
     # Card 1 — Session recap
     session_text       = (briefing or {}).get("session_recap")       or _build_session_text(snap)
@@ -3433,17 +3483,16 @@ def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
             "Yesterday's Market — What Happened, Explained Simply",
             "Yesterday's Session — What Happened & Why",
         )
-        cards.append((title, session_text_plain, session_text))
+        cards.append((title, prose_block_pair(session_text_plain, session_text)))
 
-    # Card 2 — Mover reasoning (always data-driven for freshness)
-    movers_text       = _build_movers_reasoning(snap)
-    movers_text_plain = _build_movers_reasoning_plain(snap) or movers_text
-    if movers_text:
+    # Card 2 — Key movers, as a scannable digest (always data-driven for freshness)
+    movers_digest = render_movers_digest(snap)
+    if movers_digest:
         title = mode_pair_text(
             "Why Certain Stocks Moved — The Stories Behind the Numbers",
             "Key Movers — Gainers, Losers & the Reasons Behind the Moves",
         )
-        cards.append((title, movers_text_plain, movers_text))
+        cards.append((title, movers_digest))
 
     # Card 3 — Macro & world news
     macro_text       = _build_macro_world_text(snap)
@@ -3453,14 +3502,13 @@ def render_analysis_block(snap: Snapshot, briefing: dict | None = None) -> str:
             "World Events That Are Affecting the Market",
             "Macro & Global Context — World Events Affecting Markets",
         )
-        cards.append((title, macro_text_plain, macro_text))
+        cards.append((title, prose_block_pair(macro_text_plain, macro_text)))
 
     if not cards:
         return ""
 
     html = '<h2 id="analysis"><span class="std-only">What\'s Happening in the Market</span><span class="adv-only">Market Analysis</span></h2>'
-    for title, text_plain, text_adv in cards:
-        body = prose_block_pair(text_plain, text_adv)
+    for title, body in cards:
         html += f'<div class="narr"><div class="label">{title}</div>{body}</div>'
     return html
 
@@ -4285,6 +4333,16 @@ def compute_calibration(hist: dict, window: int = 5) -> dict:
     bearish_hr, bearish_n = _hit_rate(all_entries, "bearish")
     neutral_hr, neutral_n = _hit_rate(all_entries, "neutral")
 
+    dates = sorted(d.get("date") for d in days if d.get("date"))
+    latest = dates[-1] if dates else None
+    earliest = dates[0] if dates else None
+    stale_days = None
+    if latest:
+        try:
+            stale_days = (datetime.now(ET).date() - datetime.fromisoformat(latest).date()).days
+        except Exception:
+            stale_days = None
+
     return {
         "window_days": len(days),
         "total_graded": len(all_entries),
@@ -4299,6 +4357,9 @@ def compute_calibration(hist: dict, window: int = 5) -> dict:
                      if days else None),
         "worst_day": (min(days, key=lambda d: _gpa(d.get("entries", [])) or 99).get("date")
                       if days else None),
+        "earliest_date": earliest,
+        "latest_date": latest,
+        "stale_days": stale_days,
         "last_updated": datetime.now(ET).isoformat(timespec="seconds"),
     }
 
@@ -4396,15 +4457,37 @@ def _calibration_html(cal: dict) -> str:
 
     window_d = cal.get("window_days", 0)
     cal_label = mode_pair(
-        f"How accurate we've been · last {window_d} days",
-        f"Self-Calibration · Rolling {window_d}d",
+        f"How accurate we've been · {window_d} graded session(s)",
+        f"Self-Calibration · {window_d} graded session(s)",
     )
+
+    def _human_date(dstr: str) -> str:
+        try:
+            return datetime.fromisoformat(dstr).strftime("%b %-d, %Y")
+        except Exception:
+            return dstr or ""
+
+    latest = cal.get("latest_date")
+    stale_days = cal.get("stale_days")
+    stale_html = ""
+    if latest:
+        latest_h = _human_date(latest)
+        if stale_days is not None and stale_days > 5:
+            stale_html = (
+                '<span class="cal-stale">'
+                + mode_pair(f"latest graded {latest_h} · {stale_days} days ago",
+                            f"as of {latest_h} · {stale_days}d stale")
+                + '</span>'
+            )
+        else:
+            stale_html = f'<span class="cal-asof">{mode_pair("through " + latest_h, "as of " + latest_h)}</span>'
+
     bull_label = mode_pair("How often we were right when we said \"up\"", "Bullish hit-rate")
     bear_label = mode_pair("How often we were right when we said \"down\"", "Bearish hit-rate")
     neut_label = mode_pair("How often \"watch\" stocks actually moved", "Neutral hit-rate")
     return (
         '<div class="sc-calibration">'
-        f'<div class="cal-label">{cal_label}</div>'
+        f'<div class="cal-head"><span class="cal-label">{cal_label}</span>{stale_html}</div>'
         '<div class="cal-grid">'
         f'<div class="cal-tile"><div class="cal-key">GPA</div>'
         f'<div class="cal-val gpa-{gpa_l}">{gpa_str}</div>'
@@ -4424,7 +4507,10 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None,
     """Multi-day scorecard with self-calibration panel + today's predictions."""
     history = history if history is not None else load_scorecard_history()
     days = sorted(history.get("days", []), key=lambda d: d.get("date",""), reverse=True)
-    cal = compute_calibration(history, window=5)
+    # Calibrate over the full saved history so the calibration strip and the
+    # header ("N graded · N sessions") always agree instead of mixing a 5-day
+    # window with the full session count.
+    cal = compute_calibration(history, window=len(days) or 5)
 
     # ── Today's predictions (forward-looking) ─────────────────────────────
     if eod:
@@ -4454,7 +4540,7 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None,
         )
 
     # ── Calibration + per-day history ─────────────────────────────────────
-    history_title = mode_pair("How our past picks did", "Graded Calls — Recent Sessions")
+    history_title = mode_pair("How our past picks did", "Graded Calls — Track Record")
     if days:
         # Most recent day expanded by default; older days collapsed.
         day_blocks = "".join(

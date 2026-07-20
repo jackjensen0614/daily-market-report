@@ -1241,6 +1241,50 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
 
+/* — Key-movers digest: scannable structured rows (replaces prose wall) — */
+.mv-digest { margin-top: 4px; }
+.mv-group {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--text-faint); margin: 15px 0 7px;
+}
+.mv-group:first-child { margin-top: 2px; }
+.mv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.mv-row {
+  display: grid; grid-template-columns: 15px 60px 70px 74px 1fr;
+  align-items: baseline; gap: 11px; padding: 7px 10px;
+  border-radius: 8px; transition: background .12s ease;
+}
+.mv-row:hover { background: rgba(255,255,255,.022); }
+.mv-dir { font-size: 11px; line-height: 1; text-align: center; }
+.mv-dir.up { color: var(--up); } .mv-dir.down { color: var(--down); } .mv-dir.flat { color: var(--text-faint); }
+.mv-sym { font-weight: 700; letter-spacing: .02em; color: var(--text); }
+.mv-pct { font-weight: 700; text-align: right; }
+.mv-pct.up { color: var(--up); } .mv-pct.down { color: var(--down); } .mv-pct.flat { color: var(--text-dim); }
+.mv-px { color: var(--text-faint); font-size: 12.5px; text-align: right; }
+.mv-why { color: var(--text-dim); font-size: 12.5px; line-height: 1.45; min-width: 0; }
+@media (max-width: 620px) {
+  .mv-row { grid-template-columns: 15px 54px 64px 1fr; row-gap: 2px; }
+  .mv-px  { display: none; }
+  .mv-why { grid-column: 2 / -1; }
+}
+
+/* — Scorecard calibration head: label + recency/staleness note — */
+.cal-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.cal-head .cal-label { margin-bottom: 0; }
+.cal-asof {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+  color: var(--text-faint); white-space: nowrap;
+}
+.cal-stale {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .03em;
+  color: var(--yellow); white-space: nowrap;
+  padding: 2px 9px; border-radius: 999px;
+  background: rgba(245,181,68,.12); border: 1px solid rgba(245,181,68,.28);
+}
+
 /* — Narrow screens — */
 @media (max-width: 720px) {
   .wrap { padding: 20px 16px 72px; }
