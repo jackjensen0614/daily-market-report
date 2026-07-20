@@ -2323,7 +2323,12 @@ def _b_setup(snap: Snapshot) -> str:
     )
 
 
-def _b_risks(snap: Snapshot) -> str:
+def _data_risk_items(snap: Snapshot) -> tuple[list[str], list[str]]:
+    """Data-driven risk notes → (advanced, plain) lists, capped at 4 each.
+
+    Shared by the Predictions outlook (primary home) and the legacy briefing
+    wrapper, so the risk logic lives in one place.
+    """
     risks_adv:   list[str] = []
     risks_plain: list[str] = []
     big_names = {"AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA", "JPM", "BAC", "NFLX"}
@@ -2380,8 +2385,13 @@ def _b_risks(snap: Snapshot) -> str:
         risks_adv.append("No major elevated risk signals detected in today's data.")
         risks_plain.append("Nothing scary stands out in today's data — looks like a normal trading day.")
 
-    lis_adv = "".join(f"<li>{escape_html(r)}</li>" for r in risks_adv[:4])
-    lis_std = "".join(f"<li>{escape_html(r)}</li>" for r in risks_plain[:4])
+    return risks_adv[:4], risks_plain[:4]
+
+
+def _b_risks(snap: Snapshot) -> str:
+    risks_adv, risks_plain = _data_risk_items(snap)
+    lis_adv = "".join(f"<li>{escape_html(r)}</li>" for r in risks_adv)
+    lis_std = "".join(f"<li>{escape_html(r)}</li>" for r in risks_plain)
     return (
         '<div class="briefing-section risk">'
         '<div class="bs-label"><span class="std-only">What could cause problems today</span><span class="adv-only">Risk Notes</span></div>'
@@ -3534,6 +3544,13 @@ def render_outlook_block(snap: Snapshot, briefing: dict | None = None) -> str:
     risk_text       = _to_text(risk_items)
     risk_text_plain = _to_text(risk_items_plain) or risk_text
 
+    # No AI risk notes (the live/data path) → build them from the snapshot so
+    # risks live here with the outlook rather than in the summary card.
+    if not risk_text and snap:
+        r_adv, r_plain = _data_risk_items(snap)
+        risk_text       = "\n\n".join(r_adv)
+        risk_text_plain = "\n\n".join(r_plain)
+
     html = ""
     if outlook_text:
         label = mode_pair(
@@ -3756,10 +3773,10 @@ def render_briefing_block(briefing: dict | None, snap: Snapshot | None = None,
         detailed_html = session_html + crypto_recap_html + global_html + setup_html + watch_html + crypto_out_html + risk_html
     else:
         source = "Live Data"
-        detailed_html = (
-            _b_us_markets(snap) + _b_global_markets(snap) +
-            _b_crypto(snap) + _b_setup(snap) + _b_risks(snap)
-        )
+        # US markets, global, crypto, the earnings calendar and risks each have
+        # their own dedicated section (or moved to Predictions), so the summary
+        # card no longer repeats them — it leads with the analysis narrative.
+        detailed_html = ""
 
     # Wrap the analysis block (if any) so it lives inside the briefing card.
     # We pull it out of the inner <h2> shell and just include the .narr cards.
@@ -3967,7 +3984,8 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
-        scorecard_block=render_scorecard(snap, briefing, eod=eod, history=history),
+        today_picks_block=render_today_picks(snap, briefing, eod=eod),
+        track_record_block=render_track_record(history),
         earnings_reactions_block=render_earnings_reactions(snap),
         gainers_rows=render_movers_block(snap.gainers, why_g, "No gainer data."),
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
@@ -4502,16 +4520,13 @@ def _calibration_html(cal: dict) -> str:
     )
 
 
-def render_scorecard(snap: Snapshot, briefing: dict | None = None,
-                     eod: bool = False, history: dict | None = None) -> str:
-    """Multi-day scorecard with self-calibration panel + today's predictions."""
-    history = history if history is not None else load_scorecard_history()
-    days = sorted(history.get("days", []), key=lambda d: d.get("date",""), reverse=True)
-    # Calibrate over the full saved history so the calibration strip and the
-    # header ("N graded · N sessions") always agree instead of mixing a 5-day
-    # window with the full session count.
-    cal = compute_calibration(history, window=len(days) or 5)
+def render_today_picks(snap: Snapshot, briefing: dict | None = None,
+                       eod: bool = False) -> str:
+    """Forward-looking 'Today's Picks' block for the Predictions section.
 
+    The backward-looking graded history now lives in render_track_record, so the
+    two concerns are no longer bundled in one collapsible.
+    """
     # ── Today's predictions (forward-looking) ─────────────────────────────
     if eod:
         eod_title = mode_pair("The market is closed for today", "End-of-Day · Session Closed")
@@ -4539,87 +4554,53 @@ def render_scorecard(snap: Snapshot, briefing: dict | None = None,
             f'<div class="sc-picks-wrap">{picks_html}</div>'
         )
 
-    # ── Calibration + per-day history ─────────────────────────────────────
-    history_title = mode_pair("How our past picks did", "Graded Calls — Track Record")
-    if days:
-        # Most recent day expanded by default; older days collapsed.
-        day_blocks = "".join(
-            _day_section_html(d, open_default=(i == 0))
-            for i, d in enumerate(days[:10])
-        )
-        history_sub = mode_pair(
-            f"{len(days)} day(s) saved · click any day to see details",
-            f"{len(days)} day(s) of history · expandable",
-        )
-        history_section = (
-            '<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            f'<span class="sc-section-title">{history_title}</span>'
-            f'<span class="sc-section-sub">{history_sub}</span>'
-            '</div>'
-            f'{_calibration_html(cal)}'
-            f'<div class="sc-day-stack">{day_blocks}</div>'
-        )
-    else:
-        empty_sub = mode_pair(
-            "We'll start grading picks after the first full trading day",
-            "Populates after the first full trading day with briefing data",
-        )
-        history_section = (
-            '<div class="sc-section-head" style="border-top:1px solid var(--border)">'
-            f'<span class="sc-section-title">{history_title}</span>'
-            f'<span class="sc-section-sub" style="color:var(--text-faint)">{empty_sub}</span>'
-            '</div>'
-        )
+    return f'<div class="scorecard-wrap" id="today-picks">{picks_section}</div>'
 
-    # ── Summary badge (collapsed-state header) ────────────────────────────
-    if days:
-        gpa = cal.get("rolling_gpa")
-        gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
-        gpa_l = cal.get("rolling_letter") or "—"
-        graded_n = cal.get("total_graded", 0)
-        sessions_n = len(days)
-        gpa_pill = mode_pair(
-            f"Overall grade: {gpa_l} ({gpa_str} out of 4)",
-            f"GPA {gpa_str} · {gpa_l}",
-        )
-        meta_text = mode_pair(
-            f"{graded_n} picks graded across {sessions_n} day(s)",
-            f"{graded_n} graded · {sessions_n} session(s)",
-        )
-        stats_html = (
-            '<span class="sc-summary-stats">'
-            f'<span class="gpa-pill gpa-{gpa_l}">{gpa_pill}</span>'
-            f'<span style="color:var(--text-faint)">{meta_text}</span>'
-            '</span>'
-        )
-    else:
-        n_picks = 0
-        if not eod:
-            ai = briefing or snap.ai or {}
-            n_picks = len(ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or [])
-        empty_meta = mode_pair(
-            f"{n_picks} picks · we haven't graded any yet",
-            f"{n_picks} picks · no prior grades yet",
-        )
-        stats_html = (
-            f'<span class="sc-summary-stats">'
-            f'<span style="color:var(--text-faint)">{empty_meta}</span>'
-            f'</span>'
-        )
 
-    title_html = mode_pair("Our Track Record", "Scorecard")
+def render_track_record(history: dict | None = None) -> str:
+    """Backward-looking graded track record as its own section (collapsed by
+    default — it's a retrospective, and currently a fixed backtest). Returns ''
+    when nothing has been graded yet so the section is simply omitted."""
+    history = history if history is not None else load_scorecard_history()
+    days = sorted(history.get("days", []), key=lambda d: d.get("date", ""), reverse=True)
+    if not days:
+        return ""
+    # Calibrate over the full saved history so the calibration strip and the
+    # header ("N graded · N sessions") always agree.
+    cal = compute_calibration(history, window=len(days) or 5)
+
+    day_blocks = "".join(
+        _day_section_html(d, open_default=(i == 0))
+        for i, d in enumerate(days[:10])
+    )
+
+    gpa = cal.get("rolling_gpa")
+    gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
+    gpa_l = cal.get("rolling_letter") or "—"
+    graded_n = cal.get("total_graded", 0)
+    sessions_n = len(days)
+    gpa_pill = mode_pair(
+        f"Grade: {gpa_l} ({gpa_str} out of 4)",
+        f"GPA {gpa_str} · {gpa_l}",
+    )
+    meta_text = mode_pair(
+        f"{graded_n} picks graded · {sessions_n} day(s)",
+        f"{graded_n} graded · {sessions_n} session(s)",
+    )
+    title = mode_pair("How Our Past Picks Did", "Track Record")
     return (
-        '<details class="scorecard-details" id="scorecard" open>'
+        '<details class="section-details" id="scorecard">'
         '<summary>'
-        '<span class="sc-summary-left">'
-        '<span class="sc-summary-arrow">▶</span>'
-        f'<span class="sc-summary-title">{title_html}</span>'
+        '<span class="sg-arrow">▶</span>'
+        f'<span>{title}</span>'
+        '<span class="tr-stats">'
+        f'<span class="gpa-pill gpa-{gpa_l}">{gpa_pill}</span>'
+        f'<span class="tr-meta">{meta_text}</span>'
         '</span>'
-        f'{stats_html}'
         '</summary>'
-        '<div class="scorecard-body">'
-        f'{picks_section}'
-        f'{history_section}'
+        '<div class="scorecard-wrap">'
+        f'{_calibration_html(cal)}'
+        f'<div class="sc-day-stack">{day_blocks}</div>'
         '</div>'
         '</details>'
     )

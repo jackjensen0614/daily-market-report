@@ -1268,6 +1268,15 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
   .mv-why { grid-column: 2 / -1; }
 }
 
+/* — Track Record section summary: stats pushed right, not uppercased — */
+details.section-details#scorecard > summary { flex-wrap: wrap; }
+.tr-stats {
+  margin-left: auto; display: inline-flex; align-items: baseline; gap: 8px;
+  text-transform: none; letter-spacing: normal;
+}
+.tr-meta { color: var(--text-faint); font-size: 11px; font-weight: 500; }
+#today-picks { margin-bottom: 8px; }
+
 /* — Scorecard calibration head: label + recency/staleness note — */
 .cal-head {
   display: flex; align-items: baseline; justify-content: space-between;

@@ -116,12 +116,11 @@
 
 {{ briefing_block }}
 
-<!-- ===== PREDICTIONS ===== -->
+<!-- ===== PREDICTIONS (forward-looking: picks + outlook + risks) ===== -->
 <details class="section-details setup" id="predictions" open>
 <summary><span class="sg-arrow">▶</span><span><span class="std-only">Today's Picks</span><span class="adv-only">Predictions</span> · {{ today_human }}</span></summary>
+{{ today_picks_block }}
 {{ outlook_block }}
-{{ scorecard_block }}
-{{ risk_block }}
 </details><!-- /predictions -->
 
 <!-- ===== US MARKETS ===== -->
@@ -176,6 +175,9 @@
 </div>
 {{ crypto_outlook_block }}
 </details><!-- /crypto-section -->
+
+<!-- ===== TRACK RECORD (backward-looking graded history; collapsed) ===== -->
+{{ track_record_block }}
 
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
