@@ -2592,6 +2592,53 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
     return picks
 
 
+def _session_phase(now: "datetime | None" = None) -> str:
+    """Current US equity-market phase in ET: 'premarket' | 'open' | 'afterhours' | 'closed'.
+
+    The report is generated on a 6 AM schedule *and* re-run every 5 minutes during
+    trading hours (see the GitHub Action), so any wording must match the live clock
+    rather than assume it is always pre-open.
+    """
+    now = now or datetime.now(ET)
+    if now.weekday() >= 5:          # Sat/Sun
+        return "closed"
+    mins = now.hour * 60 + now.minute
+    if mins < 4 * 60:              # 12:00–4:00 AM
+        return "closed"
+    if mins < 9 * 60 + 30:        # 4:00–9:30 AM
+        return "premarket"
+    if mins <= 16 * 60:           # 9:30 AM–4:00 PM
+        return "open"
+    if mins <= 20 * 60:           # 4:00–8:00 PM
+        return "afterhours"
+    return "closed"
+
+
+def _futures_lead(pct: float, plain: bool, phase: "str | None" = None) -> str:
+    """One honest sentence about the S&P futures read, framed to the current session.
+
+    Futures trade nearly around the clock, so the same number is legitimate whether
+    the cash market is pre-open, live, or closed — only the framing changes.
+    """
+    phase = phase or _session_phase()
+    pcts = f"{pct:+.2f}%"
+    if plain:
+        word = "higher" if pct > 0.1 else ("lower" if pct < -0.1 else "about even")
+        return {
+            "premarket":  f"Before the U.S. market opens, early bets on the S&P 500 are pointing {word} ({pcts}).",
+            "open":       f"With the market open, S&P 500 futures are pointing {word} ({pcts}).",
+            "afterhours": f"After today's close, S&P 500 futures are pointing {word} ({pcts}) for the next session.",
+            "closed":     f"Heading into the next session, S&P 500 futures are pointing {word} ({pcts}).",
+        }[phase]
+    word = "higher" if pct > 0.1 else ("lower" if pct < -0.1 else "flat")
+    return {
+        "premarket":  f"S&P 500 futures point {word} pre-market ({pcts})",
+        "open":        f"S&P 500 futures are pointing {word} intraday ({pcts})",
+        "afterhours": f"S&P 500 futures point {word} after the close ({pcts})",
+        "closed":     f"S&P 500 futures point {word} into the next session ({pcts})",
+    }[phase]
+
+
 def _b_coming_day(snap: Snapshot) -> str:
     """Brief synopsis of what to watch in the coming trading session."""
     adv_lines:   list[str] = []
@@ -2599,11 +2646,9 @@ def _b_coming_day(snap: Snapshot) -> str:
 
     sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name or "Fut" in q.name), None)
     if sp_fut:
-        dir_ = "pointing higher" if sp_fut.change_pct > 0.1 else ("pointing lower" if sp_fut.change_pct < -0.1 else "flat")
-        adv_lines.append(f"S&P futures are {dir_} pre-market ({sp_fut.change_pct:+.2f}%), setting the early directional bias.")
-        plain_word = "higher" if sp_fut.change_pct > 0.1 else ("lower" if sp_fut.change_pct < -0.1 else "about even")
+        adv_lines.append(f"{_futures_lead(sp_fut.change_pct, plain=False)}, setting the early directional bias.")
         plain_lines.append(
-            f"Before the U.S. stock market opens, early bets on the S&P 500 are pointing {plain_word} ({sp_fut.change_pct:+.2f}%). That gives an early hint at how the day might start."
+            f"{_futures_lead(sp_fut.change_pct, plain=True)} That gives an early hint at how the day might go."
         )
 
     if snap.earnings_today:
@@ -2746,8 +2791,10 @@ def _build_session_text_plain(snap: Snapshot) -> str:
             mood = "Investors are playing it safe — buying boring, steady companies that pay reliable dividends."
         else:
             mood = "Specific company news is driving things, rather than a big shift in mood."
+        lead_move = (f"led with a {leader.pct_1d:.2f}% gain" if leader.pct_1d >= 0
+                     else f"held up best but still fell {abs(leader.pct_1d):.2f}%")
         sentences.append(
-            f"The strongest part of the economy was {leader.name} (up {abs(leader.pct_1d):.2f}%), "
+            f"The strongest part of the economy was {leader.name} — it {lead_move} — "
             f"while {lagger.name} stocks did the worst ({lagger.pct_1d:+.2f}%). {mood}"
         )
 
@@ -3124,12 +3171,11 @@ def _build_outlook_text(snap: Snapshot) -> str:
 
     sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name), None)
     if sp_fut:
-        dir_  = "higher" if sp_fut.change_pct > 0.1 else ("lower" if sp_fut.change_pct < -0.1 else "flat")
-        conf  = ("signaling early buying interest from institutional participants"
+        conf  = ("signaling buying interest from institutional participants"
                  if sp_fut.change_pct > 0.4 else
-                 "suggesting caution ahead of the open" if sp_fut.change_pct < -0.4 else
-                 "offering no clear directional bias — watch the first 30 minutes for tone-setting")
-        parts.append(f"S&P 500 futures point {dir_} pre-market ({sp_fut.change_pct:+.2f}%), {conf}.")
+                 "suggesting caution" if sp_fut.change_pct < -0.4 else
+                 "offering no clear directional bias")
+        parts.append(f"{_futures_lead(sp_fut.change_pct, plain=False)}, {conf}.")
 
     if snap.earnings_today:
         mega = [e for e in snap.earnings_today
@@ -3157,9 +3203,10 @@ def _build_outlook_text(snap: Snapshot) -> str:
         leader = snap.sectors[0]
         lagger = snap.sectors[-1]
         if abs(leader.pct_1d) > 0.8:
+            cont = (", and weekly momentum backs continuation" if leader.pct_1w >= 0
+                    else ", so its leadership is unconfirmed")
             parts.append(
-                f"Sector momentum favors {leader.name} to continue leading "
-                f"(1D: {fmt_pct(leader.pct_1d)}, 1W: {fmt_pct(leader.pct_1w)}). "
+                f"{leader.name} led the tape (1D: {fmt_pct(leader.pct_1d)}, 1W: {fmt_pct(leader.pct_1w)}){cont}. "
                 f"Watch for potential rotation out of {lagger.name} ({fmt_pct(lagger.pct_1d)}) "
                 f"if risk sentiment improves intraday."
             )
@@ -3195,16 +3242,16 @@ def _build_outlook_text_plain(snap: Snapshot) -> str:
 
     sp_fut = next((q for q in snap.premarket_us if "S&P" in q.name), None)
     if sp_fut:
-        word = "higher" if sp_fut.change_pct > 0.1 else ("lower" if sp_fut.change_pct < -0.1 else "about even")
+        phase = _session_phase()
         if sp_fut.change_pct > 0.4:
-            why = "Big investors look like they're buying early — a positive sign for the open."
+            why = ("Big investors look like they're buying — a positive sign." if phase != "premarket"
+                   else "Big investors look like they're buying early — a positive sign for the open.")
         elif sp_fut.change_pct < -0.4:
-            why = "Traders look cautious before the market opens."
+            why = "Traders are leaning cautious right now."
         else:
-            why = "There's no clear direction yet — watch how the first 30 minutes go."
-        parts.append(
-            f"Before the U.S. market opens, early bets on the S&P 500 are pointing {word} ({sp_fut.change_pct:+.2f}%). {why}"
-        )
+            why = ("There's no clear direction yet — watch how the next hour trades." if phase == "open"
+                   else "There's no clear direction yet — watch how the first 30 minutes go.")
+        parts.append(f"{_futures_lead(sp_fut.change_pct, plain=True, phase=phase)} {why}")
 
     if snap.earnings_today:
         mega = [e for e in snap.earnings_today
@@ -3230,10 +3277,14 @@ def _build_outlook_text_plain(snap: Snapshot) -> str:
         leader = snap.sectors[0]
         lagger = snap.sectors[-1]
         if abs(leader.pct_1d) > 0.8:
+            d1 = f"up {leader.pct_1d:.2f}%" if leader.pct_1d >= 0 else f"down {abs(leader.pct_1d):.2f}%"
+            w1 = f"up {leader.pct_1w:.2f}%" if leader.pct_1w >= 0 else f"down {abs(leader.pct_1w):.2f}%"
+            trend = ("and has momentum on its side" if leader.pct_1w >= 0
+                     else "— but that early lead isn't confirmed yet")
             parts.append(
                 f"The {leader.name} part of the economy was the strongest yesterday "
-                f"(up {abs(leader.pct_1d):.2f}% in one day, {abs(leader.pct_1w):.2f}% over the week) and will likely keep leading. "
-                f"Meanwhile, {lagger.name} stocks lagged ({lagger.pct_1d:+.2f}%) — money may flow back there if traders feel braver later."
+                f"({d1} on the day, {w1} over the week) {trend}. "
+                f"Meanwhile, {lagger.name} stocks lagged ({lagger.pct_1d:+.2f}%) — money may rotate back there if traders feel braver later."
             )
 
     # Crypto read-through
@@ -3489,13 +3540,18 @@ def _what_to_watch_html(snap: Snapshot | None, briefing: dict | None) -> str:
             items_adv.append(f"Earnings on deck: {', '.join(names)}")
             items_plain.append(f"Quarterly results out today: {', '.join(names)}")
 
-    # 2) Biggest pre-market mover (futures or single-name pre-market)
+    # 2) Biggest futures mover (labelled to the current session phase)
     if snap and snap.premarket_us:
         biggest = max(snap.premarket_us, key=lambda q: abs(q.change_pct or 0.0), default=None)
         if biggest and abs(biggest.change_pct or 0.0) >= 0.05:
             sign = "+" if (biggest.change_pct or 0.0) >= 0 else ""
-            items_adv.append(f"Pre-market: {biggest.name} {sign}{biggest.change_pct:.2f}%")
-            items_plain.append(f"Before the market opens: {biggest.name} is {sign}{biggest.change_pct:.2f}%")
+            phase = _session_phase()
+            adv_lbl   = {"premarket": "Pre-market", "open": "Futures",
+                         "afterhours": "After-hours", "closed": "Overnight"}[phase]
+            plain_lbl = {"premarket": "Before the market opens", "open": "Right now, futures",
+                         "afterhours": "After today's close", "closed": "Overnight"}[phase]
+            items_adv.append(f"{adv_lbl}: {biggest.name} {sign}{biggest.change_pct:.2f}%")
+            items_plain.append(f"{plain_lbl}: {biggest.name} is {sign}{biggest.change_pct:.2f}%")
 
     # 3) Risk note from AI briefing, or first economic event of the day
     if briefing:
