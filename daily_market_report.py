@@ -2185,32 +2185,13 @@ def _b_exec_summary(snap: Snapshot) -> list[str]:
 
 
 def _b_us_markets(snap: Snapshot) -> str:
+    # The at-a-glance Market Snapshot hero (top of page) now carries the full
+    # index/macro grid, so the briefing recap keeps only the compact one-line
+    # chips for inline context and goes straight to the movers.
     index_chips_html = ""
     if snap.indices:
         chips = "".join(_index_chip(q.name.split("(")[0].strip(), q.change_pct, q.price) for q in snap.indices)
         index_chips_html = f'<div class="b-index-row">{chips}</div>'
-    idx_rows = "".join(
-        f'<tr><td style="font-weight:600">{escape_html(q.name)}</td>'
-        f'<td class="num" style="text-align:right">{fmt_num(q.price)}</td>'
-        f'<td class="num" style="text-align:right">{("+" if q.change >= 0 else "")}{q.change:,.2f}</td>'
-        f'<td class="num" style="text-align:right">{_pct_span(q.change_pct)}</td></tr>'
-        for q in snap.indices
-    )
-    macro_rows = "".join(
-        f'<tr><td style="color:#8a92a6">{escape_html(q.name)}</td>'
-        f'<td class="num" style="text-align:right;color:#8a92a6">{fmt_num(q.price)}</td>'
-        f'<td class="num" style="text-align:right;color:#8a92a6">{("+" if q.change >= 0 else "")}{q.change:,.2f}</td>'
-        f'<td class="num" style="text-align:right">{_pct_span(q.change_pct)}</td></tr>'
-        for q in snap.macro
-    )
-    idx_table = (
-        '<table><thead><tr>'
-        '<th style="text-align:left">Index / Macro</th>'
-        '<th style="text-align:right">Price</th>'
-        '<th style="text-align:right">Change</th>'
-        '<th style="text-align:right">%</th>'
-        f'</tr></thead><tbody>{idx_rows}{macro_rows}</tbody></table>'
-    )
 
     def mover_rows(movers: list) -> str:
         out = ""
@@ -2243,7 +2224,7 @@ def _b_us_markets(snap: Snapshot) -> str:
     return (
         '<div class="briefing-section">'
         '<div class="bs-label"><span class="std-only">How U.S. stocks did yesterday</span><span class="adv-only">US Markets · Yesterday\'s Session</span></div>'
-        f'{index_chips_html}{idx_table}{movers_2col}'
+        f'{index_chips_html}{movers_2col}'
         '</div>'
     )
 

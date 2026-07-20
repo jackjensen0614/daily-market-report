@@ -103,6 +103,17 @@
   </div>
 </div>
 
+<!-- ===== MARKET SNAPSHOT (hero — at-a-glance numbers) ===== -->
+<div class="market-snapshot" id="market-snapshot">
+  <div class="snapshot-head">
+    <span class="std-only">Market Snapshot</span><span class="adv-only">Indices &amp; Macro</span>
+    <span class="sh-sub"><span class="std-only">Where things stand · {{ prior_date_human }} close</span><span class="adv-only">Prior session · {{ prior_date_human }}</span></span>
+  </div>
+  <div class="index-grid">
+    {{ index_tiles }}
+  </div>
+</div>
+
 {{ briefing_block }}
 
 <!-- ===== PREDICTIONS ===== -->
@@ -120,11 +131,6 @@
 {{ watchlist_block }}
 
 {{ premarket_block }}
-
-<h2 id="indices"><span class="std-only">How the Whole Market Is Doing</span><span class="adv-only">Indices &amp; Macro</span></h2>
-<div class="index-grid">
-  {{ index_tiles }}
-</div>
 
 {{ sector_heatmap_block }}
 

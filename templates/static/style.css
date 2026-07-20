@@ -1,19 +1,36 @@
 :root {
-  --bg: #0b0d12;
-  --bg-panel: #12151d;
-  --bg-panel-2: #181c26;
-  --border: #232836;
-  --text: #e6e8ef;
-  --text-dim: #8a92a6;
-  --text-faint: #5a6278;
-  --accent: #6ee7b7;
-  --green: #22c55e;
-  --green-dim: #0f3a22;
-  --red: #ef4444;
-  --red-dim: #3a1414;
-  --yellow: #f59e0b;
-  --blue: #60a5fa;
-  --purple: #a78bfa;
+  /* Surfaces — deep, layered dark canvas with a hint of blue */
+  --bg: #090b11;
+  --bg-1: #0d1019;
+  --bg-panel: #0f131d;
+  --bg-panel-2: #161b28;
+  --bg-elev: #1b2233;
+  --border: #232a3b;
+  --border-strong: #333c54;
+  /* Ink */
+  --text: #eef1f8;
+  --text-dim: #9aa3ba;
+  --text-faint: #636d87;
+  /* Brand + semantic */
+  --accent: #5fe6cf;
+  --accent-2: #7ca8ff;
+  --green: #33d182;
+  --green-dim: #0f3a24;
+  --red: #f26d72;
+  --red-dim: #3a1618;
+  --yellow: #f5b544;
+  --blue: #7ca8ff;
+  --purple: #b39cff;
+  --up: #33d182;
+  --down: #f26d72;
+  /* Shape + depth */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px -16px rgba(0,0,0,.75);
+  --shadow-lg: 0 16px 48px -18px rgba(0,0,0,.8);
+  --tint-up: rgba(51,209,130,.09);
+  --tint-down: rgba(242,109,114,.09);
 }
 * { box-sizing: border-box; }
 html, body {
@@ -1048,4 +1065,185 @@ body.mode-advanced .std-only { display: none !important; }
 .mode-toggle button:hover { color: var(--text); }
 .mode-toggle button.active {
   background: var(--bg-panel-2); color: var(--text); font-weight: 600;
+}
+
+/* ============================================================================
+   REDESIGN 2026 — cohesive visual overhaul (additive override layer).
+   Loads after every base rule above, so these win by cascade order without
+   removing any existing class hook. Aesthetic: deep terminal canvas, crisp
+   hairline cards with soft elevation, teal-mint accent, confident numerics,
+   clear section rhythm, scannable-first hierarchy.
+   ========================================================================= */
+
+/* — Canvas & typography — */
+html, body {
+  background:
+    radial-gradient(1200px 600px at 78% -8%, rgba(124,168,255,.06), transparent 60%),
+    radial-gradient(900px 500px at -6% 4%, rgba(95,230,207,.05), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.003em;
+}
+::selection { background: rgba(95,230,207,.28); color: #fff; }
+.num, .value, .delta, .pct, .px, td, th { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+.wrap { max-width: 1360px; padding: 26px 34px 88px; }
+a { color: var(--accent-2); text-underline-offset: 2px; }
+a:hover { color: #a9c5ff; }
+
+/* — Header — */
+header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 22px; }
+h1 { font-size: 24px; letter-spacing: -0.02em; }
+h1 .subtle { font-size: 14px; }
+.meta { color: var(--text-faint); }
+
+/* — Sticky nav: pill hover + accent underline — */
+.sticky-nav {
+  background: linear-gradient(180deg, rgba(11,14,20,.96), rgba(11,14,20,.86));
+  backdrop-filter: blur(10px) saturate(1.1);
+  gap: 2px; padding: 4px 0; margin-bottom: 26px;
+}
+.sticky-nav a {
+  font-size: 12px; font-weight: 600; letter-spacing: .01em;
+  padding: 9px 14px; border-radius: 8px; border-bottom: none;
+  color: var(--text-faint); position: relative;
+}
+.sticky-nav a:hover { color: var(--text); background: var(--bg-panel-2); border-bottom: none; }
+
+/* — Section headers: colored leading bar + hairline — */
+details.section-details { margin-top: 44px; }
+details.section-details > summary,
+.market-group-header {
+  font-size: 12px; letter-spacing: .12em; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+details.section-details > summary::after,
+.market-group-header::after {
+  content: ""; position: absolute; left: 0; bottom: -1px; width: 46px; height: 2px;
+  border-radius: 2px; background: var(--accent);
+}
+details.section-details.us > summary::after, .market-group-header.us::after { background: var(--blue); }
+details.section-details.global > summary::after, .market-group-header.global::after { background: var(--purple); }
+details.section-details.crypto > summary::after, .market-group-header.crypto::after { background: var(--yellow); }
+.sg-arrow { color: var(--text-faint); }
+
+/* — Elevated card primitive shared by panels/tiles/cards — */
+.panel, .narr, .sector-bars, .scorecard-wrap, .wn-item, .ticker-card,
+.ef-card, .econ-event-card, .live-ticker-section, .briefing-inline,
+details.scorecard-details > summary, details.scorecard-details > .scorecard-body {
+  box-shadow: var(--shadow);
+}
+
+/* — Market Snapshot hero — */
+.market-snapshot { margin: 0 0 26px; }
+.snapshot-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--text-faint); margin: 0 2px 12px;
+}
+.snapshot-head .sh-sub { letter-spacing: .02em; text-transform: none; font-weight: 500; color: var(--text-faint); }
+.market-snapshot .index-grid { grid-template-columns: repeat(auto-fit, minmax(184px, 1fr)); gap: 12px; }
+
+/* — Tiles: hero stat cards with directional tint & lift — */
+.tile {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.022), transparent 42%),
+    var(--bg-panel);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 15px 17px; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  position: relative; overflow: hidden;
+}
+.tile:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow-lg); }
+.tile .label { color: var(--text-faint); font-size: 11px; letter-spacing: .07em; }
+.tile .value { font-size: 25px; font-weight: 650; letter-spacing: -0.02em; margin-top: 7px; }
+.tile .delta { font-size: 13px; font-weight: 600; margin-top: 3px; }
+.tile-up   { border-left: 1px solid var(--border); background: linear-gradient(180deg, var(--tint-up), transparent 60%), var(--bg-panel); box-shadow: inset 3px 0 0 var(--up), var(--shadow); }
+.tile-down { border-left: 1px solid var(--border); background: linear-gradient(180deg, var(--tint-down), transparent 60%), var(--bg-panel); box-shadow: inset 3px 0 0 var(--down), var(--shadow); }
+.tile-flat { border-left: 1px solid var(--border); box-shadow: inset 3px 0 0 var(--border-strong), var(--shadow); }
+.tile.compact { padding: 11px 13px; }
+.tile.compact .value { font-size: 17px; }
+
+/* — Panels — */
+.panel { border-radius: var(--radius); background: var(--bg-panel); }
+.panel-head { padding: 15px 17px; background: linear-gradient(180deg, rgba(255,255,255,.015), transparent); }
+.panel-head h3 { font-size: 14px; letter-spacing: .01em; }
+.cols { gap: 20px; }
+
+/* — Mover rows: subtle hover, cleaner emphasis — */
+.mover { padding: 13px 17px; transition: background .12s ease; }
+.mover:hover { background: rgba(255,255,255,.018); }
+.mover .sym { letter-spacing: .01em; }
+.mover .right .pct { font-size: 15px; }
+.mover .why { border-left-color: var(--border-strong); color: #c7cde0; }
+
+/* — "Today's Market Summary" briefing card as the lead summary — */
+.briefing-inline { border-radius: var(--radius-lg); border-color: var(--border); }
+.briefing-inline-head {
+  padding: 15px 22px;
+  background: linear-gradient(180deg, rgba(95,230,207,.06), transparent), var(--bg-panel-2);
+}
+.bi-title { font-size: 15px; letter-spacing: .01em; }
+.exec-bar { background: linear-gradient(180deg, rgba(255,255,255,.015), transparent), var(--bg-panel); }
+.exec-bar .exec-label { color: var(--accent); }
+.exec-bar ol { padding-left: 20px; }
+.exec-bar li { font-size: 13.5px; line-height: 1.6; padding-left: 4px; }
+.exec-bar li::marker { color: var(--text-faint); font-weight: 700; }
+.briefing-section p { font-size: 13.5px; line-height: 1.7; }
+.b-watchlist, .bw-label { letter-spacing: .1em; }
+
+/* — Tables — */
+th { font-size: 10.5px; letter-spacing: .08em; color: var(--text-faint); }
+tbody tr, table tr { transition: background .12s ease; }
+table tr:hover td { background: rgba(255,255,255,.016); }
+
+/* — Sector bars & cards — */
+.sector-bars { border-radius: var(--radius); padding: 16px 20px 18px; }
+.sb-track { height: 15px; background: var(--bg-1); border: 1px solid var(--border); }
+.sb-fill { border-radius: 3px; }
+.sb-fill.up { background: linear-gradient(90deg, rgba(51,209,130,.7), var(--up)); }
+.sb-fill.down { background: linear-gradient(270deg, rgba(242,109,114,.7), var(--down)); }
+.sector-card { border-radius: var(--radius-sm); transition: transform .14s ease, border-color .14s ease; }
+.sector-card:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+.sector-card .s-1d { letter-spacing: -0.01em; }
+
+/* — Sidebar — */
+.sidebar { border-left: 1px solid var(--border); background: linear-gradient(180deg, var(--bg-1), var(--bg-panel)); }
+.sb-card { border-radius: var(--radius-sm); background: var(--bg-panel); transition: border-color .14s ease, transform .14s ease; }
+.sb-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.sb-card.up   { border-left: 1px solid var(--border); box-shadow: inset 3px 0 0 var(--up); }
+.sb-card.down { border-left: 1px solid var(--border); box-shadow: inset 3px 0 0 var(--down); }
+.sb-card.flat { border-left: 1px solid var(--border); box-shadow: inset 3px 0 0 var(--border-strong); }
+.sb-add button { color: #062018; }
+
+/* — World news, ticker cards — */
+.wn-item, .ticker-card { border-radius: var(--radius-sm); }
+.wn-item.wn-bullish { box-shadow: inset 3px 0 0 var(--up), var(--shadow); border-left-color: transparent; }
+.wn-item.wn-bearish { box-shadow: inset 3px 0 0 var(--down), var(--shadow); border-left-color: transparent; }
+.wn-headline a:hover { color: var(--accent); }
+
+/* — Live ticker banner — */
+.live-ticker-section { border-radius: var(--radius); }
+.live-ticker-label { letter-spacing: .12em; }
+
+/* — Refresh + toggles — */
+.refresh-btn { border-radius: 8px; background: var(--bg-panel-2); border-color: var(--border-strong); }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mode-toggle { border-radius: 999px; }
+
+/* — Motion & focus — */
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* — Narrow screens — */
+@media (max-width: 720px) {
+  .wrap { padding: 20px 16px 72px; }
+  h1 { font-size: 20px; }
+  .tile .value { font-size: 21px; }
 }
