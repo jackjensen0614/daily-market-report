@@ -4049,6 +4049,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
         report_card_block=render_report_card(history),
+        scorecard_trend_block=render_scorecard_trend(history),
         today_picks_block=render_today_picks(snap, briefing, eod=eod),
         track_record_block=render_track_record(history),
         earnings_reactions_block=render_earnings_reactions(snap),
@@ -4722,6 +4723,129 @@ def render_report_card(history: dict | None = None) -> str:
         f'<span class="sc-report-stats">{gpa_pill}<span class="sc-hit">{hit_txt}</span></span>'
         '</div>'
         f'<div class="grade-cards">{cards}</div>'
+        '</div>'
+    )
+
+
+def _day_gpa(entries: list[dict]) -> float | None:
+    letters = [e.get("letter_grade") for e in entries if e.get("letter_grade") in _GRADE_PTS]
+    return (sum(_GRADE_PTS[l] for l in letters) / len(letters)) if letters else None
+
+
+def _day_hit_rate(entries: list[dict]) -> tuple[float | None, int, int]:
+    """Return (hit_rate, hits, graded) across directional + neutral picks."""
+    scored = [e for e in entries if (e.get("verdict") or "").upper() in ("HIT", "MISS", "FLAT")]
+    if not scored:
+        return (None, 0, 0)
+    hits = sum(1 for e in scored if (e.get("verdict") or "").upper() == "HIT")
+    return (hits / len(scored), hits, len(scored))
+
+
+def render_scorecard_trend(history: dict | None = None, max_days: int = 20) -> str:
+    """Always-visible trend chart: per-session GPA bars + a hit-rate line.
+
+    Makes the learning loop legible over time. Omitted until there are at least
+    two graded sessions (a one-point 'trend' says nothing)."""
+    history = history if history is not None else load_scorecard_history()
+    days = sorted(history.get("days", []), key=lambda d: d.get("date", ""))
+    days = [d for d in days if d.get("entries")]
+    if len(days) < 2:
+        return ""
+    days = days[-max_days:]
+
+    n = len(days)
+    W, H = 640.0, 150.0
+    pad_l, pad_r, pad_t, pad_b = 34.0, 30.0, 14.0, 26.0
+    plot_w = W - pad_l - pad_r
+    plot_h = H - pad_t - pad_b
+    slot = plot_w / n
+    bar_w = min(30.0, slot * 0.5)
+
+    def gpa_y(g: float) -> float:
+        return pad_t + plot_h * (1 - g / 4.0)
+
+    def hr_y(r: float) -> float:
+        return pad_t + plot_h * (1 - r)
+
+    # GPA gridlines at 1/2/3/4
+    grid = []
+    for g in (1, 2, 3, 4):
+        y = gpa_y(g)
+        grid.append(f'<line class="sct-grid" x1="{pad_l:.1f}" y1="{y:.1f}" x2="{W-pad_r:.1f}" y2="{y:.1f}"/>')
+        grid.append(f'<text class="sct-axis" x="{pad_l-6:.1f}" y="{y+3:.1f}" text-anchor="end">{g}</text>')
+
+    bars, hr_pts, dots, labels = [], [], [], []
+    for i, d in enumerate(days):
+        cx = pad_l + slot * (i + 0.5)
+        entries = d.get("entries", [])
+        g = _day_gpa(entries)
+        letter = _gpa_letter(g) if g is not None else "—"
+        if g is not None:
+            y = gpa_y(g)
+            bars.append(
+                f'<rect class="sct-bar gpa-fill-{letter}" x="{cx-bar_w/2:.1f}" y="{y:.1f}" '
+                f'width="{bar_w:.1f}" height="{(pad_t+plot_h)-y:.1f}" rx="2"/>'
+            )
+        r, hits, graded = _day_hit_rate(entries)
+        if r is not None:
+            hr_pts.append((cx, hr_y(r)))
+            dots.append((cx, hr_y(r)))
+        # date label (short)
+        try:
+            lbl = datetime.fromisoformat(d["date"]).strftime("%-m/%-d")
+        except Exception:
+            lbl = (d.get("date") or "")[5:]
+        labels.append(f'<text class="sct-xlabel" x="{cx:.1f}" y="{H-8:.1f}" text-anchor="middle">{escape_html(lbl)}</text>')
+
+    hr_line = ""
+    if len(hr_pts) >= 2:
+        pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in hr_pts)
+        hr_line = f'<polyline class="sct-hr-line" points="{pts}" fill="none" vector-effect="non-scaling-stroke"/>'
+    hr_dots = "".join(f'<circle class="sct-hr-dot" cx="{x:.1f}" cy="{y:.1f}" r="2.6"/>' for x, y in dots)
+
+    svg = (
+        f'<svg class="sct-svg" viewBox="0 0 {W:.0f} {H:.0f}" width="100%" '
+        f'preserveAspectRatio="xMidYMid meet" role="img" '
+        f'aria-label="Per-session GPA and hit rate trend">'
+        + "".join(grid) + "".join(bars) + hr_line + hr_dots + "".join(labels) +
+        '</svg>'
+    )
+
+    # Summary stats
+    gpas = [g for g in (_day_gpa(d.get("entries", [])) for d in days) if g is not None]
+    avg_gpa = sum(gpas) / len(gpas) if gpas else None
+    latest_gpa = gpas[-1] if gpas else None
+    all_entries = [e for d in days for e in d.get("entries", [])]
+    ov_rate, ov_hits, ov_graded = _day_hit_rate(all_entries)
+    trend_txt = ""
+    if avg_gpa is not None and latest_gpa is not None:
+        diff = latest_gpa - avg_gpa
+        arrow = "▲" if diff > 0.1 else ("▼" if diff < -0.1 else "▬")
+        acls = "up" if diff > 0.1 else ("down" if diff < -0.1 else "flat")
+        trend_txt = f'<span class="sct-trend {acls}">{arrow} latest vs avg</span>'
+
+    avg_str = f"{avg_gpa:.2f}" if avg_gpa is not None else "—"
+    hit_str = f"{ov_rate*100:.0f}%" if ov_rate is not None else "—"
+    title = mode_pair("How we've been doing", "Accuracy Over Time")
+    sub = mode_pair(
+        f"{n} sessions · avg grade {avg_str}/4 · {hit_str} moved our way",
+        f"{n} sessions · avg GPA {avg_str} · hit rate {hit_str} ({ov_hits}/{ov_graded})",
+    )
+    legend = (
+        '<span class="sct-leg"><span class="sct-leg-bar"></span>'
+        f'{mode_pair("Daily grade (0–4)", "GPA / session")}</span>'
+        '<span class="sct-leg"><span class="sct-leg-line"></span>'
+        f'{mode_pair("% that moved our way", "Hit rate")}</span>'
+    )
+    return (
+        '<div class="sct-wrap">'
+        '<div class="sct-head">'
+        f'<span class="sct-title">{title}</span>'
+        f'<span class="sct-sub">{sub}</span>'
+        f'{trend_txt}'
+        '</div>'
+        f'<div class="sct-chart">{svg}</div>'
+        f'<div class="sct-legend">{legend}</div>'
         '</div>'
     )
 

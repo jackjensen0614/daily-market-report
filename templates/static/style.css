@@ -465,6 +465,33 @@ details.scorecard-details > .scorecard-body {
   display: inline-block; padding: 2px 10px; border-radius: 999px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
 }
+/* Scorecard trend chart (accuracy over time) */
+.sct-wrap {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px 12px; margin: 12px 0;
+}
+.sct-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.sct-title { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+.sct-sub { font-size: 12px; color: var(--text-dim); }
+.sct-trend { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+.sct-chart { width: 100%; overflow-x: auto; }
+.sct-svg { display: block; max-width: 100%; }
+.sct-grid { stroke: var(--border); stroke-width: 1; opacity: .55; }
+.sct-axis { fill: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
+.sct-xlabel { fill: var(--text-faint); font-size: 8.5px; }
+.sct-bar { opacity: .9; }
+.gpa-fill-A { fill: var(--green); }
+.gpa-fill-B { fill: var(--accent); }
+.gpa-fill-C { fill: #d9b44a; }
+.gpa-fill-D { fill: #e08b4a; }
+.gpa-fill-F { fill: var(--red); }
+.gpa-fill-— { fill: var(--text-faint); }
+.sct-hr-line { stroke: var(--accent-2); stroke-width: 2px; }
+.sct-hr-dot { fill: var(--accent-2); }
+.sct-legend { display: flex; gap: 16px; margin-top: 8px; }
+.sct-leg { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+.sct-leg-bar { width: 12px; height: 10px; border-radius: 2px; background: var(--accent); display: inline-block; }
+.sct-leg-line { width: 16px; height: 0; border-top: 2px solid var(--accent-2); display: inline-block; }
 .gpa-A { background: rgba(34,197,94,.18);  color: var(--green); }
 .gpa-B { background: rgba(110,231,183,.18); color: var(--accent); }
 .gpa-C { background: rgba(245,158,11,.18); color: var(--yellow); }
