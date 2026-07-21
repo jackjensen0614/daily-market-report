@@ -1334,8 +1334,9 @@ def generate_briefing(snap: Snapshot) -> dict | None:
     ctx = build_ai_context(snap)
     try:
         resp = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
-            max_tokens=6000,
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-8"),
+            max_tokens=16000,  # adaptive thinking spends from this budget too
+            thinking={"type": "adaptive"},
             system=BRIEFING_SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": BRIEFING_USER_PROMPT.format(data=json.dumps(ctx, indent=2))}
@@ -1380,8 +1381,9 @@ def run_ai_synthesis(snap: Snapshot) -> dict:
     ctx = build_ai_context(snap)
     try:
         resp = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
-            max_tokens=4000,
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-8"),
+            max_tokens=16000,  # adaptive thinking spends from this budget too
+            thinking={"type": "adaptive"},
             system=AI_SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": AI_USER_PROMPT.format(data=json.dumps(ctx, indent=2))}
