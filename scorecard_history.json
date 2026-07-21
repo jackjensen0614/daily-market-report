@@ -2,117 +2,117 @@
   "days": [
     {
       "date": "2026-07-21",
-      "graded_at": "2026-07-21T14:32:30-04:00",
+      "graded_at": "2026-07-21T17:40:38-04:00",
       "entries": [
         {
           "ticker": "NVS",
           "rationale": "Reporting time-pre-market (EPS est $2.20 \u00b7 Mkt cap $285.4B).",
           "bias": "neutral",
-          "actual_pct": 3.313052896456117,
+          "actual_pct": 2.8817849885997786,
           "verdict": "HIT",
-          "letter_grade": "A",
-          "grade_reason": "Watchlist call vindicated: +3.31% \u2014 high realized volatility.",
-          "grade_reason_standard": "The stock moved a lot today (+3.31%). It was a good one to watch.",
-          "grade_reason_advanced": "Watchlist call vindicated: +3.31% \u2014 high realized volatility."
+          "letter_grade": "B",
+          "grade_reason": "Notable mover: +2.88% \u2014 meaningful tape action validated the watch.",
+          "grade_reason_standard": "The stock moved a fair amount (+2.88%). Worth watching.",
+          "grade_reason_advanced": "Notable mover: +2.88% \u2014 meaningful tape action validated the watch."
         },
         {
           "ticker": "SCHW",
           "rationale": "Reporting time-pre-market (EPS est $1.53 \u00b7 Mkt cap $178.3B).",
           "bias": "neutral",
-          "actual_pct": -1.677395363122793,
+          "actual_pct": -2.516093044684189,
           "verdict": "HIT",
           "letter_grade": "B",
-          "grade_reason": "Notable mover: -1.68% \u2014 meaningful tape action validated the watch.",
-          "grade_reason_standard": "The stock moved a fair amount (-1.68%). Worth watching.",
-          "grade_reason_advanced": "Notable mover: -1.68% \u2014 meaningful tape action validated the watch."
+          "grade_reason": "Notable mover: -2.52% \u2014 meaningful tape action validated the watch.",
+          "grade_reason_standard": "The stock moved a fair amount (-2.52%). Worth watching.",
+          "grade_reason_advanced": "Notable mover: -2.52% \u2014 meaningful tape action validated the watch."
         },
         {
           "ticker": "IBKR",
           "rationale": "Reporting time-after-hours (EPS est $0.63 \u00b7 Mkt cap $155.5B).",
           "bias": "neutral",
-          "actual_pct": 3.114096146847869,
+          "actual_pct": 2.9886538554198117,
           "verdict": "HIT",
-          "letter_grade": "A",
-          "grade_reason": "Watchlist call vindicated: +3.11% \u2014 high realized volatility.",
-          "grade_reason_standard": "The stock moved a lot today (+3.11%). It was a good one to watch.",
-          "grade_reason_advanced": "Watchlist call vindicated: +3.11% \u2014 high realized volatility."
+          "letter_grade": "B",
+          "grade_reason": "Notable mover: +2.99% \u2014 meaningful tape action validated the watch.",
+          "grade_reason_standard": "The stock moved a fair amount (+2.99%). Worth watching.",
+          "grade_reason_advanced": "Notable mover: +2.99% \u2014 meaningful tape action validated the watch."
         },
         {
           "ticker": "SOXL",
           "rationale": "Led gainers at +17.1% to $160.14 yesterday.",
           "bias": "neutral",
-          "actual_pct": 15.773702372746762,
+          "actual_pct": 15.883339021501275,
           "verdict": "HIT",
           "letter_grade": "A",
-          "grade_reason": "Watchlist call vindicated: +15.77% \u2014 high realized volatility.",
-          "grade_reason_standard": "The stock moved a lot today (+15.77%). It was a good one to watch.",
-          "grade_reason_advanced": "Watchlist call vindicated: +15.77% \u2014 high realized volatility."
+          "grade_reason": "Watchlist call vindicated: +15.88% \u2014 high realized volatility.",
+          "grade_reason_standard": "The stock moved a lot today (+15.88%). It was a good one to watch.",
+          "grade_reason_advanced": "Watchlist call vindicated: +15.88% \u2014 high realized volatility."
         },
         {
           "ticker": "DHR",
           "rationale": "Led losers at -11.1% to $178.80 yesterday.",
           "bias": "neutral",
-          "actual_pct": -11.361944226626134,
+          "actual_pct": -10.989013990574316,
           "verdict": "HIT",
           "letter_grade": "A",
-          "grade_reason": "Watchlist call vindicated: -11.36% \u2014 high realized volatility.",
-          "grade_reason_standard": "The stock moved a lot today (-11.36%). It was a good one to watch.",
-          "grade_reason_advanced": "Watchlist call vindicated: -11.36% \u2014 high realized volatility."
+          "grade_reason": "Watchlist call vindicated: -10.99% \u2014 high realized volatility.",
+          "grade_reason_standard": "The stock moved a lot today (-10.99%). It was a good one to watch.",
+          "grade_reason_advanced": "Watchlist call vindicated: -10.99% \u2014 high realized volatility."
         },
         {
           "ticker": "MU",
           "rationale": "Most active at $32.79B dollar volume \u2014 elevated institutional flow.",
           "bias": "neutral",
-          "actual_pct": 12.049079751139956,
+          "actual_pct": 12.17387085210636,
           "verdict": "HIT",
           "letter_grade": "A",
-          "grade_reason": "Watchlist call vindicated: +12.05% \u2014 high realized volatility.",
-          "grade_reason_standard": "The stock moved a lot today (+12.05%). It was a good one to watch.",
-          "grade_reason_advanced": "Watchlist call vindicated: +12.05% \u2014 high realized volatility."
+          "grade_reason": "Watchlist call vindicated: +12.17% \u2014 high realized volatility.",
+          "grade_reason_standard": "The stock moved a lot today (+12.17%). It was a good one to watch.",
+          "grade_reason_advanced": "Watchlist call vindicated: +12.17% \u2014 high realized volatility."
         },
         {
           "ticker": "NVDA",
           "rationale": "Most active at $13.44B dollar volume \u2014 elevated institutional flow.",
           "bias": "neutral",
-          "actual_pct": 1.4635016338944487,
-          "verdict": "FLAT",
-          "letter_grade": "C",
-          "grade_reason": "Modest mover: +1.46% \u2014 within ordinary range, soft signal.",
-          "grade_reason_standard": "The stock moved a little (+1.46%). Less than we hoped.",
-          "grade_reason_advanced": "Modest mover: +1.46% \u2014 within ordinary range, soft signal."
+          "actual_pct": 1.9726458731385712,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Notable mover: +1.97% \u2014 meaningful tape action validated the watch.",
+          "grade_reason_standard": "The stock moved a fair amount (+1.97%). Worth watching.",
+          "grade_reason_advanced": "Notable mover: +1.97% \u2014 meaningful tape action validated the watch."
         },
         {
           "ticker": "QQQ",
           "rationale": "Most active at $12.83B dollar volume \u2014 elevated institutional flow.",
           "bias": "neutral",
-          "actual_pct": 1.838920184734687,
+          "actual_pct": 1.8547213156642435,
           "verdict": "HIT",
           "letter_grade": "B",
-          "grade_reason": "Notable mover: +1.84% \u2014 meaningful tape action validated the watch.",
-          "grade_reason_standard": "The stock moved a fair amount (+1.84%). Worth watching.",
-          "grade_reason_advanced": "Notable mover: +1.84% \u2014 meaningful tape action validated the watch."
+          "grade_reason": "Notable mover: +1.85% \u2014 meaningful tape action validated the watch.",
+          "grade_reason_standard": "The stock moved a fair amount (+1.85%). Worth watching.",
+          "grade_reason_advanced": "Notable mover: +1.85% \u2014 meaningful tape action validated the watch."
         },
         {
           "ticker": "SPY",
           "rationale": "Most active at $12.48B dollar volume \u2014 elevated institutional flow.",
           "bias": "neutral",
-          "actual_pct": 0.7936897633677713,
+          "actual_pct": 0.8341309298597851,
           "verdict": "FLAT",
           "letter_grade": "C",
-          "grade_reason": "Modest mover: +0.79% \u2014 within ordinary range, soft signal.",
-          "grade_reason_standard": "The stock moved a little (+0.79%). Less than we hoped.",
-          "grade_reason_advanced": "Modest mover: +0.79% \u2014 within ordinary range, soft signal."
+          "grade_reason": "Modest mover: +0.83% \u2014 within ordinary range, soft signal.",
+          "grade_reason_standard": "The stock moved a little (+0.83%). Less than we hoped.",
+          "grade_reason_advanced": "Modest mover: +0.83% \u2014 within ordinary range, soft signal."
         },
         {
           "ticker": "AMD",
           "rationale": "Most active at $9.46B dollar volume \u2014 elevated institutional flow.",
           "bias": "neutral",
-          "actual_pct": 7.62158276398338,
+          "actual_pct": 8.114062544883692,
           "verdict": "HIT",
           "letter_grade": "A",
-          "grade_reason": "Watchlist call vindicated: +7.62% \u2014 high realized volatility.",
-          "grade_reason_standard": "The stock moved a lot today (+7.62%). It was a good one to watch.",
-          "grade_reason_advanced": "Watchlist call vindicated: +7.62% \u2014 high realized volatility."
+          "grade_reason": "Watchlist call vindicated: +8.11% \u2014 high realized volatility.",
+          "grade_reason_standard": "The stock moved a lot today (+8.11%). It was a good one to watch.",
+          "grade_reason_advanced": "Watchlist call vindicated: +8.11% \u2014 high realized volatility."
         }
       ]
     }
