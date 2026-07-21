@@ -67,12 +67,11 @@
 <nav class="sticky-nav">
   <a href="#live-markets">Live</a>
   <a href="#briefing"><span class="std-only">Summary</span><span class="adv-only">Briefing</span></a>
-  <a href="#predictions"><span class="std-only">Picks</span><span class="adv-only">Predictions</span></a>
+  <a href="#predictions"><span class="std-only">Scorecard</span><span class="adv-only">Scorecard</span></a>
   <a href="#us-markets"><span class="std-only">U.S.</span><span class="adv-only">US Markets</span></a>
   <a href="#earnings-cal">Earnings</a>
   <a href="#global-markets"><span class="std-only">World</span><span class="adv-only">Global</span></a>
   <a href="#crypto-section">Crypto</a>
-  <a href="#scorecard"><span class="std-only">Track Record</span><span class="adv-only">Scorecard</span></a>
 </nav>
 
 <!-- ===== LIVE MARKETS TICKER ===== -->
@@ -116,11 +115,13 @@
 
 {{ briefing_block }}
 
-<!-- ===== PREDICTIONS (forward-looking: picks + outlook + risks) ===== -->
+<!-- ===== PREDICTION SCORECARD (grade last session + predict this one) ===== -->
 <details class="section-details setup" id="predictions" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">Today's Picks</span><span class="adv-only">Predictions</span> · {{ today_human }}</span></summary>
+<summary><span class="sg-arrow">▶</span><span><span class="std-only">Scorecard</span><span class="adv-only">Prediction Scorecard</span></span></summary>
+{{ report_card_block }}
 {{ today_picks_block }}
 {{ outlook_block }}
+{{ track_record_block }}
 </details><!-- /predictions -->
 
 <!-- ===== US MARKETS ===== -->
@@ -175,9 +176,6 @@
 </div>
 {{ crypto_outlook_block }}
 </details><!-- /crypto-section -->
-
-<!-- ===== TRACK RECORD (backward-looking graded history; collapsed) ===== -->
-{{ track_record_block }}
 
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude

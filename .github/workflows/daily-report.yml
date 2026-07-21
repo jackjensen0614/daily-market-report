@@ -13,7 +13,7 @@ on:
   workflow_dispatch:   # allow manual trigger from GitHub UI
 
 permissions:
-  contents: read
+  contents: write   # needed to commit briefings + scorecard grades back to main
   pages: write
   id-token: write
 
@@ -51,6 +51,33 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      # Persist the learning loop back to the repo. The pre-market run (0 12)
+      # locks in the day's predictions (briefing-*.json); the post-market run
+      # (30 20) persists that day's grades (scorecard_history.json). Skipped on
+      # the every-5-min cron so it never spams commits. continue-on-error means
+      # a git failure can never block the Pages deploy.
+      - name: Persist briefings + scorecard grades
+        if: >
+          github.event_name == 'workflow_dispatch' ||
+          github.event.schedule == '0 12 * * 1-5' ||
+          github.event.schedule == '30 20 * * 1-5'
+        continue-on-error: true
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- briefing-*.json scorecard_history.json
+          if git diff --cached --quiet; then
+            echo "No new briefings or grades to persist."
+            exit 0
+          fi
+          # [skip ci] + GITHUB_TOKEN both prevent this push from re-triggering the build.
+          git commit -m "chore: persist briefings + scorecard grades [skip ci]"
+          git push origin HEAD:main || {
+            echo "Push rejected — rebasing on latest main and retrying."
+            git pull --rebase origin main
+            git push origin HEAD:main
+          }
 
   deploy:
     needs: build

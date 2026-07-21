@@ -383,6 +383,22 @@ details.scorecard-details > .scorecard-body {
 .sc-section-sub { font-size: 11px; color: var(--text-faint); }
 .sc-picks-wrap { padding: 14px 14px 6px; }
 
+/* Report card — most-recent graded session, pinned atop the scorecard */
+.sc-report .sc-section-head {
+  justify-content: flex-start; gap: 10px; flex-wrap: wrap;
+}
+.sc-report .sc-section-title { color: var(--text); }
+.sc-report-stats {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 10px;
+}
+.sc-report-stats .gpa-pill { text-transform: none; letter-spacing: normal; }
+.sc-hit { font-size: 11px; font-weight: 600; color: var(--text-faint); white-space: nowrap; }
+.sc-empty {
+  padding: 18px 16px; font-size: 12.5px; color: var(--text-faint);
+}
+/* Divider cue between "how we did" and "what's next" inside the scorecard */
+#today-picks { border-top: 1px solid var(--border); }
+
 /* A–F grade cards (post-close scorecard) */
 .grade-cards {
   display: grid; grid-template-columns: 1fr; gap: 10px;
@@ -1019,28 +1035,26 @@ details.world-news-details[open] > summary .expand-hint { display: none; }
 .ticker-card.medium { border-left-color: #f59e0b; }
 .ticker-card.high   { border-left-color: #ef4444; }
 .tc-top {
-  display: flex; align-items: baseline; justify-content: space-between;
-  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px;
 }
-.tc-symbol { font-size: 16px; font-weight: 700; color: var(--text); }
+.tc-symbol { font-size: 16px; font-weight: 700; color: var(--text); margin-right: auto; }
 .tc-bias {
   font-size: 11px; font-weight: 600; padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 4px; white-space: nowrap;
 }
 .tc-bias.bullish { color: var(--up);   background: #16a34a22; }
 .tc-bias.bearish { color: var(--down); background: #dc262622; }
 .tc-bias.neutral { color: var(--text-faint); background: var(--bg-panel-2); }
-.tc-return {
-  font-size: 12px; font-weight: 600; color: var(--text-dim);
-  margin-bottom: 6px;
+/* Estimated-move chip, sits on the top row next to the direction */
+.tc-ret {
+  font-size: 11.5px; font-weight: 700; color: var(--text-dim);
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+  background: var(--bg-panel-2); border: 1px solid var(--border);
 }
-.tc-rationale {
-  font-size: 12px; color: var(--text-dim); margin-bottom: 8px;
-  line-height: 1.5;
-}
-.tc-analysis {
-  font-size: 12px; color: var(--text-faint); line-height: 1.6;
-  border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;
+/* Trimmed 1–2 sentence reason (replaces the old rationale + analysis wall) */
+.tc-reason {
+  font-size: 12px; color: var(--text-dim); line-height: 1.5;
 }
 
 /* Reading-mode toggle */

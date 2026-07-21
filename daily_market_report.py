@@ -2011,6 +2011,28 @@ def render_risk_block(ai: dict) -> str:
     )
 
 
+def _first_sentence(text: str) -> str:
+    """First sentence of `text` (through its terminating . ! or ?)."""
+    t = re.sub(r"\s+", " ", (text or "").strip())
+    if not t:
+        return ""
+    m = re.search(r"(?<=[.!?])\s", t)
+    return t[:m.start()] if m else t
+
+
+def _compact_reason(rationale: str, analysis: str, max_chars: int = 150) -> str:
+    """A tight 1–2 sentence blurb: the short rationale plus, if it fits, the
+    first sentence of the longer analysis — so pick cards stay scannable
+    instead of showing a full paragraph."""
+    r = re.sub(r"\s+", " ", (rationale or "").strip())
+    a = _first_sentence(analysis or "")
+    combined = f"{r} {a}".strip() if (a and a.lower() not in r.lower()) else r
+    combined = re.sub(r"\s+", " ", combined).strip()
+    if len(combined) > max_chars:
+        combined = combined[:max_chars].rsplit(" ", 1)[0].rstrip(",;:.") + "…"
+    return combined
+
+
 def _ticker_cards_html(picks: list[dict]) -> str:
     """Render a risk-tiered grid of ticker prediction cards."""
     tiers = [
@@ -2035,46 +2057,36 @@ def _ticker_cards_html(picks: list[dict]) -> str:
             ana_plain = p.get("analysis_plain") or ana_adv
             sym   = escape_html(str(p.get("ticker", "")))
             bias_plain, bias_adv_label = humanize_bias_label(bias)
-            # Strip jargon like "(gap risk)" for the std variant
-            ret_plain = ret.replace("(gap risk)", "(could swing either way)").replace("(short)", "(betting it goes down)").replace("(swing)", "(short-term trade)")
-            if ret:
-                ret_html = (
-                    f'<div class="tc-return">'
-                    f'<span class="std-only">What we think it could move: {ret_plain}</span>'
-                    f'<span class="adv-only">Est. return: {ret}</span>'
-                    f'</div>'
-                )
-            else:
-                ret_html = ""
 
-            rat_html = (
-                f'<div class="tc-rationale">'
-                f'<span class="std-only">{escape_html(rat_plain)}</span>'
-                f'<span class="adv-only">{escape_html(rat_adv)}</span>'
+            # Estimated move rides on the top row as a compact chip. Keep only the
+            # numeric range — parentheticals like "(gap risk)" would overflow the
+            # chip, and the direction chip ("Mixed"/"Up") already conveys them.
+            ret_chip = re.sub(r"\s*\([^)]*\)", "", ret).strip()
+            ret_html = (
+                f'<span class="tc-ret" title="Estimated move">{escape_html(ret_chip)}</span>'
+            ) if ret_chip else ""
+
+            # One trimmed 1–2 sentence reason instead of rationale + a paragraph.
+            reason_std = _compact_reason(rat_plain, ana_plain)
+            reason_adv = _compact_reason(rat_adv, ana_adv)
+            reason_html = (
+                f'<div class="tc-reason">'
+                f'<span class="std-only">{escape_html(reason_std)}</span>'
+                f'<span class="adv-only">{escape_html(reason_adv)}</span>'
                 f'</div>'
             )
-            if ana_adv or ana_plain:
-                ana_html = (
-                    f'<div class="tc-analysis">'
-                    f'<span class="std-only">{escape_html(ana_plain)}</span>'
-                    f'<span class="adv-only">{escape_html(ana_adv)}</span>'
-                    f'</div>'
-                )
-            else:
-                ana_html = ""
 
             cards.append(
                 f'<div class="ticker-card {tier_key}">'
-                f'  <div class="tc-top">'
-                f'    <span class="tc-symbol">{sym}</span>'
-                f'    <span class="tc-bias {bias}">{arrow} '
+                f'<div class="tc-top">'
+                f'<span class="tc-symbol">{sym}</span>'
+                f'<span class="tc-bias {bias}">{arrow} '
                 f'<span class="std-only">{escape_html(bias_plain)}</span>'
                 f'<span class="adv-only">{escape_html(bias_adv_label)}</span>'
                 f'</span>'
-                f'  </div>'
-                f'  {ret_html}'
-                f'  {rat_html}'
-                f'  {ana_html}'
+                f'{ret_html}'
+                f'</div>'
+                f'{reason_html}'
                 f'</div>'
             )
         out.append(
@@ -3984,6 +3996,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         sentiment_block=render_sentiment_strip(snap),
+        report_card_block=render_report_card(history),
         today_picks_block=render_today_picks(snap, briefing, eod=eod),
         track_record_block=render_track_record(history),
         earnings_reactions_block=render_earnings_reactions(snap),
@@ -4557,6 +4570,106 @@ def render_today_picks(snap: Snapshot, briefing: dict | None = None,
     return f'<div class="scorecard-wrap" id="today-picks">{picks_section}</div>'
 
 
+def _report_card_heading(date_iso: str) -> str:
+    """Relative heading for the most-recent graded session (e.g. 'Yesterday's
+    Report Card', 'Today's Report Card', or 'Friday's Report Card')."""
+    try:
+        d = datetime.fromisoformat(date_iso).date()
+    except Exception:
+        return "Latest Report Card"
+    today = datetime.now(ET).date()
+    try:
+        prior = datetime.fromisoformat(_prior_trading_day_before(today.isoformat())).date()
+    except Exception:
+        prior = None
+    if d >= today:
+        return "Today's Report Card"
+    if prior is not None and d == prior:
+        return "Yesterday's Report Card"
+    return f"{d.strftime('%A')}'s Report Card"
+
+
+def render_report_card(history: dict | None = None) -> str:
+    """Prominent 'most recent graded session' block for the top of the scorecard.
+
+    This is the backward-looking half of the loop — it grades the previous
+    session's picks and puts the result front-and-center, right above today's
+    new picks. Full multi-day history stays in the collapsible track record.
+    Returns an empty-state note when nothing has been graded yet.
+    """
+    history = history if history is not None else load_scorecard_history()
+    days = sorted(history.get("days", []), key=lambda d: d.get("date", ""), reverse=True)
+
+    # Only headline a graded day if it's recent. Otherwise (nothing graded, or
+    # the newest grade is stale — e.g. before the loop has warmed up) show a
+    # clean "waiting for the close" state so we never front a months-old card.
+    # The full backtest still lives in the collapsible track record below.
+    stale = True
+    if days:
+        try:
+            latest_d = datetime.fromisoformat(days[0]["date"]).date()
+            stale = (datetime.now(ET).date() - latest_d).days > 5
+        except Exception:
+            stale = True
+
+    if not days or stale:
+        if days:
+            try:
+                last_h = datetime.fromisoformat(days[0]["date"]).strftime("%b %-d")
+            except Exception:
+                last_h = days[0].get("date", "")
+            sub = mode_pair(f"Last graded {last_h} · fresh grades post after the next close",
+                            f"Last graded {last_h} · awaiting next close")
+            empty = mode_pair("New picks get graded once the market closes — check back then.",
+                              "Awaiting the next session close to grade current picks.")
+        else:
+            sub = mode_pair("Grades appear after the next market close", "First grades post after the next close")
+            empty = mode_pair("No graded sessions yet — check back after the market closes.",
+                              "No graded sessions yet.")
+        return (
+            '<div class="scorecard-wrap sc-report">'
+            '<div class="sc-section-head">'
+            f'<span class="sc-section-title">{mode_pair("How our last picks did", "Report Card")}</span>'
+            f'<span class="sc-section-sub">{sub}</span>'
+            '</div>'
+            f'<div class="sc-empty">{empty}</div>'
+            '</div>'
+        )
+
+    latest = days[0]
+    date_iso = latest.get("date", "")
+    entries = latest.get("entries", [])
+    letters = [e.get("letter_grade") for e in entries if e.get("letter_grade") in _GRADE_PTS]
+    gpa = (sum(_GRADE_PTS[l] for l in letters) / len(letters)) if letters else None
+    gpa_str = f"{gpa:.2f}" if gpa is not None else "—"
+    gpa_l = _gpa_letter(gpa)
+    hits = sum(1 for e in entries if (e.get("verdict") or "").upper() == "HIT")
+    graded = len(entries)
+    try:
+        date_human = datetime.fromisoformat(date_iso).strftime("%A, %b %-d")
+    except Exception:
+        date_human = date_iso
+    heading = _report_card_heading(date_iso)
+
+    gpa_pill = (
+        f'<span class="gpa-pill gpa-{gpa_l}">'
+        f'{mode_pair(f"Grade {gpa_l} · {gpa_str}/4", f"GPA {gpa_str} · {gpa_l}")}'
+        '</span>'
+    )
+    hit_txt = mode_pair(f"{hits} of {graded} moved our way", f"{hits}/{graded} hit")
+    cards = "".join(_grade_card_html(e) for e in entries)
+    return (
+        '<div class="scorecard-wrap sc-report">'
+        '<div class="sc-section-head">'
+        f'<span class="sc-section-title">{escape_html(heading)}</span>'
+        f'<span class="sc-section-sub">{escape_html(date_human)}</span>'
+        f'<span class="sc-report-stats">{gpa_pill}<span class="sc-hit">{hit_txt}</span></span>'
+        '</div>'
+        f'<div class="grade-cards">{cards}</div>'
+        '</div>'
+    )
+
+
 def render_track_record(history: dict | None = None) -> str:
     """Backward-looking graded track record as its own section (collapsed by
     default — it's a retrospective, and currently a fixed backtest). Returns ''
@@ -4587,7 +4700,7 @@ def render_track_record(history: dict | None = None) -> str:
         f"{graded_n} picks graded · {sessions_n} day(s)",
         f"{graded_n} graded · {sessions_n} session(s)",
     )
-    title = mode_pair("How Our Past Picks Did", "Track Record")
+    title = mode_pair("Full history · every graded session", "Full Track Record")
     return (
         '<details class="section-details" id="scorecard">'
         '<summary>'
@@ -5257,20 +5370,37 @@ def main():
             log(f"Generating briefing for {target_session} via Anthropic…")
             briefing = generate_briefing(snap)
 
-        # Persist briefing under the target trading session's date so the
-        # following EOD run finds it for grading.
-        if briefing:
+        # Persist the session's predictions so the next run can grade them.
+        # When AI synthesis is unavailable (the common case right now), fall
+        # back to the same data-driven picks the page renders, so the learning
+        # loop still has real predictions on disk to grade. Without this the
+        # scorecard can never advance past the committed backtest.
+        persist_briefing = briefing
+        if not (persist_briefing and persist_briefing.get("tickers_to_watch")):
+            data_picks = _b_tickers_prediction(snap)
+            if data_picks:
+                persist_briefing = dict(persist_briefing or {})
+                persist_briefing["tickers_to_watch"] = data_picks
+                persist_briefing.setdefault("generated_by", "data-fallback")
+                persist_briefing.setdefault("generated_at",
+                                            datetime.now(ET).isoformat(timespec="seconds"))
+
+        if persist_briefing and persist_briefing.get("tickers_to_watch"):
+            payload = json.dumps(persist_briefing, indent=2)
+            # Write once per session (first run of the day locks the picks in);
+            # later runs must not overwrite grades-in-progress.
             bp = SCRIPT_DIR / f"briefing-{target_session}.json"
             if not bp.exists():
                 try:
-                    bp.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
-                    log(f"Briefing persisted to {bp.name}")
+                    bp.write_text(payload, encoding="utf-8")
+                    log(f"Briefing persisted to {bp.name} "
+                        f"({persist_briefing.get('generated_by', 'ai')})")
                 except Exception as e:
                     warn(f"Could not persist briefing: {e}")
             out_briefing = Path(args.out).parent / f"briefing-{target_session}.json"
             if out_briefing != bp:
                 try:
-                    out_briefing.write_text(json.dumps(briefing, indent=2), encoding="utf-8")
+                    out_briefing.write_text(payload, encoding="utf-8")
                     log(f"Briefing also saved to {out_briefing}")
                 except Exception as e:
                     log(f"Could not save briefing to output dir: {e}")
