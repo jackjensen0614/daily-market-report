@@ -331,6 +331,7 @@ class Quote:
     volume: int | None = None
     market_cap: float | None = None
     dollar_volume: float | None = None
+    spark: list[float] | None = None   # recent daily closes (oldest→newest) for sparklines
 
 
 @dataclass
@@ -611,6 +612,18 @@ def _last_two(hist: pd.DataFrame) -> tuple[float, float, int] | None:
         return None
 
 
+def _spark_series(hist: "pd.DataFrame", n: int = 6) -> list[float] | None:
+    """Return the last `n` daily closes (oldest→newest) for a sparkline."""
+    if hist is None or hist.empty or "Close" not in hist:
+        return None
+    try:
+        closes = hist["Close"].dropna().tail(n).tolist()
+        vals = [float(c) for c in closes]
+        return vals if len(vals) >= 2 else None
+    except Exception:
+        return None
+
+
 def fetch_quotes(symbols_with_names: dict[str, str]) -> list[Quote]:
     """Fetch last-2-day close and compute change for a set of symbols."""
     if not symbols_with_names:
@@ -660,6 +673,7 @@ def fetch_quotes(symbols_with_names: dict[str, str]) -> list[Quote]:
                 change_pct=pct,
                 volume=vol if vol else None,
                 dollar_volume=(last * vol) if vol else None,
+                spark=_spark_series(hist),
             )
         )
     return out
@@ -1479,12 +1493,48 @@ def cls_for(pct: float) -> str:
     return "flat"
 
 
+def _sparkline_svg(values: list[float] | None, cls: str,
+                   width: int = 84, height: int = 26) -> str:
+    """Inline SVG polyline + soft area fill for a small price series.
+
+    Colored by `cls` ('up'/'down'/'flat') via CSS currentColor so it tracks
+    the tile's delta color. Returns '' when there isn't enough data.
+    """
+    if not values or len(values) < 2:
+        return ""
+    lo, hi = min(values), max(values)
+    span = (hi - lo) or 1.0
+    pad = 2.0
+    n = len(values)
+    step = (width - 2 * pad) / (n - 1)
+    pts = []
+    for i, v in enumerate(values):
+        x = pad + i * step
+        y = pad + (height - 2 * pad) * (1 - (v - lo) / span)
+        pts.append((x, y))
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    area = (f"{pts[0][0]:.1f},{height - pad:.1f} " + line +
+            f" {pts[-1][0]:.1f},{height - pad:.1f}")
+    dot_x, dot_y = pts[-1]
+    return (
+        f'<svg class="spark spark-{cls}" viewBox="0 0 {width} {height}" '
+        f'width="{width}" height="{height}" preserveAspectRatio="none" '
+        f'aria-hidden="true" focusable="false">'
+        f'<polygon class="spark-area" points="{area}"/>'
+        f'<polyline class="spark-line" points="{line}" fill="none" '
+        f'vector-effect="non-scaling-stroke"/>'
+        f'<circle class="spark-dot" cx="{dot_x:.1f}" cy="{dot_y:.1f}" r="1.9"/>'
+        f'</svg>'
+    )
+
+
 def render_index_tile(q: Quote) -> str:
     cls = cls_for(q.change_pct)
     price = fmt_num(q.price)
     delta = f"{'+' if q.change >= 0 else ''}{q.change:,.2f} ({fmt_pct(q.change_pct)})"
     return _jinja_env.get_template("_tile.html").render(
-        cls=cls, q=q, price=price, delta=delta
+        cls=cls, q=q, price=price, delta=delta,
+        spark=_sparkline_svg(q.spark, cls),
     )
 
 

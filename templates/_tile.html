@@ -1,7 +1,11 @@
 
     <div class="tile tile-{{ cls }}">
       <div class="label">{{ q.name }}</div>
-      <div class="value num">{{ price }}</div>
-      <div class="delta num {{ cls }}">{{ delta }}</div>
+      <div class="tile-body">
+        <div class="tile-figures">
+          <div class="value num">{{ price }}</div>
+          <div class="delta num {{ cls }}">{{ delta }}</div>
+        </div>
+        {% if spark %}<div class="tile-spark">{{ spark }}</div>{% endif %}
+      </div>
     </div>
-    
