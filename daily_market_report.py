@@ -4306,7 +4306,11 @@ def backfill_scorecard_history(force_dates: list[str] | None = None) -> dict:
     """
     hist = load_scorecard_history()
     have = {d["date"] for d in hist.get("days", [])}
-    force = set(force_dates or [])
+    # Always re-grade the current session: intraday runs grade against the live
+    # price, and the post-close run must be free to overwrite that with the
+    # final close. Past days stay frozen once the session is over.
+    today_iso = datetime.now(ET).date().isoformat()
+    force = set(force_dates or []) | {today_iso}
     pat = re.compile(r"briefing-(\d{4}-\d{2}-\d{2})\.json$")
 
     for path in sorted(SCRIPT_DIR.glob("briefing-*.json")):
