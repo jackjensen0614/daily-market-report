@@ -64,14 +64,11 @@
   </div>
 </header>
 
-<nav class="sticky-nav">
-  <a href="#live-markets">Live</a>
-  <a href="#briefing"><span class="std-only">Summary</span><span class="adv-only">Briefing</span></a>
-  <a href="#predictions"><span class="std-only">Scorecard</span><span class="adv-only">Scorecard</span></a>
-  <a href="#us-markets"><span class="std-only">U.S.</span><span class="adv-only">US Markets</span></a>
-  <a href="#earnings-cal">Earnings</a>
-  <a href="#global-markets"><span class="std-only">World</span><span class="adv-only">Global</span></a>
-  <a href="#crypto-section">Crypto</a>
+<nav class="sticky-nav tab-bar" id="tab-bar">
+  <a href="#tab-today" class="tab-link" data-tab="today">Today</a>
+  <a href="#tab-markets" class="tab-link" data-tab="markets"><span class="std-only">U.S. Stocks</span><span class="adv-only">US Markets</span></a>
+  <a href="#tab-global" class="tab-link" data-tab="global"><span class="std-only">World</span><span class="adv-only">Global</span></a>
+  <a href="#tab-crypto" class="tab-link" data-tab="crypto">Crypto</a>
 </nav>
 
 <!-- ===== LIVE MARKETS TICKER ===== -->
@@ -102,7 +99,9 @@
   </div>
 </div>
 
-<!-- ===== MARKET SNAPSHOT (hero — at-a-glance numbers) ===== -->
+<!-- ===== TAB: TODAY (the morning cockpit: snapshot → scorecard → narrative) ===== -->
+<section class="tab-panel" id="tab-today" data-panel="today">
+
 <div class="market-snapshot" id="market-snapshot">
   <div class="snapshot-head">
     <span class="std-only">Market Snapshot</span><span class="adv-only">Indices &amp; Macro</span>
@@ -113,20 +112,21 @@
   </div>
 </div>
 
-{{ briefing_block }}
-
-<!-- ===== PREDICTION SCORECARD (grade last session + predict this one) ===== -->
-<details class="section-details setup" id="predictions" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">Scorecard</span><span class="adv-only">Prediction Scorecard</span></span></summary>
+<!-- Scorecard: grade the last session, predict this one -->
+<div class="market-group-header setup" id="predictions"><span class="std-only">Scorecard</span><span class="adv-only">Prediction Scorecard</span></div>
 {{ report_card_block }}
 {{ today_picks_block }}
 {{ outlook_block }}
 {{ track_record_block }}
-</details><!-- /predictions -->
 
-<!-- ===== US MARKETS ===== -->
-<details class="section-details us" id="us-markets" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">U.S. Stock Market</span><span class="adv-only">US Markets</span></span></summary>
+<!-- The narrative brief reads best after the numbers it explains -->
+{{ briefing_block }}
+
+</section><!-- /tab-today -->
+
+<!-- ===== TAB: US MARKETS ===== -->
+<section class="tab-panel" id="tab-markets" data-panel="markets">
+<div class="market-group-header us" id="us-markets"><span class="std-only">U.S. Stock Market</span><span class="adv-only">US Markets</span></div>
 
 {{ watchlist_block }}
 
@@ -155,27 +155,27 @@
   {{ earnings_reactions_block }}
 </div>
 
-{{ world_news_block }}
-
 {{ earnings_section_block }}
 
-</details><!-- /us-markets -->
+</section><!-- /tab-markets -->
 
-<!-- ===== GLOBAL MARKETS ===== -->
-<details class="section-details global" id="global-markets" open>
-<summary><span class="sg-arrow">▶</span><span><span class="std-only">Markets Around the World</span><span class="adv-only">Global Markets</span></span></summary>
+<!-- ===== TAB: GLOBAL ===== -->
+<section class="tab-panel" id="tab-global" data-panel="global">
+<div class="market-group-header global" id="global-markets"><span class="std-only">Markets Around the World</span><span class="adv-only">Global Markets</span></div>
 {{ global_block }}
-</details><!-- /global-markets -->
 
-<!-- ===== CRYPTO ===== -->
-<details class="section-details crypto" id="crypto-section" open>
-<summary><span class="sg-arrow">▶</span><span>Crypto</span></summary>
+{{ world_news_block }}
+</section><!-- /tab-global -->
+
+<!-- ===== TAB: CRYPTO ===== -->
+<section class="tab-panel" id="tab-crypto" data-panel="crypto">
+<div class="market-group-header crypto" id="crypto-section">Crypto</div>
 <div class="panel collapsed" id="crypto-panel">
   <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {{ crypto_top_n }}</span></h3><div class="panel-head-right"><div class="sub"><span class="std-only">BTC &amp; ETH first, then biggest 24h moves</span><span class="adv-only">BTC/ETH pinned · then by abs(24h Δ)</span></div><button type="button" class="crypto-toggle" data-collapsed-label="Show all {{ crypto_top_n }}" data-expanded-label="Show top 5">Show all {{ crypto_top_n }}</button></div></div>
   <div class="crypto-rows">{{ crypto_rows }}</div>
 </div>
 {{ crypto_outlook_block }}
-</details><!-- /crypto-section -->
+</section><!-- /tab-crypto -->
 
 <footer>
   Data: Yahoo Finance (via yfinance), CoinGecko, Nasdaq Calendar · Analysis: Claude
@@ -217,6 +217,62 @@ function setReadingMode(mode) {
   var saved = 'standard';
   try { saved = localStorage.getItem(MODE_KEY) || 'standard'; } catch(e) {}
   setReadingMode(saved);
+})();
+
+// ── Tab views (Today / Markets / Global / Crypto) ────────────────────────
+// The page is one document; tabs show one panel at a time. The active tab
+// survives the 60s auto-refresh via sessionStorage, and legacy #anchors
+// deep-link into the right tab so old links keep working.
+var TAB_KEY = '_mktActiveTab';
+var TAB_NAMES = ['today', 'markets', 'global', 'crypto'];
+var LEGACY_HASH_TAB = {
+  'live-markets': 'today', 'market-snapshot': 'today', 'briefing': 'today',
+  'predictions': 'today', 'today-picks': 'today', 'scorecard': 'today',
+  'us-markets': 'markets', 'movers': 'markets', 'earnings-cal': 'markets',
+  'global-markets': 'global', 'crypto-section': 'crypto', 'crypto-panel': 'crypto'
+};
+function activateTab(name, opts) {
+  opts = opts || {};
+  if (TAB_NAMES.indexOf(name) < 0) name = 'today';
+  document.querySelectorAll('.tab-panel').forEach(function(p) {
+    p.classList.toggle('active', p.getAttribute('data-panel') === name);
+  });
+  document.querySelectorAll('.tab-link').forEach(function(a) {
+    a.classList.toggle('active', a.getAttribute('data-tab') === name);
+  });
+  try { sessionStorage.setItem(TAB_KEY, name); } catch(e) {}
+  if (opts.updateHash) {
+    try { history.replaceState(null, '', '#tab-' + name); } catch(e) {}
+  }
+  if (opts.scroll) window.scrollTo(0, 0);
+}
+(function initTabs() {
+  if (!document.querySelector('.tab-panel')) return;
+  document.body.classList.add('js-tabs');
+  var initial = null;
+  var h = (window.location.hash || '').replace(/^#/, '');
+  if (h.indexOf('tab-') === 0 && TAB_NAMES.indexOf(h.slice(4)) >= 0) {
+    initial = h.slice(4);
+  } else if (LEGACY_HASH_TAB[h]) {
+    initial = LEGACY_HASH_TAB[h];
+  }
+  if (!initial) {
+    try { initial = sessionStorage.getItem(TAB_KEY); } catch(e) {}
+  }
+  activateTab(initial || 'today', {});
+  // Legacy in-tab anchor: activate its tab, then scroll to the element
+  if (h && LEGACY_HASH_TAB[h]) {
+    var el = document.getElementById(h);
+    if (el) {
+      requestAnimationFrame(function() { el.scrollIntoView(); });
+    }
+  }
+  document.querySelectorAll('.tab-link').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      activateTab(a.getAttribute('data-tab'), {updateHash: true, scroll: true});
+    });
+  });
 })();
 
 // ── Watchlist sidebar ────────────────────────────────────────────────────

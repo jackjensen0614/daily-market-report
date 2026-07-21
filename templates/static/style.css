@@ -1314,3 +1314,65 @@ details.section-details#scorecard > summary { flex-wrap: wrap; }
   h1 { font-size: 20px; }
   .tile .value { font-size: 21px; }
 }
+
+/* ============================================================
+   TABBED LAYOUT 2026 — one focused view at a time
+   Today / US Markets / Global / Crypto. Additive block: panels
+   are only hidden when JS tags <body> with .js-tabs, so the
+   page degrades to the old single-scroll without JS.
+   ============================================================ */
+
+/* — Panels — */
+body.js-tabs .tab-panel { display: none; }
+body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.js-tabs .tab-panel.active { animation: none; }
+}
+
+/* — Tab bar: the nav is now a segmented control — */
+.tab-bar { gap: 4px; padding: 6px 0; }
+.tab-bar .tab-link {
+  font-size: 12.5px; font-weight: 600;
+  color: var(--text-faint);
+}
+.tab-bar .tab-link.active {
+  color: var(--text); background: var(--bg-panel-2);
+}
+.tab-bar .tab-link.active::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: 3px;
+  height: 2px; border-radius: 2px; background: var(--accent);
+}
+/* Per-tab accent mirrors the section palette (us/global/crypto) */
+.tab-bar .tab-link[data-tab="markets"].active::after { background: var(--blue); }
+.tab-bar .tab-link[data-tab="global"].active::after  { background: var(--purple); }
+.tab-bar .tab-link[data-tab="crypto"].active::after  { background: var(--yellow); }
+.tab-bar .tab-link:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px;
+}
+
+/* — Group headers replace the old <details> section summaries — */
+.market-group-header {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  margin: 36px 0 22px; color: var(--text-dim);
+}
+.market-group-header.us     { color: #60a5fa; }
+.market-group-header.global { color: #c4b5fd; }
+.market-group-header.crypto { color: #fbbf24; }
+.market-group-header.setup  { color: var(--accent); }
+/* First header in a panel hugs the tab bar instead of floating */
+.tab-panel > .market-group-header:first-child { margin-top: 4px; }
+
+/* — Today panel rhythm: snapshot → scorecard → briefing — */
+#tab-today .market-snapshot { margin-top: 4px; }
+#tab-today .briefing-inline { margin-top: 36px; }
+
+/* — Sidebar cards: clamp the analysis prose to keep the rail scannable — */
+.sb-pred {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
