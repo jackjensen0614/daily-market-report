@@ -8,4 +8,17 @@
         </div>
         {% if spark %}<div class="tile-spark">{{ spark }}</div>{% endif %}
       </div>
+      {% if wk52 %}
+      <div class="tile-range zone-{{ wk52.zone }}" title="{{ wk52.title }}">
+        <div class="tr-track">
+          <div class="tr-fill" style="width:{{ wk52.pos }}%"></div>
+          <div class="tr-marker" style="left:{{ wk52.pos }}%"></div>
+        </div>
+        <div class="tr-labels">
+          <span class="tr-lo num">{{ wk52.low }}</span>
+          <span class="tr-cap">52-wk · {{ wk52.from_high }} from high</span>
+          <span class="tr-hi num">{{ wk52.high }}</span>
+        </div>
+      </div>
+      {% endif %}
     </div>

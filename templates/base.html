@@ -60,6 +60,9 @@
     <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
       <span class="spin">&#8635;</span> <span id="refresh-label">Refresh</span>
     </button>
+    <button class="print-btn" id="print-btn" onclick="printReport()" title="Print or save this report as a PDF">
+      &#128424; <span class="std-only">Save PDF</span><span class="adv-only">Print / PDF</span>
+    </button>
     <span id="refresh-status" class="meta"></span>
   </div>
 </header>
@@ -856,6 +859,23 @@ function doRefresh() {
       : btn.getAttribute('data-expanded-label');
   });
 })();
+
+// Print / Save-as-PDF: the @media print stylesheet flattens tabs and hides
+// interactive chrome. Here we temporarily expand the collapsed crypto list so
+// the printed copy is complete, then restore it afterward.
+function printReport() {
+  var cryptoPanel = document.getElementById('crypto-panel');
+  var wasCollapsed = cryptoPanel && cryptoPanel.classList.contains('collapsed');
+  if (wasCollapsed) cryptoPanel.classList.remove('collapsed');
+  var restore = function () {
+    if (wasCollapsed && cryptoPanel) cryptoPanel.classList.add('collapsed');
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
+  // Safari/some browsers don't fire afterprint reliably — restore defensively.
+  setTimeout(restore, 1500);
+}
 </script>
 </body>
 </html>

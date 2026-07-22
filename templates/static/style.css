@@ -75,6 +75,36 @@ h2 {
 .tile-figures { min-width: 0; }
 .tile-spark { flex: 0 0 auto; opacity: 0.95; }
 .tile.compact .tile-spark { display: none; }
+
+/* 52-week range bar on index/macro tiles */
+.tile-range { margin-top: 12px; }
+.tile.compact .tile-range { display: none; }
+.tr-track {
+  position: relative; height: 5px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--red-dim), var(--bg-elev) 45%, var(--bg-elev) 55%, var(--green-dim));
+  overflow: visible;
+}
+.tr-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px;
+  background: linear-gradient(90deg, rgba(124,168,255,.0), var(--accent-2));
+  opacity: .5;
+}
+.tr-marker {
+  position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--text); border: 2px solid var(--bg-panel);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.zone-hot  .tr-marker { background: var(--green); }
+.zone-cold .tr-marker { background: var(--red); }
+.tr-labels {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 5px; font-size: 10px; color: var(--text-faint);
+}
+.tr-cap { color: var(--text-dim); font-size: 9.5px; letter-spacing: .02em; }
+.zone-hot  .tr-cap { color: var(--green); }
+.zone-cold .tr-cap { color: var(--red); }
+
 svg.spark { display: block; overflow: visible; }
 .spark-line { stroke-width: 1.6px; }
 .spark-area { opacity: 0.14; stroke: none; }
@@ -283,6 +313,13 @@ a { color: #8ab4f8; }
 .refresh-btn .spin { font-size: 15px; line-height: 1; }
 .refresh-btn.spinning .spin { display: inline-block; animation: spin .6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.print-btn {
+  background: #1e2535; border: 1px solid #3d4560; color: #c8cfdf;
+  border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
+}
+.print-btn:hover { background: #252d42; border-color: var(--accent-2); color: var(--accent-2); }
 .premarket-bar { margin-bottom:18px; }
 .tile.compact { padding:10px 12px; }
 .tile.compact .value { font-size:16px; }
@@ -592,6 +629,40 @@ details.scorecard-details > .scorecard-body {
 .time-tbd { background: rgba(148,163,184,.10); color: var(--text-faint); }
 
 /* Sector horizontal-bar chart */
+/* Market breadth strip (advancing vs declining sectors) */
+.breadth {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 13px 18px 14px; margin: 12px 0 14px;
+}
+.breadth-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 9px;
+}
+.breadth-title {
+  font-size: 11px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.breadth-verdict { font-size: 13px; font-weight: 600; }
+.breadth-verdict.tone-up   { color: var(--green); }
+.breadth-verdict.tone-down { color: var(--red); }
+.breadth-verdict.tone-flat { color: var(--yellow); }
+.breadth-bar {
+  display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+  background: var(--bg-panel-2); gap: 2px;
+}
+.bb-seg { height: 100%; }
+.bb-up   { background: var(--green); }
+.bb-flat { background: var(--text-faint); }
+.bb-down { background: var(--red); }
+.breadth-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 9px; font-size: 12px;
+}
+.breadth-legend .bl { color: var(--text-dim); }
+.breadth-legend .bl.up   { color: var(--green); }
+.breadth-legend .bl.down { color: var(--red); }
+.breadth-legend .bl.flat { color: var(--text-faint); }
+.breadth-legend .bl.avg { margin-left: auto; color: var(--text-faint); }
+
 .sector-bars {
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: 10px; padding: 14px 18px 16px; margin: 12px 0 18px;
@@ -1491,4 +1562,54 @@ body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; 
 .sb-pred {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ============================================================
+   PRINT / SAVE-AS-PDF
+   Flip the dark canvas to an ink-friendly light theme, flatten
+   the tabbed layout into one continuous document, and strip out
+   interactive-only chrome. Triggered by the browser's print
+   dialog (the "Save PDF" button just calls window.print()).
+   ============================================================ */
+@media print {
+  :root {
+    --bg: #ffffff; --bg-1: #ffffff; --bg-panel: #ffffff; --bg-panel-2: #f4f6fb;
+    --bg-elev: #eef1f8; --border: #d3d9e6; --border-strong: #b6bfd4;
+    --text: #10131c; --text-dim: #3a4256; --text-faint: #6a7488;
+    --green: #0a8f4f; --green-dim: #d6f2e4; --red: #c22c33; --red-dim: #f7dde0;
+    --up: #0a8f4f; --down: #c22c33; --accent: #0f8f83; --accent-2: #315fd6;
+    --shadow: none;
+  }
+  body, body.mode-standard, body.mode-advanced { background: #fff !important; color: var(--text); }
+
+  /* Hide interactive-only chrome */
+  .sidebar, .sticky-nav, .tab-bar, .live-ticker-section,
+  .refresh-btn, .print-btn, .mode-toggle, #refresh-status,
+  .lookup-search, .lookup-suggest, .sb-add, .sb-suggest,
+  #lk-suggest, #sb-suggest, .crypto-toggle, .fab, #sb-restore-btn {
+    display: none !important;
+  }
+
+  /* Flatten the shell + reveal every tab panel as one document */
+  .page-layout, .main-col, .wrap {
+    display: block !important; max-width: none !important;
+    margin: 0 !important; padding: 0 !important; width: 100% !important;
+  }
+  body.js-tabs .tab-panel,
+  body.js-tabs .tab-panel:not(.active) { display: block !important; }
+  .tab-panel { break-inside: auto; }
+  .tab-panel + .tab-panel { break-before: page; }
+
+  /* Show the full crypto list when printReport() expands it */
+  #crypto-panel .crypto-rows .mover { display: flex !important; }
+
+  /* Cards should not be sliced across pages where avoidable */
+  .tile, .panel, .narr, .ticker-card, .grade-card, .wa-card,
+  .breadth, .sector-bars, .scorecard-wrap, .cal-grid {
+    break-inside: avoid;
+  }
+
+  * { box-shadow: none !important; text-shadow: none !important; }
+  a { color: inherit !important; text-decoration: none !important; }
+  @page { margin: 14mm; }
 }

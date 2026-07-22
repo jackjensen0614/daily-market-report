@@ -332,6 +332,8 @@ class Quote:
     market_cap: float | None = None
     dollar_volume: float | None = None
     spark: list[float] | None = None   # recent daily closes (oldest→newest) for sparklines
+    wk52_high: float | None = None     # trailing 52-week high (close basis)
+    wk52_low: float | None = None      # trailing 52-week low (close basis)
 
 
 @dataclass
@@ -678,6 +680,47 @@ def fetch_quotes(symbols_with_names: dict[str, str]) -> list[Quote]:
             )
         )
     return out
+
+
+def attach_52w_range(quotes: list[Quote]) -> None:
+    """Populate wk52_high / wk52_low on each Quote from ~1y of weekly closes.
+
+    One bulk weekly download keeps the payload tiny (≈52 points/symbol). Mutates
+    the quotes in place; silently skips any symbol Yahoo doesn't return.
+    """
+    syms = [q.symbol for q in quotes if q.symbol]
+    if not syms:
+        return
+    try:
+        data = yf.download(
+            syms, period="1y", interval="1wk",
+            auto_adjust=False, progress=False, group_by="ticker", threads=True,
+        )
+    except Exception as e:
+        log(f"52-week range download failed: {e}")
+        return
+    if data is None or data.empty:
+        return
+    by_symbol = {q.symbol: q for q in quotes}
+    for sym, q in by_symbol.items():
+        try:
+            if len(syms) == 1:
+                hist = data
+            elif sym in data.columns.get_level_values(0):
+                hist = data[sym]
+            else:
+                continue
+            close = hist["Close"].dropna()
+            if close.empty:
+                continue
+            hi, lo = float(close.max()), float(close.min())
+            # Fold in the latest intraday close so a fresh high/low isn't clipped
+            hi = max(hi, q.price)
+            lo = min(lo, q.price)
+            if hi > lo:
+                q.wk52_high, q.wk52_low = hi, lo
+        except Exception:
+            continue
 
 
 def fetch_screener(screener_id: str, count: int = 25) -> list[Quote]:
@@ -1641,9 +1684,26 @@ def render_index_tile(q: Quote) -> str:
     cls = cls_for(q.change_pct)
     price = fmt_num(q.price)
     delta = f"{'+' if q.change >= 0 else ''}{q.change:,.2f} ({fmt_pct(q.change_pct)})"
+    wk52 = None
+    if (q.wk52_high is not None and q.wk52_low is not None
+            and q.wk52_high > q.wk52_low):
+        span = q.wk52_high - q.wk52_low
+        pos = max(0.0, min(100.0, (q.price - q.wk52_low) / span * 100.0))
+        from_high = (q.price - q.wk52_high) / q.wk52_high * 100.0
+        # Near-high (top 10%) reads bullish; near-low (bottom 10%) bearish
+        zone = "hot" if pos >= 90 else ("cold" if pos <= 10 else "mid")
+        wk52 = {
+            "pos": f"{pos:.1f}",
+            "low": fmt_num(q.wk52_low),
+            "high": fmt_num(q.wk52_high),
+            "from_high": fmt_pct(from_high),
+            "zone": zone,
+            "title": f"52-week range {fmt_num(q.wk52_low)} – {fmt_num(q.wk52_high)} · "
+                     f"{fmt_pct(from_high)} from high",
+        }
     return _jinja_env.get_template("_tile.html").render(
         cls=cls, q=q, price=price, delta=delta,
-        spark=_sparkline_svg(q.spark, cls),
+        spark=_sparkline_svg(q.spark, cls), wk52=wk52,
     )
 
 
@@ -4331,8 +4391,63 @@ def render_sector_heatmap(snap: Snapshot) -> str:
         ))
     return (
         f'<h2 id="sectors"><span class="std-only">How Each Part of the Economy Is Doing</span><span class="adv-only">Sector Performance</span></h2>'
+        f'{render_breadth_strip(snap)}'
         f'{bars_html}'
         f'<div class="sector-grid">{"".join(cards)}</div>'
+    )
+
+
+def render_breadth_strip(snap: Snapshot) -> str:
+    """Market breadth from the 11 sector ETFs: how many advanced vs declined.
+
+    A quick 'was it a broad move or a narrow one?' read, derived entirely from
+    data already in the snapshot — no extra network calls.
+    """
+    sectors = snap.sectors or []
+    if len(sectors) < 3:
+        return ""
+    up   = sum(1 for s in sectors if s.pct_1d > 0.05)
+    down = sum(1 for s in sectors if s.pct_1d < -0.05)
+    flat = len(sectors) - up - down
+    total = len(sectors)
+    avg = sum(s.pct_1d for s in sectors) / total
+    up_pct   = up / total * 100.0
+    down_pct = down / total * 100.0
+    flat_pct = max(0.0, 100.0 - up_pct - down_pct)
+
+    if up >= down * 2 and up >= total * 0.6:
+        tone, verdict_std, verdict_adv = "up", "Broad rally", "Broad-based advance"
+    elif down >= up * 2 and down >= total * 0.6:
+        tone, verdict_std, verdict_adv = "down", "Broad selloff", "Broad-based decline"
+    elif abs(up - down) <= 1:
+        tone, verdict_std, verdict_adv = "flat", "Split tape", "Mixed / rotational"
+    else:
+        tone = "up" if up > down else "down"
+        verdict_std = "Leaned up" if up > down else "Leaned down"
+        verdict_adv = "Modestly positive breadth" if up > down else "Modestly negative breadth"
+
+    avg_cls = cls_for(avg)
+    return (
+        '<div class="breadth" role="img" '
+        f'aria-label="Market breadth: {up} of {total} sectors advanced, average {fmt_pct(avg)}">'
+        '<div class="breadth-head">'
+        '<span class="breadth-title"><span class="std-only">Market Breadth</span>'
+        '<span class="adv-only">Sector Breadth</span></span>'
+        f'<span class="breadth-verdict tone-{tone}">'
+        f'<span class="std-only">{verdict_std}</span><span class="adv-only">{verdict_adv}</span></span>'
+        '</div>'
+        '<div class="breadth-bar">'
+        f'<div class="bb-seg bb-up" style="width:{up_pct:.2f}%"></div>'
+        f'<div class="bb-seg bb-flat" style="width:{flat_pct:.2f}%"></div>'
+        f'<div class="bb-seg bb-down" style="width:{down_pct:.2f}%"></div>'
+        '</div>'
+        '<div class="breadth-legend">'
+        f'<span class="bl up">▲ {up} advancing</span>'
+        + (f'<span class="bl flat">■ {flat} flat</span>' if flat else '')
+        + f'<span class="bl down">▼ {down} declining</span>'
+        f'<span class="bl avg">avg <span class="num {avg_cls}">{fmt_pct(avg)}</span></span>'
+        '</div>'
+        '</div>'
     )
 
 
@@ -5470,6 +5585,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
         snap.macro = fetch_quotes(EXTRA_MACRO_TICKERS)
     except Exception as e:
         warn(f"macro fetch failed: {e}", snap)
+
+    log("Fetching 52-week ranges for indices & macro…")
+    try:
+        attach_52w_range(snap.indices + snap.macro)
+    except Exception as e:
+        warn(f"52-week range fetch failed: {e}", snap)
 
     log("Fetching global indices…")
     try:
