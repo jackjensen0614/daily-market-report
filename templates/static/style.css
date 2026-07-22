@@ -32,6 +32,45 @@
   --tint-up: rgba(51,209,130,.09);
   --tint-down: rgba(242,109,114,.09);
 }
+
+/* ── Light theme (opt-in via the header toggle) ── */
+:root.theme-light {
+  --bg: #f4f6fa;
+  --bg-1: #eceff5;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f3f5fa;
+  --bg-elev: #ffffff;
+  --border: #e2e6ef;
+  --border-strong: #ccd3e0;
+  --text: #121620;
+  --text-dim: #4a5468;
+  --text-faint: #7b8698;
+  --accent: #0d8f83;
+  --accent-2: #315fd6;
+  --green: #0a8f4f; --green-dim: #d6f2e4;
+  --red: #c22c33; --red-dim: #f7dde0;
+  --yellow: #b07d0a;
+  --blue: #315fd6; --purple: #6d4fd6;
+  --up: #0a8f4f; --down: #c22c33;
+  --shadow: 0 1px 2px rgba(20,30,60,.06), 0 8px 24px -16px rgba(20,30,60,.18);
+  --shadow-lg: 0 16px 44px -18px rgba(20,30,60,.22);
+  --tint-up: rgba(10,143,79,.08);
+  --tint-down: rgba(194,44,51,.08);
+}
+/* Components that hardcode dark colors need light equivalents */
+:root.theme-light .refresh-btn,
+:root.theme-light .print-btn {
+  background: #eef1f7; border: 1px solid var(--border-strong); color: var(--text-dim);
+}
+:root.theme-light .refresh-btn:hover { background: #e3e8f1; }
+:root.theme-light .print-btn:hover { background: #e3e8f1; color: var(--accent-2); }
+:root.theme-light .sticky-nav { background: rgba(255,255,255,.9); }
+:root.theme-light .pill.up { background: var(--green-dim); border-color: #9fd9bb; color: #0a7a43; }
+:root.theme-light .narr.risk,
+:root.theme-light .briefing-section.risk { background: #fdf5e2; border-color: #e6d3a0; }
+:root.theme-light .briefing-modal-head { background: var(--bg-panel-2); }
+:root.theme-light .fab { color: #062018; }
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0; background: var(--bg); color: var(--text);
@@ -320,6 +359,7 @@ a { color: #8ab4f8; }
   transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
 }
 .print-btn:hover { background: #252d42; border-color: var(--accent-2); color: var(--accent-2); }
+.theme-btn { padding: 6px 11px; font-size: 14px; line-height: 1; }
 
 /* Live market-status clock */
 .market-clock {

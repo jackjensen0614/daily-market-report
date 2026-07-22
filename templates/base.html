@@ -10,6 +10,15 @@
 <style>
 {% include 'static/style.css' -%}
 </style>
+<script>
+  /* Apply the saved theme before first paint to avoid a flash. */
+  (function () {
+    try {
+      if (localStorage.getItem('mktTheme') === 'light')
+        document.documentElement.classList.add('theme-light');
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body class="mode-standard">
 
@@ -69,6 +78,9 @@
     </button>
     <button class="print-btn" id="copy-btn" onclick="copySummary()" title="Copy a plain-text market summary to your clipboard">
       &#128203; <span id="copy-label">Copy summary</span>
+    </button>
+    <button class="print-btn theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light / dark theme" aria-label="Toggle light or dark theme">
+      <span id="theme-icon">&#9728;</span>
     </button>
     <textarea id="copy-summary-src" hidden aria-hidden="true">{{ text_summary }}</textarea>
     <span id="refresh-status" class="meta"></span>
@@ -263,6 +275,24 @@ function setReadingMode(mode) {
   try { saved = localStorage.getItem(MODE_KEY) || 'standard'; } catch(e) {}
   setReadingMode(saved);
 })();
+
+// ── Light / dark theme toggle (dark is the default) ──────────────────────
+// The saved theme is applied pre-paint by the inline <head> script; this just
+// handles the button icon and toggling. Icon shows the theme you'd switch TO.
+function updateThemeIcon() {
+  var icon = document.getElementById('theme-icon');
+  if (!icon) return;
+  var light = document.documentElement.classList.contains('theme-light');
+  icon.innerHTML = light ? '&#9790;' : '&#9728;';  // ☾ to go dark, ☀ to go light
+  var btn = document.getElementById('theme-btn');
+  if (btn) btn.title = light ? 'Switch to dark theme' : 'Switch to light theme';
+}
+function toggleTheme() {
+  var light = document.documentElement.classList.toggle('theme-light');
+  try { localStorage.setItem('mktTheme', light ? 'light' : 'dark'); } catch (e) {}
+  updateThemeIcon();
+}
+updateThemeIcon();
 
 // ── Tab views (Today / Markets / Global / Crypto) ────────────────────────
 // The page is one document; tabs show one panel at a time. The active tab
