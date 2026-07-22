@@ -18,6 +18,7 @@
 <!-- ── Watchlist sidebar (always visible) ── -->
 <div class="sidebar" id="sidebar">
   <div class="sb-head">
+    <button class="sb-collapse-btn" onclick="toggleWatchlist()" title="Hide watchlist" aria-label="Hide watchlist">&#171;</button>
     <div class="sb-title">★ <span class="std-only">Stocks I'm Watching</span><span class="adv-only">My Watchlist</span></div>
     <div class="sb-subtitle"><span class="std-only">Yesterday's close · refreshes every 5 minutes</span><span class="adv-only">Prior session · refreshes every 5 min</span></div>
     <button id="sb-restore-btn" onclick="restoreServerCards()" style="display:none;margin-top:6px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-faint);font-size:10px;padding:3px 8px;cursor:pointer;width:100%">Restore hidden tickers</button>
@@ -226,6 +227,7 @@
 </div><!-- /main-col -->
 </div><!-- /page-layout -->
 
+<button id="sb-reopen" class="sb-reopen" onclick="toggleWatchlist()" title="Show watchlist" aria-label="Show watchlist">&#9733; <span class="std-only">Watching</span><span class="adv-only">Watchlist</span></button>
 <button id="back-to-top" class="back-to-top" onclick="scrollToTop()" title="Back to top" aria-label="Back to top" hidden>&#8593;</button>
 <script type="application/json" id="scorecard-csv-data">{{ scorecard_csv_json }}</script>
 <script>
@@ -1049,6 +1051,18 @@ function downloadScorecardCsv() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
+
+// Collapse / expand the watchlist sidebar (persisted across sessions).
+var WL_KEY = 'mktWlCollapsed';
+function toggleWatchlist() {
+  var collapsed = document.body.classList.toggle('wl-collapsed');
+  try { localStorage.setItem(WL_KEY, collapsed ? '1' : '0'); } catch (e) {}
+}
+(function initWatchlistCollapse() {
+  var v = null;
+  try { v = localStorage.getItem(WL_KEY); } catch (e) {}
+  if (v === '1') document.body.classList.add('wl-collapsed');
+})();
 
 // Floating "back to top" button — appears once the page is scrolled down.
 function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }

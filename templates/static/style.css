@@ -1175,12 +1175,34 @@ details.earnings-extra > .cols { margin-top: 12px; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 @media (max-width: 920px) { .sidebar { display: none; } }
 .sb-head {
-  padding: 14px 14px 10px; border-bottom: 1px solid var(--border);
+  padding: 14px 34px 10px 14px; border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 5;
   background: var(--bg-panel);
   box-shadow: 0 4px 6px -4px rgba(0,0,0,0.4);
 }
 .sb-title { font-size: 13px; font-weight: 700; color: var(--text); }
+/* Collapse control + collapsed state */
+.sb-collapse-btn {
+  position: absolute; top: 12px; right: 10px;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-faint); font-size: 15px; line-height: 1; cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.sb-collapse-btn:hover { color: var(--text); border-color: var(--accent); }
+body.wl-collapsed .sidebar { display: none; }
+.sb-reopen {
+  display: none; position: fixed; left: 0; bottom: 20px; z-index: 200;
+  align-items: center; gap: 6px;
+  background: var(--bg-elev); border: 1px solid var(--border-strong); border-left: none;
+  border-radius: 0 8px 8px 0; color: var(--text);
+  font-size: 12px; font-weight: 600; padding: 9px 13px 9px 11px;
+  cursor: pointer; box-shadow: var(--shadow);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.sb-reopen:hover { color: var(--accent); border-color: var(--accent); background: var(--bg-panel-2); }
+body.wl-collapsed .sb-reopen { display: inline-flex; }
+@media (max-width: 920px) { .sb-reopen { display: none !important; } }
 .sb-subtitle { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
 .sb-add {
   display: flex; gap: 6px; padding: 10px 12px;
@@ -1764,7 +1786,8 @@ body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; 
   .refresh-btn, .print-btn, .mode-toggle, #refresh-status,
   .lookup-search, .lookup-suggest, .sb-add, .sb-suggest,
   #lk-suggest, #sb-suggest, .crypto-toggle, .fab, #sb-restore-btn,
-  .movers-filter, .back-to-top, #copy-summary-src, .market-clock, .tr-toolbar {
+  .movers-filter, .back-to-top, #copy-summary-src, .market-clock, .tr-toolbar,
+  .sb-reopen {
     display: none !important;
   }
 
