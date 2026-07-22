@@ -657,6 +657,49 @@ details.scorecard-details > .scorecard-body {
 .time-amc { background: rgba(167,139,250,.18); color: var(--purple); }
 .time-tbd { background: rgba(148,163,184,.10); color: var(--text-faint); }
 
+/* Risk barometer — composite risk-on/off gauge */
+.risk-barometer {
+  margin-top: 14px; padding: 13px 16px 14px;
+  background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.rb-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.rb-title {
+  font-size: 11px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.rb-verdict { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rb-verdict.tone-on      { color: var(--green); }
+.rb-verdict.tone-off     { color: var(--red); }
+.rb-verdict.tone-neutral { color: var(--yellow); }
+.rb-verdict .rb-scale { font-size: 11px; font-weight: 500; color: var(--text-faint); }
+.rb-track {
+  position: relative; height: 8px; border-radius: 5px;
+  background: linear-gradient(90deg, var(--red) 0%, var(--yellow) 50%, var(--green) 100%);
+  opacity: .92;
+}
+.rb-marker {
+  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--text); border: 2px solid var(--bg-panel-2);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.rb-scale-row {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint);
+}
+.rb-comps {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px;
+}
+.rb-comp {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px;
+}
+.rb-comp-key { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.rb-comp-val { font-size: 13px; font-weight: 600; margin-top: 2px; color: var(--text); }
+
 /* Sector horizontal-bar chart */
 /* Market breadth strip (advancing vs declining sectors) */
 .breadth {
@@ -745,6 +788,19 @@ details.scorecard-details > .scorecard-body {
 .fx-pair { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
 .fx-px { font-size: 17px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .fx-chg { font-size: 12px; font-weight: 600; margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+/* Crypto market overview (total mcap / volume / dominance) */
+.crypto-overview {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 16px;
+}
+.co-tile {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 13px;
+}
+.co-key { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; }
+.co-val { font-size: 18px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.co-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+@media (max-width: 440px) { .crypto-overview { grid-template-columns: 1fr; } }
 
 /* Track-record CSV export toolbar */
 .tr-toolbar { display: flex; justify-content: flex-end; padding: 12px 14px 0; }

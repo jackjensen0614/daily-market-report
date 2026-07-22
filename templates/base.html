@@ -121,6 +121,7 @@
   <div class="index-grid">
     {{ index_tiles }}
   </div>
+  {{ risk_barometer_block }}
 </div>
 
 <!-- Scorecard: grade the last session, predict this one -->
@@ -208,6 +209,7 @@
 <!-- ===== TAB: CRYPTO ===== -->
 <section class="tab-panel" id="tab-crypto" data-panel="crypto">
 <div class="market-group-header crypto" id="crypto-section">Crypto</div>
+{{ crypto_overview_block }}
 <div class="panel collapsed" id="crypto-panel">
   <div class="panel-head"><h3><span class="std-only">Biggest Cryptocurrencies</span><span class="adv-only">Crypto · Top {{ crypto_top_n }}</span></h3><div class="panel-head-right"><div class="sub"><span class="std-only">BTC &amp; ETH first, then biggest 24h moves</span><span class="adv-only">BTC/ETH pinned · then by abs(24h Δ)</span></div><button type="button" class="crypto-toggle" data-collapsed-label="Show all {{ crypto_top_n }}" data-expanded-label="Show top 5">Show all {{ crypto_top_n }}</button></div></div>
   <div class="crypto-rows">{{ crypto_rows }}</div>

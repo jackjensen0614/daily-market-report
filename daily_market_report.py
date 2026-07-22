@@ -410,6 +410,7 @@ class Snapshot:
     crypto: list[MoverWithNews] = field(default_factory=list)
     crypto_gainers: list[MoverWithNews] = field(default_factory=list)
     crypto_losers: list[MoverWithNews] = field(default_factory=list)
+    crypto_global: dict = field(default_factory=dict)   # total mcap, volume, BTC dominance
     global_indices: list[Quote] = field(default_factory=list)
     yields: list[Quote] = field(default_factory=list)   # Treasury tenors (3M/5Y/10Y/30Y)
     fx: list[Quote] = field(default_factory=list)        # major currency pairs
@@ -966,6 +967,29 @@ def fetch_crypto_markets(n: int = CRYPTO_TOP_N) -> list[Quote]:
         except Exception as e:
             log(f"  skipping crypto row: {e}")
     return out
+
+
+def fetch_crypto_global() -> dict:
+    """Aggregate crypto market stats from CoinGecko /global: total market cap,
+    24h volume, 24h market-cap change, and BTC/ETH dominance."""
+    try:
+        r = requests.get(f"{COINGECKO_BASE}/global",
+                         headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+                         timeout=20)
+        r.raise_for_status()
+        d = r.json().get("data", {})
+    except Exception as e:
+        log(f"CoinGecko global failed: {e}")
+        return {}
+    dom = d.get("market_cap_percentage", {}) or {}
+    return {
+        "total_market_cap_usd": float((d.get("total_market_cap", {}) or {}).get("usd", 0) or 0),
+        "total_volume_usd": float((d.get("total_volume", {}) or {}).get("usd", 0) or 0),
+        "market_cap_change_24h": float(d.get("market_cap_change_percentage_24h_usd", 0) or 0),
+        "btc_dominance": float(dom.get("btc", 0) or 0),
+        "eth_dominance": float(dom.get("eth", 0) or 0),
+        "active_cryptos": int(d.get("active_cryptocurrencies", 0) or 0),
+    }
 
 
 def fetch_crypto_news_item(coin: Quote) -> list[NewsItem]:
@@ -4361,6 +4385,35 @@ def render_fx_strip(snap: Snapshot) -> str:
     )
 
 
+def render_crypto_overview(snap: Snapshot) -> str:
+    """Whole-market crypto stats: total market cap (+24h change), 24h volume,
+    and BTC/ETH dominance. Sits above the top-coins list on the Crypto tab."""
+    g = snap.crypto_global or {}
+    mcap = g.get("total_market_cap_usd") or 0
+    if not mcap:
+        return ""
+    vol = g.get("total_volume_usd") or 0
+    chg = g.get("market_cap_change_24h") or 0
+    btc_dom = g.get("btc_dominance") or 0
+    eth_dom = g.get("eth_dominance") or 0
+    chg_cls = cls_for(chg)
+    tiles = [
+        ("Total Market Cap", fmt_usd(mcap),
+         f'<span class="num {chg_cls}">{fmt_pct(chg)}</span> · 24h'),
+        ("24h Volume", fmt_usd(vol), ""),
+        ("BTC Dominance", f"{btc_dom:.1f}%",
+         f"ETH {eth_dom:.1f}%" if eth_dom else ""),
+    ]
+    tile_html = "".join(
+        f'<div class="co-tile"><div class="co-key">{escape_html(k)}</div>'
+        f'<div class="co-val num">{v}</div>'
+        + (f'<div class="co-sub">{sub}</div>' if sub else '')
+        + '</div>'
+        for k, v, sub in tiles
+    )
+    return f'<div class="crypto-overview">{tile_html}</div>'
+
+
 def build_text_summary(snap: Snapshot) -> str:
     """A plain-text digest of the session for quick sharing (Slack / email).
 
@@ -4491,6 +4544,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         briefing_block=render_briefing_block(briefing, snap, analysis_html=render_analysis_block(snap, briefing)),
         premarket_block=render_premarket_strips(snap),
         watchlist_block=render_watchlist(snap),
+        risk_barometer_block=render_risk_barometer(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
         yield_curve_block=render_yield_curve(snap),
         sentiment_block=render_sentiment_strip(snap),
@@ -4503,6 +4557,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         losers_rows=render_movers_block(snap.losers, why_l, "No loser data."),
         active_rows=render_movers_block(snap.most_active, why_a, "No active data."),
         crypto_rows=render_movers_block(crypto_list, why_c, "No crypto data."),
+        crypto_overview_block=render_crypto_overview(snap),
         crypto_top_n=CRYPTO_TOP_N,
         outlook_block=render_outlook_block(snap, briefing),
         week_ahead_block=render_week_ahead(snap),
@@ -4646,6 +4701,56 @@ def render_breadth_strip(snap: Snapshot) -> str:
         + f'<span class="bl down">▼ {down} declining</span>'
         f'<span class="bl avg">avg <span class="num {avg_cls}">{fmt_pct(avg)}</span></span>'
         '</div>'
+        '</div>'
+    )
+
+
+def render_risk_barometer(snap: Snapshot) -> str:
+    """Composite risk-on / risk-off read from VIX, sector breadth, and index
+    participation — a single at-a-glance gauge of the market environment.
+    Synthesized entirely from data already in the snapshot (no extra fetch).
+    """
+    vix = next((q for q in snap.indices if "VIX" in q.name.upper()), None)
+    equity = [q for q in snap.indices if "VIX" not in q.name.upper()]
+    sectors = snap.sectors or []
+    if not equity or len(sectors) < 3:
+        return ""
+
+    comps: list[tuple[str, float, str]] = []  # (label, score 0-100, detail)
+    if vix and vix.price:
+        # Calm (low VIX) is risk-on: map 12 -> 100, 35 -> 0.
+        vs = max(0.0, min(100.0, (35.0 - vix.price) / (35.0 - 12.0) * 100.0))
+        comps.append(("Volatility", vs, f"VIX {vix.price:.1f}"))
+    up_sec = sum(1 for s in sectors if s.pct_1d > 0.05)
+    comps.append(("Breadth", up_sec / len(sectors) * 100.0, f"{up_sec}/{len(sectors)} sectors up"))
+    up_idx = sum(1 for q in equity if q.change_pct >= 0)
+    comps.append(("Participation", up_idx / len(equity) * 100.0, f"{up_idx}/{len(equity)} indexes up"))
+
+    score = sum(c[1] for c in comps) / len(comps)
+    if score >= 70:   tone, std, adv = "on", "Risk-On", "Risk-On"
+    elif score >= 55: tone, std, adv = "on", "Leaning Risk-On", "Mild Risk-On"
+    elif score >= 45: tone, std, adv = "neutral", "Mixed", "Neutral / Mixed"
+    elif score >= 30: tone, std, adv = "off", "Cautious", "Cautious / Risk-Off"
+    else:             tone, std, adv = "off", "Risk-Off", "Risk-Off"
+
+    comp_html = "".join(
+        f'<div class="rb-comp"><div class="rb-comp-key">{escape_html(label)}</div>'
+        f'<div class="rb-comp-val">{escape_html(detail)}</div></div>'
+        for label, _s, detail in comps
+    )
+    return (
+        '<div class="risk-barometer" role="img" '
+        f'aria-label="Risk barometer {score:.0f} of 100 — {adv}">'
+        '<div class="rb-head">'
+        '<span class="rb-title"><span class="std-only">Market Mood</span>'
+        '<span class="adv-only">Risk Barometer</span></span>'
+        f'<span class="rb-verdict tone-{tone}">'
+        f'<span class="std-only">{std}</span><span class="adv-only">{adv}</span>'
+        f' · {score:.0f}<span class="rb-scale">/100</span></span>'
+        '</div>'
+        f'<div class="rb-track"><div class="rb-marker" style="left:{score:.1f}%"></div></div>'
+        '<div class="rb-scale-row"><span>Risk-Off</span><span>Neutral</span><span>Risk-On</span></div>'
+        f'<div class="rb-comps">{comp_html}</div>'
         '</div>'
     )
 
@@ -6002,6 +6107,10 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     crypto_q = fetch_crypto_markets(CRYPTO_TOP_N)
     if not crypto_q:
         warn("No crypto data — CoinGecko may be rate-limited.", snap)
+    try:
+        snap.crypto_global = fetch_crypto_global()
+    except Exception as e:
+        warn(f"crypto global fetch failed: {e}", snap)
     snap.crypto = attach_crypto_news(crypto_q)
     # sort for gainer/loser subsets (display ordering is applied later at
     # render time, so it also covers the --offline cached-snapshot path)
@@ -6122,6 +6231,7 @@ def load_cache() -> Snapshot | None:
             losers=[mw_from(x) for x in raw.get("losers", [])],
             most_active=[mw_from(x) for x in raw.get("most_active", [])],
             crypto=[mw_from(x) for x in raw.get("crypto", [])],
+            crypto_global=raw.get("crypto_global", {}),
             crypto_gainers=[mw_from(x) for x in raw.get("crypto_gainers", [])],
             crypto_losers=[mw_from(x) for x in raw.get("crypto_losers", [])],
             earnings_today=[ev_from(x) for x in raw.get("earnings_today", [])],
