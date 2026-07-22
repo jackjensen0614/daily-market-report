@@ -4555,8 +4555,8 @@ def render_yield_curve(snap: Snapshot) -> str:
     by_tenor = {q.name: q for q in pts}
 
     # SVG geometry — categorical (even) x spacing so labels line up with dots.
-    W, H = 320.0, 132.0
-    padx, top, bottom = 14.0, 24.0, 22.0
+    W, H = 320.0, 104.0
+    padx, top, bottom = 14.0, 20.0, 18.0
     plot_h = H - top - bottom
     n = len(pts)
     lo = min(q.price for q in pts)
