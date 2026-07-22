@@ -1341,6 +1341,15 @@ details.world-news-details[open] > summary .expand-hint { display: none; }
 .tc-reason {
   font-size: 12px; color: var(--text-dim); line-height: 1.5;
 }
+/* Forward "call" / recommendation on each pick */
+.tc-outlook {
+  margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--border);
+}
+.tc-outlook-label {
+  display: block; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
+}
+.tc-outlook-text { font-size: 12px; color: var(--text); line-height: 1.5; }
 
 /* Reading-mode toggle */
 body.mode-standard .adv-only { display: none !important; }

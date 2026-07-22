@@ -1459,7 +1459,9 @@ BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY 
       "rationale": "one-line signal — specific catalyst, level, or technical setup",
       "rationale_plain": "Same rationale but in plain language — no jargon ('catalyst' = 'reason', 'breakout' = 'big move up past a recent high', 'support level' = 'a price the stock has bounced off before'). Friendly tone.",
       "analysis": "2-3 sentences: trade thesis, key catalyst or level, primary risk to the thesis",
-      "analysis_plain": "Same analysis in plain language. 2-3 short sentences. Explain WHY in human terms ('Nvidia jumped because the company told investors it expects to make more money than people thought'). Conversational tone."
+      "analysis_plain": "Same analysis in plain language. 2-3 short sentences. Explain WHY in human terms ('Nvidia jumped because the company told investors it expects to make more money than people thought'). Conversational tone.",
+      "outlook": "Our forward CALL on the stock — a concrete prediction for the session/near term, matching the bias. If the name reports earnings, predict beat/miss and the likely gap direction & size and reference the EPS estimate; otherwise predict the expected move, the level that confirms it, and the level that invalidates it. 1-2 sentences.",
+      "outlook_plain": "Same call in plain language — no jargon. Say plainly what we think will happen and roughly how much the stock could move, and what would tell us we're wrong. 1-2 short sentences."
     }},
     ... 6-10 items across all three risk tiers
   ],
@@ -2348,6 +2350,69 @@ def _compact_reason(rationale: str, analysis: str, max_chars: int = 150) -> str:
     return combined
 
 
+def _pick_outlook(pick: dict, snap: "Snapshot") -> tuple[str, str]:
+    """Generate a forward 'call' for a pick — (advanced, plain).
+
+    Leads with an earnings expectation when the name reports today, otherwise a
+    momentum/continuation call with the level that confirms and the level that
+    invalidates it. Framed as a prediction, consistent with the self-graded
+    scorecard — not personalized advice.
+    """
+    ticker = (pick.get("ticker") or "").upper()
+    bias = (pick.get("bias") or "").lower()
+    if bias not in ("bullish", "bearish"):
+        return "", ""
+    ret = re.sub(r"\s*\([^)]*\)", "", pick.get("return_estimate", "")).strip()
+    ret_txt = f" — roughly {ret}" if ret else ""
+    up = bias == "bullish"
+
+    earn = next((e for e in (snap.earnings_today or [])
+                 if (e.symbol_or_event or "").upper() == ticker), None)
+    if earn:
+        when = humanize_time_token(earn.time) if earn.time else "today"
+        est_clean = re.sub(r"(?i)^eps\s*est\.?\s*", "", (earn.extra or "").strip()).strip()
+        est_adv = f" (Street sees EPS ~{est_clean})" if est_clean else ""
+        est_plain = f" Analysts expect earnings near {est_clean} per share." if est_clean else ""
+        if up:
+            adv = (f"Reports {when}{est_adv}. We lean toward a beat given recent strength — "
+                   f"a clean print could gap it up{ret_txt}; a guidance cut is the main downside.")
+            plain = (f"Shares results {when}.{est_plain} We think the report will likely be good, "
+                     f"which could push the stock up{ret_txt}. The risk is weak guidance about the future.")
+        else:
+            adv = (f"Reports {when}{est_adv}. Expectations look stretched — a miss or soft guidance "
+                   f"could drop it{ret_txt}; a blowout beat is the upside risk.")
+            plain = (f"Shares results {when}.{est_plain} We think there's a real chance of a letdown, "
+                     f"which could push the stock down{ret_txt}. The risk is a surprisingly strong report.")
+        return adv, plain
+
+    if up:
+        adv = (f"We expect follow-through{ret_txt} if it holds above yesterday's close; "
+               f"a break back below is the early fade signal.")
+        plain = (f"We think it can keep climbing{ret_txt} as long as it stays above yesterday's close. "
+                 f"If it slips below that, the move is probably over.")
+    else:
+        adv = (f"We expect continued pressure{ret_txt} while it stays under yesterday's close; "
+               f"a reclaim on volume would flip the thesis.")
+        plain = (f"We think it can keep falling{ret_txt} as long as it stays below yesterday's close. "
+                 f"If it climbs back above that on heavy trading, the drop is likely done.")
+    return adv, plain
+
+
+def ensure_pick_outlooks(picks: list[dict], snap: "Snapshot") -> list[dict]:
+    """Ensure every pick has an `outlook` / `outlook_plain` forward call, filling
+    in a generated one when the AI (or a data pick) didn't supply it."""
+    for p in picks:
+        if not (p.get("outlook") or "").strip():
+            adv, plain = _pick_outlook(p, snap)
+            if adv:
+                p["outlook"] = adv
+            if plain and not (p.get("outlook_plain") or "").strip():
+                p["outlook_plain"] = plain
+        if p.get("outlook") and not (p.get("outlook_plain") or "").strip():
+            p["outlook_plain"] = p["outlook"]
+    return picks
+
+
 def _ticker_cards_html(picks: list[dict]) -> str:
     """Render a risk-tiered grid of ticker prediction cards."""
     tiers = [
@@ -2391,6 +2456,22 @@ def _ticker_cards_html(picks: list[dict]) -> str:
                 f'</div>'
             )
 
+            # Forward "call" — our recommendation / prediction for the name.
+            outlook_adv = (p.get("outlook") or "").strip()
+            outlook_std = (p.get("outlook_plain") or outlook_adv).strip()
+            outlook_html = ""
+            if outlook_adv or outlook_std:
+                call_label = mode_pair("What we expect", "Our call")
+                outlook_html = (
+                    f'<div class="tc-outlook">'
+                    f'<span class="tc-outlook-label">{call_label}</span>'
+                    f'<span class="tc-outlook-text">'
+                    f'<span class="std-only">{escape_html(outlook_std)}</span>'
+                    f'<span class="adv-only">{escape_html(outlook_adv or outlook_std)}</span>'
+                    f'</span>'
+                    f'</div>'
+                )
+
             cards.append(
                 f'<div class="ticker-card {tier_key}">'
                 f'<div class="tc-top">'
@@ -2402,6 +2483,7 @@ def _ticker_cards_html(picks: list[dict]) -> str:
                 f'{ret_html}'
                 f'</div>'
                 f'{reason_html}'
+                f'{outlook_html}'
                 f'</div>'
             )
         out.append(
@@ -5093,6 +5175,8 @@ def render_today_picks(snap: Snapshot, briefing: dict | None = None,
         watch_picks = ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or []
         # Directional calls only — drop any 'neutral' / just-watching picks.
         watch_picks = [p for p in watch_picks if (p.get("bias") or "").lower() != "neutral"]
+        # Attach a forward "call" to every pick (AI-supplied or generated).
+        watch_picks = ensure_pick_outlooks(watch_picks, snap)
         picks_html = _ticker_cards_html(watch_picks) if watch_picks else ""
         preds_title = mode_pair("Today's stock picks", "Today's Predictions")
         preds_sub = mode_pair("Stocks we think are worth watching today", "Next session watchlist")
