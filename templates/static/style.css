@@ -703,6 +703,37 @@ details.scorecard-details > .scorecard-body {
 .yc-note { font-size: 12px; color: var(--text-dim); margin-top: 8px;
   text-align: center; line-height: 1.4; }
 
+/* Movers filter box */
+.movers-filter { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.movers-filter input {
+  flex: 1; max-width: 360px; background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px; padding: 8px 12px;
+  transition: border-color .15s;
+}
+.movers-filter input:focus { outline: none; border-color: var(--accent-2); }
+.movers-filter input::placeholder { color: var(--text-faint); }
+.mf-count { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+
+/* FX / currencies grid */
+.fx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px; margin-bottom: 8px; }
+.fx-tile { background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; }
+.fx-pair { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.fx-px { font-size: 17px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.fx-chg { font-size: 12px; font-weight: 600; margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+/* Back-to-top floating button */
+.back-to-top {
+  position: fixed; right: 20px; bottom: 20px; z-index: 200;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--bg-elev); border: 1px solid var(--border-strong); color: var(--text);
+  font-size: 20px; line-height: 1; cursor: pointer; box-shadow: var(--shadow);
+  transition: background .15s, border-color .15s, transform .15s;
+}
+.back-to-top:hover { background: var(--bg-panel-2); border-color: var(--accent); transform: translateY(-2px); }
+@media (max-width: 720px) { .back-to-top { right: 14px; bottom: 14px; width: 40px; height: 40px; } }
+
 .sector-bars {
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: 10px; padding: 14px 18px 16px; margin: 12px 0 18px;
@@ -1626,7 +1657,8 @@ body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; 
   .sidebar, .sticky-nav, .tab-bar, .live-ticker-section,
   .refresh-btn, .print-btn, .mode-toggle, #refresh-status,
   .lookup-search, .lookup-suggest, .sb-add, .sb-suggest,
-  #lk-suggest, #sb-suggest, .crypto-toggle, .fab, #sb-restore-btn {
+  #lk-suggest, #sb-suggest, .crypto-toggle, .fab, #sb-restore-btn,
+  .movers-filter, .back-to-top, #copy-summary-src {
     display: none !important;
   }
 

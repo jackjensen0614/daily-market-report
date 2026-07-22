@@ -165,6 +165,11 @@
 {{ sentiment_block }}
 
 <h2 id="movers"><span class="std-only">Yesterday's Biggest Winners &amp; Losers</span><span class="adv-only">Stock Movers</span> · {{ prior_date_human }}</h2>
+<div class="movers-filter">
+  <input type="text" id="movers-filter-input" placeholder="Filter movers by ticker or name…"
+         autocomplete="off" spellcheck="false" oninput="filterMovers(this.value)" />
+  <span id="movers-filter-count" class="mf-count"></span>
+</div>
 <div class="cols">
   <div class="panel">
     <div class="panel-head"><h3><span class="std-only">Stocks That Went Up the Most</span><span class="adv-only">Top Gainers</span></h3><div class="sub"><span class="std-only">The biggest gains in price</span><span class="adv-only">Largest % moves up</span></div></div>
@@ -192,6 +197,8 @@
 <div class="market-group-header global" id="global-markets"><span class="std-only">Markets Around the World</span><span class="adv-only">Global Markets</span></div>
 {{ global_block }}
 
+{{ fx_block }}
+
 {{ world_news_block }}
 </section><!-- /tab-global -->
 
@@ -213,6 +220,8 @@
 </div>
 </div><!-- /main-col -->
 </div><!-- /page-layout -->
+
+<button id="back-to-top" class="back-to-top" onclick="scrollToTop()" title="Back to top" aria-label="Back to top" hidden>&#8593;</button>
 <script>
 // Local file:// previously redirected to the published GitHub Pages copy.
 // That blocks local development (changes to report.html aren't visible
@@ -935,6 +944,35 @@ function copySummary() {
     fallback();
   }
 }
+
+// Live-filter the stock-movers tables by ticker or company name.
+function filterMovers(q) {
+  q = (q || '').trim().toLowerCase();
+  var rows = document.querySelectorAll('#tab-markets .cols .mover');
+  var shown = 0;
+  rows.forEach(function(row) {
+    var sym = (row.querySelector('.sym') || {}).textContent || '';
+    var name = (row.querySelector('.name') || {}).textContent || '';
+    var match = !q || (sym + ' ' + name).toLowerCase().indexOf(q) !== -1;
+    row.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+  var count = document.getElementById('movers-filter-count');
+  if (count) count.textContent = q ? (shown + ' match' + (shown === 1 ? '' : 'es')) : '';
+}
+
+// Floating "back to top" button — appears once the page is scrolled down.
+function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
+(function initBackToTop() {
+  var btn = document.getElementById('back-to-top');
+  if (!btn) return;
+  var onScroll = function() {
+    var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+    btn.hidden = y < 600;
+  };
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
+})();
 </script>
 </body>
 </html>

@@ -103,6 +103,12 @@ TREASURY_TICKERS = {
     "^IRX": "3M", "^FVX": "5Y", "^TNX": "10Y", "^TYX": "30Y",
 }
 
+# Major FX pairs for the currencies strip (Yahoo pair-form symbols).
+FX_TICKERS = {
+    "EURUSD=X": "EUR/USD", "USDJPY=X": "USD/JPY", "GBPUSD=X": "GBP/USD",
+    "USDCNY=X": "USD/CNY", "USDCAD=X": "USD/CAD", "AUDUSD=X": "AUD/USD",
+}
+
 # Global equity indices
 GLOBAL_INDICES = {
     "^GDAXI": "DAX (Germany)",
@@ -406,6 +412,7 @@ class Snapshot:
     crypto_losers: list[MoverWithNews] = field(default_factory=list)
     global_indices: list[Quote] = field(default_factory=list)
     yields: list[Quote] = field(default_factory=list)   # Treasury tenors (3M/5Y/10Y/30Y)
+    fx: list[Quote] = field(default_factory=list)        # major currency pairs
     earnings_today: list[CalendarEvent] = field(default_factory=list)
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
@@ -4226,6 +4233,31 @@ def render_global_block(snap: Snapshot) -> str:
     return f'{sub}<div class="pm-grid">{tiles}</div>'
 
 
+def render_fx_strip(snap: Snapshot) -> str:
+    """Compact grid of major FX pairs for the Global tab."""
+    if not snap.fx:
+        return ""
+
+    def _fx_price(v: float) -> str:
+        return f"{v:,.4f}" if abs(v) < 10 else f"{v:,.2f}"
+
+    tiles = []
+    for q in snap.fx:
+        cls = cls_for(q.change_pct)
+        tiles.append(
+            f'<div class="fx-tile">'
+            f'<div class="fx-pair">{escape_html(q.name)}</div>'
+            f'<div class="fx-px num">{_fx_price(q.price)}</div>'
+            f'<div class="fx-chg num {cls}">{fmt_pct(q.change_pct)}</div>'
+            f'</div>'
+        )
+    return (
+        '<h2 id="fx"><span class="std-only">Currencies</span>'
+        '<span class="adv-only">FX · Major Pairs</span></h2>'
+        f'<div class="fx-grid">{"".join(tiles)}</div>'
+    )
+
+
 def build_text_summary(snap: Snapshot) -> str:
     """A plain-text digest of the session for quick sharing (Slack / email).
 
@@ -4370,6 +4402,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
         global_block=render_global_block(snap),
+        fx_block=render_fx_strip(snap),
         world_news_block=render_world_news_block(snap, briefing),
         sidebar_block=render_sidebar_block(snap),
     )
@@ -5752,6 +5785,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     except Exception as e:
         warn(f"yield curve fetch failed: {e}", snap)
 
+    log("Fetching FX rates…")
+    try:
+        snap.fx = fetch_quotes(FX_TICKERS)
+    except Exception as e:
+        warn(f"FX fetch failed: {e}", snap)
+
     log("Fetching sector performance (YTD)…")
     try:
         snap.sectors = fetch_sectors()
@@ -5922,6 +5961,7 @@ def load_cache() -> Snapshot | None:
             macro=[q_from(x) for x in raw.get("macro", [])],
             global_indices=[q_from(x) for x in raw.get("global_indices", [])],
             yields=[q_from(x) for x in raw.get("yields", [])],
+            fx=[q_from(x) for x in raw.get("fx", [])],
             gainers=[mw_from(x) for x in raw.get("gainers", [])],
             losers=[mw_from(x) for x in raw.get("losers", [])],
             most_active=[mw_from(x) for x in raw.get("most_active", [])],
