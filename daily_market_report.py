@@ -2350,60 +2350,93 @@ def _compact_reason(rationale: str, analysis: str, max_chars: int = 150) -> str:
     return combined
 
 
-def _pick_outlook(pick: dict, snap: "Snapshot") -> tuple[str, str]:
+def _pick_outlook(pick: dict, snap: "Snapshot", idx: int = 0) -> tuple[str, str]:
     """Generate a forward 'call' for a pick — (advanced, plain).
 
     Leads with an earnings expectation when the name reports today, otherwise a
     momentum/continuation call with the level that confirms and the level that
-    invalidates it. Framed as a prediction, consistent with the self-graded
-    scorecard — not personalized advice.
+    invalidates it. `idx` is a per-pool sequence number (see ensure_pick_outlooks)
+    so successive picks of the same bias round-robin through the phrasing pool —
+    varied across cards, and stable across re-renders. Framed as a prediction,
+    consistent with the self-graded scorecard — not personal advice.
     """
-    ticker = (pick.get("ticker") or "").upper()
     bias = (pick.get("bias") or "").lower()
     if bias not in ("bullish", "bearish"):
         return "", ""
+    ticker = (pick.get("ticker") or "").upper()
     ret = re.sub(r"\s*\([^)]*\)", "", pick.get("return_estimate", "")).strip()
-    ret_txt = f" — roughly {ret}" if ret else ""
+    r = f" — roughly {ret}" if ret else ""          # advanced return clause
+    rp = f" — maybe {ret}" if ret else ""            # plain return clause
     up = bias == "bullish"
+
+    def _choose(variants: list[tuple[str, str]]) -> tuple[str, str]:
+        return variants[idx % len(variants)]
 
     earn = next((e for e in (snap.earnings_today or [])
                  if (e.symbol_or_event or "").upper() == ticker), None)
     if earn:
         when = humanize_time_token(earn.time) if earn.time else "today"
         est_clean = re.sub(r"(?i)^eps\s*est\.?\s*", "", (earn.extra or "").strip()).strip()
-        est_adv = f" (Street sees EPS ~{est_clean})" if est_clean else ""
-        est_plain = f" Analysts expect earnings near {est_clean} per share." if est_clean else ""
+        est_a = f" (Street sees EPS ~{est_clean})" if est_clean else ""
+        est_p = f" Analysts expect earnings near {est_clean} per share." if est_clean else ""
+        lead_a = f"Reports {when}{est_a}. "
+        lead_p = f"Shares results {when}.{est_p} "
         if up:
-            adv = (f"Reports {when}{est_adv}. We lean toward a beat given recent strength — "
-                   f"a clean print could gap it up{ret_txt}; a guidance cut is the main downside.")
-            plain = (f"Shares results {when}.{est_plain} We think the report will likely be good, "
-                     f"which could push the stock up{ret_txt}. The risk is weak guidance about the future.")
-        else:
-            adv = (f"Reports {when}{est_adv}. Expectations look stretched — a miss or soft guidance "
-                   f"could drop it{ret_txt}; a blowout beat is the upside risk.")
-            plain = (f"Shares results {when}.{est_plain} We think there's a real chance of a letdown, "
-                     f"which could push the stock down{ret_txt}. The risk is a surprisingly strong report.")
-        return adv, plain
+            return _choose([
+                (lead_a + f"We lean toward a beat given recent strength — a clean print could gap it up{r}; a guidance cut is the main downside.",
+                 lead_p + f"We think the report will likely be good, which could push the stock up{rp}. The risk is weak guidance about the future."),
+                (lead_a + f"Momentum favors an upside surprise — a solid quarter could pop it{r}; watch the guidance more than the headline number.",
+                 lead_p + f"The recent trend points to a good report that could lift the stock{rp}. What matters most is what they say about the months ahead."),
+                (lead_a + f"Setup leans bullish into the print — a beat-and-raise could gap it{r}; the risk is a 'sell-the-news' fade even on decent numbers.",
+                 lead_p + f"Things look positive going in — strong results could send it higher{rp}. Sometimes a stock still drops on good news, so that's the risk."),
+            ])
+        return _choose([
+            (lead_a + f"Expectations look stretched — a miss or soft guidance could drop it{r}; a blowout beat is the upside risk.",
+             lead_p + f"We think there's a real chance of a letdown, which could push the stock down{rp}. The risk is a surprisingly strong report."),
+            (lead_a + f"The bar looks high — any disappointment could gap it down{r}; a clean beat-and-raise is the squeeze risk.",
+             lead_p + f"A lot of good news is already priced in, so a weak report could sink it{rp}. A big surprise to the upside is the risk."),
+            (lead_a + f"We lean cautious into the print — weak guidance could sink it{r}; a strong quarter is the risk to the bearish call.",
+             lead_p + f"We're wary going in — soft results could drag it lower{rp}. A strong quarter would prove us wrong."),
+        ])
 
     if up:
-        adv = (f"We expect follow-through{ret_txt} if it holds above yesterday's close; "
-               f"a break back below is the early fade signal.")
-        plain = (f"We think it can keep climbing{ret_txt} as long as it stays above yesterday's close. "
-                 f"If it slips below that, the move is probably over.")
-    else:
-        adv = (f"We expect continued pressure{ret_txt} while it stays under yesterday's close; "
-               f"a reclaim on volume would flip the thesis.")
-        plain = (f"We think it can keep falling{ret_txt} as long as it stays below yesterday's close. "
-                 f"If it climbs back above that on heavy trading, the drop is likely done.")
-    return adv, plain
+        return _choose([
+            (f"We expect follow-through{r} if it holds above yesterday's close; a break back below is the early fade signal.",
+             f"We think it can keep climbing{rp} as long as it stays above yesterday's close. If it slips below that, the move is probably over."),
+            (f"Momentum traders should press the advantage{r}; first-30-minute volume is the tell — a light-volume open warns of a fade.",
+             f"Buyers likely keep pushing it up{rp}. Watch the first half hour — if not many shares trade, the rally may stall."),
+            (f"Path of least resistance is higher{r} while it defends yesterday's close; losing that level flips the setup.",
+             f"It should drift higher{rp} while it stays above yesterday's close. Dropping under that would change the picture."),
+            (f"A higher open that holds sets up more upside{r}; treat a fade back under yesterday's close as the exit.",
+             f"If it opens up and stays there, it can run further{rp}. Slipping back under yesterday's close is the sign to step aside."),
+        ])
+    return _choose([
+        (f"We expect continued pressure{r} while it stays under yesterday's close; a reclaim on volume would flip the thesis.",
+         f"We think it can keep falling{rp} as long as it stays below yesterday's close. If it climbs back above that on heavy trading, the drop is likely done."),
+        (f"Look for follow-through selling{r} as stops trigger; a strong-volume reclaim of yesterday's close is the warning.",
+         f"More selling is likely{rp} as automatic sell orders kick in. If it pushes back above yesterday's close on heavy trading, the slide may be over."),
+        (f"Path of least resistance is lower{r} unless it reclaims yesterday's close; a sharp intraday bounce is the risk.",
+         f"It should keep sliding{rp} unless it climbs back above yesterday's close. A quick bounce is the main risk to that."),
+        (f"A failed bounce that rolls over confirms more downside{r}; a clean reclaim of yesterday's close negates it.",
+         f"If it tries to bounce and fails, it likely heads lower{rp}. Getting back above yesterday's close would cancel that."),
+    ])
 
 
 def ensure_pick_outlooks(picks: list[dict], snap: "Snapshot") -> list[dict]:
     """Ensure every pick has an `outlook` / `outlook_plain` forward call, filling
-    in a generated one when the AI (or a data pick) didn't supply it."""
+    in a generated one when the AI (or a data pick) didn't supply it.
+
+    A per-pool counter (keyed by earnings-today + bias) round-robins the
+    fallback phrasing so no two same-type picks read alike until the pool wraps.
+    """
+    earn_syms = {(e.symbol_or_event or "").upper() for e in (snap.earnings_today or [])}
+    seq: dict[tuple, int] = {}
     for p in picks:
         if not (p.get("outlook") or "").strip():
-            adv, plain = _pick_outlook(p, snap)
+            bucket = ((p.get("ticker") or "").upper() in earn_syms, (p.get("bias") or "").lower())
+            i = seq.get(bucket, 0)
+            seq[bucket] = i + 1
+            adv, plain = _pick_outlook(p, snap, idx=i)
             if adv:
                 p["outlook"] = adv
             if plain and not (p.get("outlook_plain") or "").strip():
