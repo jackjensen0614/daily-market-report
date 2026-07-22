@@ -130,6 +130,22 @@
 <section class="tab-panel" id="tab-markets" data-panel="markets">
 <div class="market-group-header us" id="us-markets"><span class="std-only">U.S. Stock Market</span><span class="adv-only">US Markets</span></div>
 
+<!-- Look up any stock on demand -->
+<div class="lookup" id="lookup">
+  <div class="lookup-head">
+    <span class="lookup-title">&#128269; <span class="std-only">Look Up Any Stock</span><span class="adv-only">Ticker Lookup</span></span>
+    <span class="lookup-sub"><span class="std-only">Search any ticker or company for a live quote, chart &amp; news</span><span class="adv-only">Live quote · chart · signal · news for any symbol</span></span>
+  </div>
+  <div class="lookup-search">
+    <input type="text" id="lk-input" placeholder="e.g. AAPL, Nvidia, SPY, BTC…"
+           autocomplete="off" spellcheck="false"
+           oninput="lkUpdate()" onkeydown="lkKey(event)"
+           onfocus="lkUpdate()" onblur="setTimeout(lkHide, 160)" />
+    <div id="lk-suggest" class="lookup-suggest" hidden></div>
+  </div>
+  <div id="lk-result" class="lookup-result"></div>
+</div>
+
 {{ watchlist_block }}
 
 {{ premarket_block }}
@@ -568,6 +584,162 @@ function loadUserCards() {
   });
 }
 loadUserCards(); // sidebar is always visible — populate on page load
+
+// ── Ticker lookup panel (research any symbol on demand) ───────────────────
+// Reuses TICKER_DB autocomplete (sbLocalMatches/sbRemoteSearch) and the same
+// TradingView embed pattern as the watchlist, so it needs no backend.
+var lkSeq = 0, lkActiveIdx = -1, lkDebounce = null, lkCurrent = '';
+
+function lkTvSymbol(sym) {
+  sym = String(sym || '').toUpperCase();
+  if (sym.indexOf(':') >= 0) return sym;
+  if (/-USD$/.test(sym)) return 'CRYPTO:' + sym.replace('-USD', '') + 'USD';
+  return sym;
+}
+
+function lkInject(container, src, config) {
+  container.innerHTML =
+    '<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
+  var s = document.createElement('script');
+  s.type = 'text/javascript';
+  s.async = true;
+  s.src = 'https://s3.tradingview.com/external-embedding/' + src;
+  s.textContent = JSON.stringify(config);
+  container.querySelector('.tradingview-widget-container').appendChild(s);
+}
+
+function lkShow(sym, name) {
+  sym = String(sym || '').toUpperCase();
+  if (!sym) return;
+  lkCurrent = sym;
+  var tv = lkTvSymbol(sym);
+  var box = document.getElementById('lk-result');
+  if (!box) return;
+  box.innerHTML =
+    '<div class="lk-card">' +
+    '  <div class="lk-widget lk-info"></div>' +
+    '  <div class="lk-row">' +
+    '    <div class="lk-widget lk-chart"></div>' +
+    '    <div class="lk-widget lk-tech"></div>' +
+    '  </div>' +
+    '  <div class="lk-widget lk-news"></div>' +
+    '</div>';
+  lkInject(box.querySelector('.lk-info'), 'embed-widget-symbol-info.js', {
+    symbol: tv, width: '100%', locale: 'en', colorTheme: 'dark', isTransparent: true
+  });
+  lkInject(box.querySelector('.lk-chart'), 'embed-widget-symbol-overview.js', {
+    symbols: [[name || sym, tv + '|1D']],
+    chartOnly: false, width: '100%', height: 320, locale: 'en',
+    colorTheme: 'dark', isTransparent: true, autosize: false, showVolume: false,
+    lineWidth: 2, fontSize: '10', gridLineColor: 'rgba(35,42,59,0.6)',
+    dateRanges: ['1d|1', '5d|5', '1m|30', '3m|60', '12m|1D', 'all|1M']
+  });
+  lkInject(box.querySelector('.lk-tech'), 'embed-widget-technical-analysis.js', {
+    symbol: tv, interval: '1D', width: '100%', height: 320, locale: 'en',
+    colorTheme: 'dark', isTransparent: true, showIntervalTabs: true
+  });
+  lkInject(box.querySelector('.lk-news'), 'embed-widget-timeline.js', {
+    feedMode: 'symbol', symbol: tv, displayMode: 'regular',
+    width: '100%', height: 360, locale: 'en', colorTheme: 'dark', isTransparent: true
+  });
+}
+
+function lkRender(matches, loading) {
+  var box = document.getElementById('lk-suggest');
+  if (!box) return;
+  if (loading && !matches.length) {
+    box.innerHTML = '<div class="sb-suggest-empty">Searching…</div>';
+    box.hidden = false; return;
+  }
+  if (!matches.length) {
+    box.innerHTML = '<div class="sb-suggest-empty">No matches — press Enter to try anyway</div>';
+    box.hidden = false; return;
+  }
+  lkActiveIdx = -1;
+  box.innerHTML = matches.map(function (m) {
+    var sym = m[0], name = m[1] || '', type = m[2] || 'Stock';
+    return '<div class="sb-suggest-item" data-sym="' + escapeHtmlJs(sym) + '" ' +
+      'data-name="' + escapeHtmlJs(name) + '" ' +
+      'onmousedown="lkPick(\'' + escapeHtmlJs(sym).replace(/'/g, "\\'") + '\',\'' +
+      escapeHtmlJs(name).replace(/'/g, "\\'") + '\')">' +
+      '<span class="sb-suggest-sym">' + escapeHtmlJs(sym) + '</span>' +
+      '<span class="sb-suggest-name">' + escapeHtmlJs(name) + '</span>' +
+      '<span class="sb-suggest-type ' + escapeHtmlJs(type.toLowerCase()) + '">' + escapeHtmlJs(type) + '</span>' +
+      '</div>';
+  }).join('');
+  box.hidden = false;
+}
+
+function lkUpdate() {
+  var inp = document.getElementById('lk-input');
+  if (!inp) return;
+  var q = (inp.value || '').trim();
+  if (!q) { lkHide(); return; }
+  var local = sbLocalMatches(q, 8);
+  lkRender(local, true);
+  clearTimeout(lkDebounce);
+  var seq = ++lkSeq;
+  lkDebounce = setTimeout(function () {
+    sbRemoteSearch(q).then(function (rem) {
+      if (seq !== lkSeq) return;
+      var seen = {}, merged = [];
+      local.concat(rem || []).forEach(function (t) {
+        var k = String(t[0]).toUpperCase();
+        if (!seen[k]) { seen[k] = 1; merged.push(t); }
+      });
+      lkRender(merged.slice(0, 8), false);
+    });
+  }, 220);
+}
+
+function lkPick(sym, name) {
+  var inp = document.getElementById('lk-input');
+  if (inp) inp.value = name ? (sym + ' · ' + name) : sym;
+  lkHide();
+  lkShow(sym, name);
+}
+
+function lkHide() {
+  var box = document.getElementById('lk-suggest');
+  if (box) box.hidden = true;
+  lkActiveIdx = -1;
+}
+
+function lkKey(e) {
+  var box = document.getElementById('lk-suggest');
+  var items = box ? box.querySelectorAll('.sb-suggest-item') : [];
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault(); lkActiveIdx = Math.min(lkActiveIdx + 1, items.length - 1); lkHighlight(items);
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault(); lkActiveIdx = Math.max(lkActiveIdx - 1, 0); lkHighlight(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (lkActiveIdx >= 0 && items[lkActiveIdx]) {
+      lkPick(items[lkActiveIdx].getAttribute('data-sym'), items[lkActiveIdx].getAttribute('data-name'));
+    } else {
+      var raw = (document.getElementById('lk-input').value || '').trim();
+      if (!raw) return;
+      var local = sbLocalMatches(raw, 1);
+      if (local.length) { lkPick(local[0][0], local[0][1]); return; }
+      sbRemoteSearch(raw).then(function (rem) {
+        if (rem && rem.length) lkPick(rem[0][0], rem[0][1]);
+        else lkPick(raw.toUpperCase().replace(/[^A-Z0-9.\-^:]/g, ''), '');
+      });
+    }
+  } else if (e.key === 'Escape') {
+    lkHide();
+  }
+}
+
+function lkHighlight(items) {
+  for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', i === lkActiveIdx);
+  if (lkActiveIdx >= 0 && items[lkActiveIdx]) items[lkActiveIdx].scrollIntoView({ block: 'nearest' });
+}
+
+// Seed the panel so it isn't empty on first view.
+(function initLookup() {
+  if (document.getElementById('lk-result')) lkShow('AAPL', 'Apple Inc.');
+})();
 
 // ── Hidden server-side cards ──────────────────────────────────────────────
 var HIDDEN_KEY = 'mktHiddenCards';

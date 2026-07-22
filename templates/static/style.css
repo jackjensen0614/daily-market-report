@@ -465,6 +465,40 @@ details.scorecard-details > .scorecard-body {
   display: inline-block; padding: 2px 10px; border-radius: 999px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
 }
+/* Ticker lookup panel */
+.lookup {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px; margin: 4px 0 18px;
+}
+.lookup-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.lookup-title { font-size: 14px; font-weight: 700; letter-spacing: .03em; color: var(--accent); }
+.lookup-sub { font-size: 12px; color: var(--text-dim); }
+.lookup-search { position: relative; max-width: 460px; }
+#lk-input {
+  width: 100%; background: var(--bg); border: 1px solid var(--border-strong);
+  border-radius: 8px; color: var(--text); font-size: 14px; padding: 10px 12px;
+  outline: none;
+}
+#lk-input:focus { border-color: var(--accent); }
+.lookup-suggest {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  z-index: 50; max-height: 300px; overflow-y: auto;
+}
+.lookup-suggest[hidden] { display: none; }
+.lookup-result { margin-top: 14px; }
+.lk-card { display: flex; flex-direction: column; gap: 12px; }
+.lk-row { display: grid; grid-template-columns: 1.7fr 1fr; gap: 12px; }
+@media (max-width: 820px) { .lk-row { grid-template-columns: 1fr; } }
+.lk-widget {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden;
+}
+.lk-info { min-height: 120px; }
+.lk-chart, .lk-tech { min-height: 320px; }
+.lk-news { min-height: 200px; }
+
 /* Week-ahead calendar strip */
 .week-ahead { margin: 18px 0; }
 .wa-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
