@@ -1323,6 +1323,45 @@ body.wl-collapsed .sb-reopen { display: inline-flex; }
   overflow: hidden;
 }
 .sb-news a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Watchlist price targets / alerts / notes */
+.sb-alert { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); }
+.sb-alert-add {
+  background: none; border: 1px dashed var(--border-strong); border-radius: 6px;
+  color: var(--text-faint); font-size: 10.5px; padding: 4px 8px; cursor: pointer; width: 100%;
+  transition: color .15s, border-color .15s;
+}
+.sb-alert-add:hover { color: var(--accent); border-color: var(--accent); }
+.sb-target { font-size: 11px; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.sb-target-label { color: var(--text-faint); }
+.sb-target.hit .sb-target-label { color: var(--green); font-weight: 700; }
+.sb-target-val { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.sb-target-away { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.sb-note { font-size: 11px; color: var(--text-dim); margin-top: 3px; line-height: 1.4;
+  word-break: break-word; }
+.sb-alert-edit {
+  background: none; border: none; color: var(--text-faint); font-size: 10px;
+  padding: 2px 0 0; cursor: pointer; text-decoration: underline;
+}
+.sb-alert-edit:hover { color: var(--accent); }
+.sb-card.alert-hit {
+  border-color: var(--up);
+  box-shadow: inset 3px 0 0 var(--up), 0 0 0 1px rgba(51,209,130,.25);
+}
+.sb-alert-editor { display: flex; flex-direction: column; gap: 5px; }
+.sb-alert-editor input {
+  background: var(--bg-1); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text); font-size: 11px; padding: 5px 7px; width: 100%;
+}
+.sb-alert-editor input:focus { outline: none; border-color: var(--accent-2); }
+.sb-alert-actions { display: flex; gap: 5px; }
+.sb-alert-actions button {
+  flex: 1; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-panel-2);
+  color: var(--text-dim); font-size: 10.5px; padding: 4px 6px; cursor: pointer;
+}
+.sb-alert-save { background: var(--accent) !important; color: #062018 !important; border-color: var(--accent) !important; font-weight: 700; }
+.sb-alert-actions button:hover { border-color: var(--accent-2); }
+
 /* user-added TV charts */
 .sb-user-card {
   background: var(--bg-panel); border: 1px solid var(--border);

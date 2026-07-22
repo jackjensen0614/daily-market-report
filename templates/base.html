@@ -638,6 +638,89 @@ function loadUserCards() {
 }
 loadUserCards(); // sidebar is always visible — populate on page load
 
+// ── Watchlist price targets, alerts & notes ──────────────────────────────
+// Per-ticker target price + note stored in localStorage, applied to the
+// server-rendered "Tracked" cards. When the live price crosses the target the
+// card lights up. Direction is inferred from the price when the target was set.
+var WL_ALERT_KEY = 'mktWlAlerts';
+function getWlAlerts() { try { return JSON.parse(localStorage.getItem(WL_ALERT_KEY) || '{}'); } catch (e) { return {}; } }
+function saveWlAlerts(a) { try { localStorage.setItem(WL_ALERT_KEY, JSON.stringify(a)); } catch (e) {} }
+function wlCard(sym) { return document.querySelector('.sb-card[data-symbol="' + (window.CSS && CSS.escape ? CSS.escape(sym) : sym) + '"]'); }
+function wlMoney(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function wlQuote(sym) { return "'" + String(sym).replace(/'/g, "\\'") + "'"; }
+
+function setWlAlert(sym, target, note, base) {
+  var all = getWlAlerts();
+  if (target == null && !note) { delete all[sym]; }
+  else { all[sym] = {target: target, note: note || '', base: base}; }
+  saveWlAlerts(all);
+  renderCardAlert(sym);
+}
+
+function renderCardAlert(sym) {
+  var card = wlCard(sym);
+  if (!card) return;
+  var price = parseFloat(card.getAttribute('data-price')) || 0;
+  var a = getWlAlerts()[sym] || null;
+  var foot = card.querySelector('.sb-alert');
+  if (!foot) { foot = document.createElement('div'); foot.className = 'sb-alert'; card.appendChild(foot); }
+  card.classList.remove('alert-hit');
+  if (!a) {
+    foot.innerHTML = '<button class="sb-alert-add" onclick="openWlAlertEditor(' + wlQuote(sym) + ')">+ Set target / note</button>';
+    return;
+  }
+  var html = '';
+  if (a.target != null) {
+    var up = (a.base != null) ? (a.target >= a.base) : (a.target >= price);
+    var hit = up ? (price >= a.target) : (price <= a.target);
+    var away = price ? ((a.target - price) / price * 100) : 0;
+    if (hit) card.classList.add('alert-hit');
+    html += '<div class="sb-target' + (hit ? ' hit' : '') + '">'
+      + '<span class="sb-target-label">' + (hit ? '✓ Target reached' : (up ? '▲ Target' : '▼ Target')) + '</span> '
+      + '<span class="sb-target-val">' + wlMoney(a.target) + '</span>'
+      + (hit ? '' : ' <span class="sb-target-away">' + (away >= 0 ? '+' : '') + away.toFixed(1) + '%</span>')
+      + '</div>';
+  }
+  if (a.note) html += '<div class="sb-note">' + escapeHtmlJs(a.note) + '</div>';
+  html += '<button class="sb-alert-edit" onclick="openWlAlertEditor(' + wlQuote(sym) + ')">edit</button>';
+  foot.innerHTML = html;
+}
+
+function openWlAlertEditor(sym) {
+  var card = wlCard(sym);
+  if (!card) return;
+  var price = parseFloat(card.getAttribute('data-price')) || 0;
+  var a = getWlAlerts()[sym] || {};
+  var foot = card.querySelector('.sb-alert') || (function () {
+    var f = document.createElement('div'); f.className = 'sb-alert'; card.appendChild(f); return f;
+  })();
+  foot.innerHTML =
+    '<div class="sb-alert-editor">' +
+    '  <input type="number" step="any" class="sb-alert-target" placeholder="Target price (now ' + wlMoney(price) + ')" value="' + (a.target != null ? a.target : '') + '">' +
+    '  <input type="text" class="sb-alert-note" maxlength="120" placeholder="Note (optional)" value="' + escapeHtmlJs(a.note || '') + '">' +
+    '  <div class="sb-alert-actions">' +
+    '    <button class="sb-alert-save" onclick="saveWlAlertFromEditor(' + wlQuote(sym) + ',' + price + ')">Save</button>' +
+    '    <button class="sb-alert-cancel" onclick="renderCardAlert(' + wlQuote(sym) + ')">Cancel</button>' +
+    (a.target != null || a.note ? '    <button class="sb-alert-clear" onclick="setWlAlert(' + wlQuote(sym) + ',null,\'\',' + price + ')">Clear</button>' : '') +
+    '  </div>' +
+    '</div>';
+  var ti = foot.querySelector('.sb-alert-target'); if (ti) ti.focus();
+}
+
+function saveWlAlertFromEditor(sym, price) {
+  var card = wlCard(sym);
+  if (!card) return;
+  var t = parseFloat(card.querySelector('.sb-alert-target').value);
+  var note = card.querySelector('.sb-alert-note').value.trim();
+  setWlAlert(sym, isNaN(t) ? null : t, note, price);
+}
+
+(function initWatchlistAlerts() {
+  document.querySelectorAll('.sb-card[data-symbol]').forEach(function (card) {
+    renderCardAlert(card.getAttribute('data-symbol'));
+  });
+})();
+
 // ── Ticker lookup panel (research any symbol on demand) ───────────────────
 // Reuses TICKER_DB autocomplete (sbLocalMatches/sbRemoteSearch) and the same
 // TradingView embed pattern as the watchlist, so it needs no backend.
