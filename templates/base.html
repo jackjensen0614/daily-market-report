@@ -63,15 +63,20 @@
     <button class="print-btn" id="print-btn" onclick="printReport()" title="Print or save this report as a PDF">
       &#128424; <span class="std-only">Save PDF</span><span class="adv-only">Print / PDF</span>
     </button>
+    <button class="print-btn" id="copy-btn" onclick="copySummary()" title="Copy a plain-text market summary to your clipboard">
+      &#128203; <span id="copy-label">Copy summary</span>
+    </button>
+    <textarea id="copy-summary-src" hidden aria-hidden="true">{{ text_summary }}</textarea>
     <span id="refresh-status" class="meta"></span>
   </div>
 </header>
 
 <nav class="sticky-nav tab-bar" id="tab-bar">
-  <a href="#tab-today" class="tab-link" data-tab="today">Today</a>
-  <a href="#tab-markets" class="tab-link" data-tab="markets"><span class="std-only">U.S. Stocks</span><span class="adv-only">US Markets</span></a>
-  <a href="#tab-global" class="tab-link" data-tab="global"><span class="std-only">World</span><span class="adv-only">Global</span></a>
-  <a href="#tab-crypto" class="tab-link" data-tab="crypto">Crypto</a>
+  <a href="#tab-today" class="tab-link" data-tab="today" title="Today (press 1)">Today</a>
+  <a href="#tab-markets" class="tab-link" data-tab="markets" title="US Markets (press 2)"><span class="std-only">U.S. Stocks</span><span class="adv-only">US Markets</span></a>
+  <a href="#tab-global" class="tab-link" data-tab="global" title="Global (press 3)"><span class="std-only">World</span><span class="adv-only">Global</span></a>
+  <a href="#tab-crypto" class="tab-link" data-tab="crypto" title="Crypto (press 4)">Crypto</a>
+  <span class="kbd-hint" aria-hidden="true"><kbd>1</kbd>–<kbd>4</kbd> tabs · <kbd>/</kbd> search · <kbd>p</kbd> print</span>
 </nav>
 
 <!-- ===== LIVE MARKETS TICKER ===== -->
@@ -154,6 +159,8 @@
 {{ premarket_block }}
 
 {{ sector_heatmap_block }}
+
+{{ yield_curve_block }}
 
 {{ sentiment_block }}
 
@@ -293,6 +300,32 @@ function activateTab(name, opts) {
       e.preventDefault();
       activateTab(a.getAttribute('data-tab'), {updateHash: true, scroll: true});
     });
+  });
+})();
+
+// ── Keyboard navigation ──────────────────────────────────────────────────
+// 1–4 jump between tabs, "/" focuses the ticker lookup, "p" opens print.
+// Ignored while typing in a field or when a modifier key is held.
+(function initKeyboardNav() {
+  if (!document.querySelector('.tab-panel')) return;
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+      if (e.key === 'Escape') t.blur();
+      return;
+    }
+    if (e.key >= '1' && e.key <= '4') {
+      activateTab(TAB_NAMES[parseInt(e.key, 10) - 1], {updateHash: true, scroll: true});
+      e.preventDefault();
+    } else if (e.key === '/') {
+      activateTab('markets', {updateHash: true});
+      var lk = document.getElementById('lk-input');
+      if (lk) { lk.scrollIntoView({block: 'center'}); lk.focus(); }
+      e.preventDefault();
+    } else if (e.key === 'p' || e.key === 'P') {
+      if (typeof printReport === 'function') { printReport(); e.preventDefault(); }
+    }
   });
 })();
 
@@ -875,6 +908,32 @@ function printReport() {
   window.print();
   // Safari/some browsers don't fire afterprint reliably — restore defensively.
   setTimeout(restore, 1500);
+}
+
+// Copy a plain-text market summary to the clipboard (for Slack / email).
+function copySummary() {
+  var src = document.getElementById('copy-summary-src');
+  var label = document.getElementById('copy-label');
+  if (!src) return;
+  var text = src.value;
+  var flash = function(msg) {
+    if (!label) return;
+    var prev = label.textContent;
+    label.textContent = msg;
+    setTimeout(function(){ label.textContent = prev === msg ? 'Copy summary' : prev; }, 1600);
+  };
+  var fallback = function() {
+    src.hidden = false;
+    src.select();
+    try { document.execCommand('copy'); flash('Copied ✓'); }
+    catch (e) { flash('Copy failed'); }
+    src.hidden = true;
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function(){ flash('Copied ✓'); }, fallback);
+  } else {
+    fallback();
+  }
 }
 </script>
 </body>

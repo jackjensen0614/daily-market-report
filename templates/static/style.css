@@ -345,6 +345,12 @@ html { scroll-padding-top: 64px; }
   transition:color .15s, border-color .15s; flex-shrink:0;
   scroll-snap-align:start; }
 .sticky-nav a:hover { color:var(--text); border-bottom-color:var(--accent); }
+.kbd-hint { margin-left:auto; align-self:center; padding:0 10px; flex-shrink:0;
+  color:var(--text-faint); font-size:11px; white-space:nowrap; }
+.kbd-hint kbd { font-family:inherit; font-size:10px; color:var(--text-dim);
+  background:var(--bg-panel-2); border:1px solid var(--border);
+  border-radius:4px; padding:1px 5px; margin:0 1px; }
+@media (max-width: 860px) { .kbd-hint { display:none; } }
 @media (max-width: 720px) {
   .sticky-nav {
     margin:0 -16px 16px;
@@ -662,6 +668,40 @@ details.scorecard-details > .scorecard-body {
 .breadth-legend .bl.down { color: var(--red); }
 .breadth-legend .bl.flat { color: var(--text-faint); }
 .breadth-legend .bl.avg { margin-left: auto; color: var(--text-faint); }
+
+/* Treasury yield curve */
+.yield-curve {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 18px 16px; margin: 12px 0 18px;
+}
+.yc-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.yc-title {
+  font-size: 11px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.yc-spread {
+  font-size: 12.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.yc-spread .yc-bps { font-weight: 500; opacity: .8; font-size: 11px; }
+.yc-spread.tone-up   { color: var(--green); background: rgba(51,209,130,.12);  border-color: rgba(51,209,130,.28); }
+.yc-spread.tone-down { color: var(--red);   background: rgba(242,109,114,.12); border-color: rgba(242,109,114,.30); }
+.yc-spread.tone-flat { color: var(--yellow); background: rgba(245,181,68,.12);  border-color: rgba(245,181,68,.28); }
+.yc-chart { max-width: 460px; margin: 2px auto 0; }
+.yc-svg { display: block; overflow: visible; }
+.yc-line { stroke: var(--accent-2); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.yc-dot { stroke: var(--bg-panel); stroke-width: 1.5; fill: var(--accent-2); }
+.yc-dot.up   { fill: var(--green); }
+.yc-dot.down { fill: var(--red); }
+.yc-val { fill: var(--text); font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+.yc-ten { fill: var(--text-faint); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .04em; }
+.yc-note { font-size: 12px; color: var(--text-dim); margin-top: 8px;
+  text-align: center; line-height: 1.4; }
 
 .sector-bars {
   background: var(--bg-panel); border: 1px solid var(--border);

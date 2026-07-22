@@ -96,6 +96,13 @@ EXTRA_MACRO_TICKERS = {
     "NG=F":     "Natural Gas",
 }
 
+# Treasury tenors for the yield-curve panel (all quoted as raw-percent yields).
+# There's no reliable free 2Y on Yahoo, so the inversion signal uses 3M vs 10Y
+# — the spread the Fed watches most closely as a recession indicator.
+TREASURY_TICKERS = {
+    "^IRX": "3M", "^FVX": "5Y", "^TNX": "10Y", "^TYX": "30Y",
+}
+
 # Global equity indices
 GLOBAL_INDICES = {
     "^GDAXI": "DAX (Germany)",
@@ -398,6 +405,7 @@ class Snapshot:
     crypto_gainers: list[MoverWithNews] = field(default_factory=list)
     crypto_losers: list[MoverWithNews] = field(default_factory=list)
     global_indices: list[Quote] = field(default_factory=list)
+    yields: list[Quote] = field(default_factory=list)   # Treasury tenors (3M/5Y/10Y/30Y)
     earnings_today: list[CalendarEvent] = field(default_factory=list)
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
@@ -4218,6 +4226,54 @@ def render_global_block(snap: Snapshot) -> str:
     return f'{sub}<div class="pm-grid">{tiles}</div>'
 
 
+def build_text_summary(snap: Snapshot) -> str:
+    """A plain-text digest of the session for quick sharing (Slack / email).
+
+    Copied to the clipboard by the "Copy summary" button. Kept terse and
+    dependency-free so it pastes cleanly anywhere.
+    """
+    try:
+        dt = datetime.fromisoformat(snap.prior_session_date)
+        header = f"Daily Market Snapshot — {dt.strftime('%A, %B %-d, %Y')} close"
+    except Exception:
+        header = "Daily Market Snapshot"
+    lines = [header]
+
+    if snap.indices:
+        parts = [f"{q.name} {fmt_num(q.price)} ({fmt_pct(q.change_pct)})" for q in snap.indices]
+        lines.append("Indices: " + " · ".join(parts))
+
+    yten = next((q for q in snap.yields if q.name == "10Y"), None)
+    ythree = next((q for q in snap.yields if q.name == "3M"), None)
+    if yten:
+        rate = f"10Y {yten.price:.2f}%"
+        if ythree:
+            spread = yten.price - ythree.price
+            shape = "inverted" if spread < 0 else ("flat" if spread < 0.25 else "upward")
+            rate += f" · curve {shape} (10Y−3M {spread:+.2f}%)"
+        lines.append("Rates: " + rate)
+
+    if snap.sectors:
+        up = sum(1 for s in snap.sectors if s.pct_1d > 0.05)
+        avg = sum(s.pct_1d for s in snap.sectors) / len(snap.sectors)
+        lines.append(f"Breadth: {up} of {len(snap.sectors)} sectors up (avg {fmt_pct(avg)})")
+
+    if snap.gainers:
+        g = snap.gainers[0].quote
+        lines.append(f"Top gainer: {g.symbol} {fmt_pct(g.change_pct)}")
+    if snap.losers:
+        l = snap.losers[0].quote
+        lines.append(f"Top loser: {l.symbol} {fmt_pct(l.change_pct)}")
+
+    cparts = [f"{m.quote.name} {fmt_usd(m.quote.price)} ({fmt_pct(m.quote.change_pct)})"
+              for m in (snap.crypto or [])[:2]]
+    if cparts:
+        lines.append("Crypto: " + " · ".join(cparts))
+
+    lines.append("— via Daily Market Report")
+    return "\n".join(lines)
+
+
 def render_report(snap: Snapshot, briefing: dict | None = None,
                   eod: bool = False, history: dict | None = None) -> str:
     prior_date = snap.prior_session_date
@@ -4284,6 +4340,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
     html = _jinja_env.get_template("base.html").render(
         build_id=build_id,
         ticker_db_json=ticker_db_json,
+        text_summary=escape_html(build_text_summary(snap)),
         prior_date=prior_date,
         prior_date_human=prior_dt.strftime("%A, %B %-d, %Y"),
         generated_human=gen_dt_et.strftime("%Y-%m-%d %H:%M %Z"),
@@ -4295,6 +4352,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         premarket_block=render_premarket_strips(snap),
         watchlist_block=render_watchlist(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
+        yield_curve_block=render_yield_curve(snap),
         sentiment_block=render_sentiment_strip(snap),
         report_card_block=render_report_card(history),
         scorecard_trend_block=render_scorecard_trend(history),
@@ -4447,6 +4505,96 @@ def render_breadth_strip(snap: Snapshot) -> str:
         + f'<span class="bl down">▼ {down} declining</span>'
         f'<span class="bl avg">avg <span class="num {avg_cls}">{fmt_pct(avg)}</span></span>'
         '</div>'
+        '</div>'
+    )
+
+
+def render_yield_curve(snap: Snapshot) -> str:
+    """Treasury yield curve (3M/5Y/10Y/30Y) with a 3M–10Y inversion signal.
+
+    An inverted curve (short rates above long rates) has preceded every modern
+    US recession, so it's worth a glance at the open. Renders a small inline
+    SVG plus a colored spread badge. Degrades gracefully if tenors are missing.
+    """
+    pts = [q for q in (snap.yields or []) if q.price and q.price > 0]
+    if len(pts) < 2:
+        return ""
+    by_tenor = {q.name: q for q in pts}
+
+    # SVG geometry — categorical (even) x spacing so labels line up with dots.
+    W, H = 320.0, 132.0
+    padx, top, bottom = 14.0, 24.0, 22.0
+    plot_h = H - top - bottom
+    n = len(pts)
+    lo = min(q.price for q in pts)
+    hi = max(q.price for q in pts)
+    vpad = max(0.08, (hi - lo) * 0.18)
+    lo_a, hi_a = lo - vpad, hi + vpad
+    span = (hi_a - lo_a) or 1.0
+    xs = [padx + (i * (W - 2 * padx) / (n - 1)) for i in range(n)]
+    ys = [top + plot_h * (1 - (q.price - lo_a) / span) for q in pts]
+
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    dots, labels = [], []
+    for q, x, y in zip(pts, xs, ys):
+        dcls = cls_for(q.change_pct)
+        dots.append(f'<circle class="yc-dot {dcls}" cx="{x:.1f}" cy="{y:.1f}" r="3"/>')
+        labels.append(
+            f'<text class="yc-val" x="{x:.1f}" y="{y - 8:.1f}" text-anchor="middle">{q.price:.2f}</text>'
+            f'<text class="yc-ten" x="{x:.1f}" y="{H - 6:.1f}" text-anchor="middle">{escape_html(q.name)}</text>'
+        )
+    svg = (
+        f'<svg class="yc-svg" viewBox="0 0 {W:.0f} {H:.0f}" width="100%" '
+        f'preserveAspectRatio="xMidYMid meet" role="img" '
+        f'aria-label="Treasury yield curve">'
+        f'<polyline class="yc-line" points="{line}" fill="none"/>'
+        + "".join(dots) + "".join(labels) +
+        '</svg>'
+    )
+
+    # 3M–10Y spread → inversion signal
+    badge = ""
+    note_std = note_adv = ""
+    short, long = by_tenor.get("3M"), by_tenor.get("10Y")
+    if short and long:
+        spread = long.price - short.price          # 10Y minus 3M, in pct points
+        bps = spread * 100.0
+        if spread < 0:
+            tone, lbl = "down", "Inverted"
+            note_std = ("Short-term rates are higher than long-term ones — an unusual "
+                        "setup that has often come before recessions.")
+            note_adv = "Curve inverted (3M > 10Y) — a classic late-cycle recession signal."
+        elif spread < 0.25:
+            tone, lbl = "flat", "Flat"
+            note_std = "Short and long rates are close together — the curve is nearly flat."
+            note_adv = "Curve flat/flattening — watch for a move toward inversion."
+        else:
+            tone, lbl = "up", "Upward"
+            note_std = "Long-term rates sit above short-term ones — a normal, healthy shape."
+            note_adv = "Upward-sloping (normal) term structure."
+        badge = (
+            f'<span class="yc-spread tone-{tone}">{lbl} · '
+            f'10Y−3M <span class="num">{spread:+.2f}%</span> '
+            f'<span class="yc-bps">({bps:+.0f} bps)</span></span>'
+        )
+
+    note_html = ""
+    if note_std:
+        note_html = (
+            '<div class="yc-note">'
+            f'<span class="std-only">{note_std}</span>'
+            f'<span class="adv-only">{note_adv}</span>'
+            '</div>'
+        )
+    return (
+        '<div class="yield-curve">'
+        '<div class="yc-head">'
+        '<span class="yc-title"><span class="std-only">Interest Rates (Treasury Yields)</span>'
+        '<span class="adv-only">Treasury Yield Curve</span></span>'
+        f'{badge}'
+        '</div>'
+        f'<div class="yc-chart">{svg}</div>'
+        f'{note_html}'
         '</div>'
     )
 
@@ -5598,6 +5746,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     except Exception as e:
         warn(f"global indices fetch failed: {e}", snap)
 
+    log("Fetching Treasury yield curve…")
+    try:
+        snap.yields = fetch_quotes(TREASURY_TICKERS)
+    except Exception as e:
+        warn(f"yield curve fetch failed: {e}", snap)
+
     log("Fetching sector performance (YTD)…")
     try:
         snap.sectors = fetch_sectors()
@@ -5767,6 +5921,7 @@ def load_cache() -> Snapshot | None:
             indices=[q_from(x) for x in raw.get("indices", [])],
             macro=[q_from(x) for x in raw.get("macro", [])],
             global_indices=[q_from(x) for x in raw.get("global_indices", [])],
+            yields=[q_from(x) for x in raw.get("yields", [])],
             gainers=[mw_from(x) for x in raw.get("gainers", [])],
             losers=[mw_from(x) for x in raw.get("losers", [])],
             most_active=[mw_from(x) for x in raw.get("most_active", [])],
