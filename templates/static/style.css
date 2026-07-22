@@ -904,6 +904,41 @@ details.sc-day .grade-cards { padding: 12px 14px 16px; }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
 }
 @media (max-width: 720px) { .cal-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* Prediction analytics (streak / best-worst / per-ticker leaderboard) */
+.scorecard-analytics { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.sa-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--accent); margin-bottom: 10px;
+}
+.sa-highlights {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px;
+}
+.sa-hl { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
+.sa-hl-key { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.sa-hl-val { font-size: 15px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.sa-hl-val.up { color: var(--green); }
+.sa-hl-sub { font-size: 10px; color: var(--text-faint); margin-top: 1px; }
+.sa-board { display: flex; flex-direction: column; gap: 3px; }
+.sa-row {
+  display: grid; grid-template-columns: 54px 1fr 44px 52px 40px; gap: 8px;
+  align-items: center; padding: 4px 2px; font-size: 12px;
+}
+.sa-head-row { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-faint); border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 2px; }
+.sa-tkr { font-weight: 700; }
+.sa-bar { height: 7px; background: var(--bg-1); border-radius: 4px; overflow: hidden; }
+.sa-head-row .sa-bar { background: none; }
+.sa-bar-fill { height: 100%; border-radius: 4px; }
+.sa-bar-fill.up { background: var(--up); }
+.sa-bar-fill.down { background: var(--down); }
+.sa-bar-fill.flat { background: var(--border-strong); }
+.sa-wr { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sa-wr.up { color: var(--green); } .sa-wr.down { color: var(--red); } .sa-wr.flat { color: var(--text-dim); }
+.sa-n, .sa-gpa { text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.sa-empty { font-size: 12px; color: var(--text-faint); padding: 4px 2px; }
+@media (max-width: 560px) { .sa-highlights { grid-template-columns: 1fr; } }
+
 .cal-tile {
   background: var(--bg-panel-2); border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px;

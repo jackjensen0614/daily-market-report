@@ -5590,6 +5590,130 @@ def scorecard_csv_rows(history: dict | None) -> list[list]:
     return rows
 
 
+def compute_ticker_stats(history: dict, min_calls: int = 2) -> list[dict]:
+    """Per-ticker win-rate across all graded (directional) calls in history.
+    Only tickers called at least `min_calls` times are returned, ranked by
+    win-rate then call count."""
+    agg: dict[str, dict] = {}
+    for d in history.get("days", []):
+        for e in d.get("entries", []):
+            if e.get("verdict") not in ("HIT", "MISS", "FLAT"):
+                continue
+            t = (e.get("ticker") or "").upper()
+            if not t:
+                continue
+            a = agg.setdefault(t, {"ticker": t, "graded": 0, "hits": 0, "gpa_sum": 0.0, "gpa_n": 0})
+            a["graded"] += 1
+            if e.get("verdict") == "HIT":
+                a["hits"] += 1
+            if e.get("letter_grade") in _GRADE_PTS:
+                a["gpa_sum"] += _GRADE_PTS[e["letter_grade"]]
+                a["gpa_n"] += 1
+    out = []
+    for a in agg.values():
+        if a["graded"] < min_calls:
+            continue
+        a["win_rate"] = a["hits"] / a["graded"]
+        a["avg_gpa"] = (a["gpa_sum"] / a["gpa_n"]) if a["gpa_n"] else None
+        out.append(a)
+    out.sort(key=lambda x: (x["win_rate"], x["graded"]), reverse=True)
+    return out
+
+
+def _scorecard_highlights(history: dict) -> dict:
+    """Best call, worst call, and current hit streak across graded history."""
+    days = sorted(history.get("days", []), key=lambda d: d.get("date", ""), reverse=True)
+    graded = [(d.get("date", ""), e) for d in days for e in d.get("entries", [])
+              if e.get("verdict") in ("HIT", "MISS", "FLAT")]
+
+    def signed(e):
+        ap = e.get("actual_pct")
+        if ap is None:
+            return None
+        return ap if e.get("bias") == "bullish" else -ap
+
+    scored = [(dt, e, signed(e)) for dt, e in graded if signed(e) is not None]
+    best = max(scored, key=lambda x: x[2]) if scored else None
+    worst = min(scored, key=lambda x: x[2]) if scored else None
+    streak = 0
+    for _dt, e in graded:  # most-recent first
+        if e.get("verdict") == "HIT":
+            streak += 1
+        else:
+            break
+    return {"best": best, "worst": worst, "streak": streak, "graded_total": len(graded)}
+
+
+def render_scorecard_analytics(history: dict) -> str:
+    """Prediction analytics: current streak, best/worst call, and a per-ticker
+    win-rate leaderboard. All derived from the graded (directional) history."""
+    hl = _scorecard_highlights(history)
+    stats = compute_ticker_stats(history, min_calls=2)
+    if not hl["best"] and not stats:
+        return ""
+
+    chips = []
+    if hl["streak"] >= 2:
+        chips.append(
+            '<div class="sa-hl"><div class="sa-hl-key">Current streak</div>'
+            f'<div class="sa-hl-val up">{hl["streak"]} hits in a row</div></div>'
+        )
+    if hl["best"]:
+        _dt, e, _s = hl["best"]
+        chips.append(
+            '<div class="sa-hl"><div class="sa-hl-key">Best call</div>'
+            f'<div class="sa-hl-val">{escape_html(e.get("ticker",""))} '
+            f'<span class="num {cls_for(e.get("actual_pct") or 0)}">{fmt_pct(e.get("actual_pct") or 0)}</span></div>'
+            f'<div class="sa-hl-sub">called {escape_html((e.get("bias") or "").lower())}</div></div>'
+        )
+    if hl["worst"]:
+        _dt, e, _s = hl["worst"]
+        chips.append(
+            '<div class="sa-hl"><div class="sa-hl-key">Worst call</div>'
+            f'<div class="sa-hl-val">{escape_html(e.get("ticker",""))} '
+            f'<span class="num {cls_for(e.get("actual_pct") or 0)}">{fmt_pct(e.get("actual_pct") or 0)}</span></div>'
+            f'<div class="sa-hl-sub">called {escape_html((e.get("bias") or "").lower())}</div></div>'
+        )
+    chips_html = f'<div class="sa-highlights">{"".join(chips)}</div>' if chips else ""
+
+    board_html = ""
+    if stats:
+        rows = []
+        for a in stats[:8]:
+            wr = a["win_rate"] * 100
+            wr_cls = "up" if wr >= 60 else ("down" if wr < 40 else "flat")
+            gpa = f'{a["avg_gpa"]:.2f}' if a["avg_gpa"] is not None else "—"
+            rows.append(
+                '<div class="sa-row">'
+                f'<div class="sa-tkr">{escape_html(a["ticker"])}</div>'
+                f'<div class="sa-bar"><div class="sa-bar-fill {wr_cls}" style="width:{wr:.0f}%"></div></div>'
+                f'<div class="sa-wr num {wr_cls}">{wr:.0f}%</div>'
+                f'<div class="sa-n">{a["hits"]}/{a["graded"]}</div>'
+                f'<div class="sa-gpa num">{gpa}</div>'
+                '</div>'
+            )
+        board_html = (
+            '<div class="sa-board">'
+            '<div class="sa-row sa-head-row">'
+            '<div class="sa-tkr">Ticker</div><div class="sa-bar"></div>'
+            '<div class="sa-wr">Win</div><div class="sa-n">Record</div><div class="sa-gpa">GPA</div>'
+            '</div>'
+            + "".join(rows) +
+            '</div>'
+        )
+    else:
+        board_html = ('<div class="sa-empty">Per-ticker win rates appear once a name has '
+                      'been called at least twice.</div>')
+
+    title = mode_pair("How our calls have done", "Prediction Analytics")
+    return (
+        '<div class="scorecard-analytics">'
+        f'<div class="sa-title">{title}</div>'
+        f'{chips_html}{board_html}'
+        '</div>'
+    )
+
+
 def render_track_record(history: dict | None = None) -> str:
     """Backward-looking graded track record as its own section (collapsed by
     default — it's a retrospective, and currently a fixed backtest). Returns ''
@@ -5639,6 +5763,7 @@ def render_track_record(history: dict | None = None) -> str:
         '</button>'
         '</div>'
         f'{_calibration_html(cal)}'
+        f'{render_scorecard_analytics(history)}'
         f'<div class="sc-day-stack">{day_blocks}</div>'
         '</div>'
         '</details>'
