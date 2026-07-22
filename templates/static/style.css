@@ -715,7 +715,7 @@ details.scorecard-details > .scorecard-body {
 .mf-count { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
 
 /* FX / currencies grid */
-.fx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+.fx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 8px; margin-bottom: 8px; }
 .fx-tile { background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px; }
@@ -1471,15 +1471,28 @@ th { font-size: 10.5px; letter-spacing: .08em; color: var(--text-faint); }
 tbody tr, table tr { transition: background .12s ease; }
 table tr:hover td { background: rgba(255,255,255,.016); }
 
-/* — Sector bars & cards — */
-.sector-bars { border-radius: var(--radius); padding: 16px 20px 18px; }
+/* — Stat panels & mini-tiles: one cohesive card system — */
+/* Breadth, yield curve, and sector bars share the same panel treatment so the
+   US-Markets "internals" cluster reads as one system rather than three. */
+.breadth, .yield-curve, .sector-bars {
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255,255,255,.015), transparent 42%), var(--bg-panel);
+  margin: 12px 0 16px;
+}
+.sector-bars { padding: 16px 20px 18px; }
+.breadth, .yield-curve { padding: 14px 18px 16px; }
 .sb-track { height: 15px; background: var(--bg-1); border: 1px solid var(--border); }
 .sb-fill { border-radius: 3px; }
 .sb-fill.up { background: linear-gradient(90deg, rgba(51,209,130,.7), var(--up)); }
 .sb-fill.down { background: linear-gradient(270deg, rgba(242,109,114,.7), var(--down)); }
-.sector-card { border-radius: var(--radius-sm); transition: transform .14s ease, border-color .14s ease; }
-.sector-card:hover { transform: translateY(-1px); border-color: var(--border-strong); }
-.sector-card .s-1d { letter-spacing: -0.01em; }
+/* Sector cards, sentiment tiles, and FX tiles share one mini-stat treatment. */
+.sector-card, .st-tile, .fx-tile {
+  border-radius: var(--radius-sm); transition: transform .14s ease, border-color .14s ease;
+}
+.sector-card:hover, .st-tile:hover, .fx-tile:hover {
+  transform: translateY(-1px); border-color: var(--border-strong);
+}
+.sector-card .s-1d, .st-tile .st-val, .fx-tile .fx-px { letter-spacing: -0.01em; }
 
 /* — Sidebar — */
 .sidebar { border-left: 1px solid var(--border); background: linear-gradient(180deg, var(--bg-1), var(--bg-panel)); }
