@@ -4373,6 +4373,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         build_id=build_id,
         ticker_db_json=ticker_db_json,
         text_summary=escape_html(build_text_summary(snap)),
+        scorecard_csv_json=json.dumps(scorecard_csv_rows(history)),
         prior_date=prior_date,
         prior_date_human=prior_dt.strftime("%A, %B %-d, %Y"),
         generated_human=gen_dt_et.strftime("%Y-%m-%d %H:%M %Z"),
@@ -5335,6 +5336,25 @@ def render_scorecard_trend(history: dict | None = None, max_days: int = 20) -> s
     )
 
 
+def scorecard_csv_rows(history: dict | None) -> list[list]:
+    """Flatten graded history into CSV rows for the client-side export button."""
+    history = history if history is not None else {}
+    rows: list[list] = []
+    for d in sorted(history.get("days", []), key=lambda x: x.get("date", ""), reverse=True):
+        date = d.get("date", "")
+        for e in d.get("entries", []):
+            ap = e.get("actual_pct")
+            rows.append([
+                date,
+                e.get("ticker", ""),
+                e.get("bias", ""),
+                "" if ap is None else round(float(ap), 2),
+                e.get("verdict", ""),
+                e.get("letter_grade", ""),
+            ])
+    return rows
+
+
 def render_track_record(history: dict | None = None) -> str:
     """Backward-looking graded track record as its own section (collapsed by
     default — it's a retrospective, and currently a fixed backtest). Returns ''
@@ -5377,6 +5397,12 @@ def render_track_record(history: dict | None = None) -> str:
         '</span>'
         '</summary>'
         '<div class="scorecard-wrap">'
+        '<div class="tr-toolbar">'
+        '<button type="button" class="print-btn tr-csv-btn" onclick="downloadScorecardCsv()" '
+        'title="Download the full graded track record as a CSV file">'
+        '&#11015; <span class="std-only">Export CSV</span><span class="adv-only">Download CSV</span>'
+        '</button>'
+        '</div>'
         f'{_calibration_html(cal)}'
         f'<div class="sc-day-stack">{day_blocks}</div>'
         '</div>'

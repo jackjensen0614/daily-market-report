@@ -320,6 +320,29 @@ a { color: #8ab4f8; }
   transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
 }
 .print-btn:hover { background: #252d42; border-color: var(--accent-2); color: var(--accent-2); }
+
+/* Live market-status clock */
+.market-clock {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; white-space: nowrap;
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-panel);
+}
+.market-clock .mc-dot { width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-faint); flex: 0 0 auto; }
+.market-clock .mc-time { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+.market-clock .mc-state { color: var(--text-faint); }
+.mc-open   .mc-dot { background: var(--green); animation: mc-pulse 2s ease-in-out infinite; }
+.mc-open   .mc-state { color: var(--green); }
+.mc-pre    .mc-dot { background: var(--yellow); }
+.mc-pre    .mc-state { color: var(--yellow); }
+.mc-after  .mc-dot { background: var(--accent-2); }
+.mc-after  .mc-state { color: var(--accent-2); }
+@keyframes mc-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(51,209,130,.35); }
+  50%      { box-shadow: 0 0 0 5px rgba(51,209,130,0); }
+}
+
 .premarket-bar { margin-bottom:18px; }
 .tile.compact { padding:10px 12px; }
 .tile.compact .value { font-size:16px; }
@@ -722,6 +745,10 @@ details.scorecard-details > .scorecard-body {
 .fx-pair { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
 .fx-px { font-size: 17px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .fx-chg { font-size: 12px; font-weight: 600; margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+/* Track-record CSV export toolbar */
+.tr-toolbar { display: flex; justify-content: flex-end; padding: 12px 14px 0; }
+.tr-csv-btn { font-size: 12px; padding: 5px 12px; }
 
 /* Back-to-top floating button */
 .back-to-top {
@@ -1602,6 +1629,7 @@ body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; 
 }
 @media (prefers-reduced-motion: reduce) {
   body.js-tabs .tab-panel.active { animation: none; }
+  .mc-open .mc-dot { animation: none; }
 }
 
 /* — Tab bar: the nav is now a segmented control — */
@@ -1671,7 +1699,7 @@ body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; 
   .refresh-btn, .print-btn, .mode-toggle, #refresh-status,
   .lookup-search, .lookup-suggest, .sb-add, .sb-suggest,
   #lk-suggest, #sb-suggest, .crypto-toggle, .fab, #sb-restore-btn,
-  .movers-filter, .back-to-top, #copy-summary-src {
+  .movers-filter, .back-to-top, #copy-summary-src, .market-clock, .tr-toolbar {
     display: none !important;
   }
 

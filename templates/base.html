@@ -52,6 +52,9 @@
   </div>
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
     <div class="meta">{{ warnings_html }}</div>
+    <span id="market-clock" class="market-clock" aria-live="polite" hidden>
+      <span class="mc-dot"></span><span class="mc-time"></span><span class="mc-state"></span>
+    </span>
     <div class="mode-toggle" role="group" aria-label="Reading mode">
       <span class="mt-label">View</span>
       <button id="mt-std" class="active" onclick="setReadingMode('standard')">Standard</button>
@@ -222,6 +225,7 @@
 </div><!-- /page-layout -->
 
 <button id="back-to-top" class="back-to-top" onclick="scrollToTop()" title="Back to top" aria-label="Back to top" hidden>&#8593;</button>
+<script type="application/json" id="scorecard-csv-data">{{ scorecard_csv_json }}</script>
 <script>
 // Local file:// previously redirected to the published GitHub Pages copy.
 // That blocks local development (changes to report.html aren't visible
@@ -885,8 +889,71 @@ function doRefresh() {
       if (next <= 0) { saveScroll(); clearInterval(timer); location.reload(); }
     }, 1000);
   } else {
-    if (statusEl) statusEl.textContent = 'Market closed';
+    // Market-status is shown by the live clock below; keep this slot clean.
+    if (statusEl) statusEl.textContent = '';
   }
+})();
+
+// ── Live market-status clock + session countdown ─────────────────────────
+// Shows current ET time and how long until the US regular session opens or
+// closes. Holidays are not modeled (weekends are), matching the rest of the
+// report's session logic.
+(function initMarketClock() {
+  var el = document.getElementById('market-clock');
+  if (!el) return;
+  var dotEl = el.querySelector('.mc-dot');
+  var timeEl = el.querySelector('.mc-time');
+  var stateEl = el.querySelector('.mc-state');
+  var DAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function etParts() {
+    var f = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', weekday: 'short', hour12: false,
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    var o = {};
+    f.formatToParts(new Date()).forEach(function(p){ o[p.type] = p.value; });
+    var hour = parseInt(o.hour === '24' ? '0' : o.hour, 10);
+    return { wd: o.weekday, h: hour, m: parseInt(o.minute,10), s: parseInt(o.second,10) };
+  }
+  function fmtCountdown(mins) {
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+  }
+  function nextOpenLabel(wdIdx) {
+    // Which weekday does the next 9:30 open fall on?
+    var d = wdIdx;
+    do { d = (d + 1) % 7; } while (d === 0 || d === 6);
+    return DAY[d];
+  }
+  function update() {
+    var t = etParts();
+    var wdIdx = DAY.indexOf(t.wd);
+    var mins = t.h * 60 + t.m;
+    var isWeekday = wdIdx >= 1 && wdIdx <= 5;
+    var hh = ((t.h % 12) || 12);
+    var ampm = t.h < 12 ? 'AM' : 'PM';
+    timeEl.textContent = hh + ':' + String(t.m).padStart(2,'0') + ':' +
+                         String(t.s).padStart(2,'0') + ' ' + ampm + ' ET';
+    var OPEN = 9*60+30, CLOSE = 16*60, PRE = 4*60;
+    var cls = 'closed', txt;
+    if (isWeekday && mins >= OPEN && mins < CLOSE) {
+      cls = 'open';  txt = 'Open · closes in ' + fmtCountdown(CLOSE - mins);
+    } else if (isWeekday && mins >= PRE && mins < OPEN) {
+      cls = 'pre';   txt = 'Pre-market · opens in ' + fmtCountdown(OPEN - mins);
+    } else if (isWeekday && mins >= CLOSE && mins < 20*60) {
+      cls = 'after'; txt = 'After-hours · closed';
+    } else {
+      var opensToday = isWeekday && mins < OPEN;
+      var when = opensToday ? '' : (' ' + nextOpenLabel(wdIdx));
+      txt = 'Closed · opens' + when + ' 9:30 AM';
+    }
+    el.className = 'market-clock mc-' + cls;
+    stateEl.textContent = txt;
+    el.hidden = false;
+  }
+  update();
+  setInterval(update, 1000);
 })();
 
 (function () {
@@ -959,6 +1026,26 @@ function filterMovers(q) {
   });
   var count = document.getElementById('movers-filter-count');
   if (count) count.textContent = q ? (shown + ' match' + (shown === 1 ? '' : 'es')) : '';
+}
+
+// Export the graded track record as a CSV download.
+function downloadScorecardCsv() {
+  var el = document.getElementById('scorecard-csv-data');
+  if (!el) return;
+  var rows;
+  try { rows = JSON.parse(el.textContent || '[]'); } catch (e) { return; }
+  var csvCell = function(v) {
+    var s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  var lines = [['date','ticker','bias','actual_pct','verdict','grade'].join(',')];
+  rows.forEach(function(r){ lines.push(r.map(csvCell).join(',')); });
+  var blob = new Blob([lines.join('\n')], {type: 'text/csv;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'scorecard-track-record.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
 // Floating "back to top" button — appears once the page is scrolled down.
