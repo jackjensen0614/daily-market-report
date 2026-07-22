@@ -845,7 +845,7 @@ details.sc-day .grade-cards { padding: 12px 14px 16px; }
   letter-spacing: 0.1em; color: var(--accent); margin-bottom: 10px;
 }
 .cal-grid {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
 }
 @media (max-width: 720px) { .cal-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 .cal-tile {

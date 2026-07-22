@@ -1453,7 +1453,7 @@ BRIEFING_USER_PROMPT = """Given the market data below, return JSON with EXACTLY 
   "tickers_to_watch": [
     {{
       "ticker": "XYZ",
-      "bias": "bullish | bearish | neutral",
+      "bias": "bullish | bearish",
       "risk_level": "low | medium | high",
       "return_estimate": "+3-6% (swing) or -5-10% (short)",
       "rationale": "one-line signal — specific catalyst, level, or technical setup",
@@ -2812,21 +2812,9 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
                 "analysis_plain":  analysis_plain  or analysis,
             })
 
-    # 1. Earnings reporters — binary gap risk = HIGH
-    for e in snap.earnings_today[:3]:
-        sym = e.symbol_or_event
-        if sym and sym.isalpha() and len(sym) <= 5:
-            detail = f" ({e.extra})" if e.extra else ""
-            human_time = humanize_time_token(e.time) if e.time else "today"
-            add(sym, "neutral", "high", "±5-15% (gap risk)",
-                f"Reporting {e.time or 'today'}{detail}.",
-                f"{sym} reports {human_time} — a beat typically gaps it +5-15% at the open, a miss or guidance cut the reverse. "
-                f"Size with defined risk (options or tight stops) and watch the pre-market tape.",
-                rationale_plain=f"Sharing quarterly results {human_time}{detail}.",
-                analysis_plain=(
-                    f"{sym}'s results land {human_time}. The stock can jump or drop 5-15% fast depending on whether the numbers beat expectations — "
-                    f"risky because it happens in seconds, so watch carefully before trading."
-                ))
+    # (Earnings reporters are covered in the dedicated Earnings section; they
+    # are a binary two-sided event, not a directional call, so they are not
+    # listed here as graded predictions.)
 
     # 2. Biggest gainer — continuation
     if snap.gainers:
@@ -2890,7 +2878,7 @@ def _b_tickers_prediction(snap: Snapshot) -> list[dict]:
     # 5. Most-active fill — MEDIUM risk
     for m in snap.most_active:
         q = m.quote
-        bias = "bullish" if q.change_pct > 0.5 else ("bearish" if q.change_pct < -0.5 else "neutral")
+        bias = "bullish" if q.change_pct >= 0 else "bearish"
         vol_str = fmt_usd(q.dollar_volume) if q.dollar_volume else "high"
         mag = abs(q.change_pct)
         ret_est = f"+{mag*0.2:.1f}-{mag*0.4:.1f}%" if mag > 1 else "+1-3%"
@@ -4308,6 +4296,10 @@ def build_text_summary(snap: Snapshot) -> str:
 
 def render_report(snap: Snapshot, briefing: dict | None = None,
                   eod: bool = False, history: dict | None = None) -> str:
+    # The scorecard grades directional calls only — strip any 'neutral' /
+    # "just watching" picks (including ones saved in older history) so the
+    # track record, calibration, and CSV export all stay directional.
+    history = drop_neutral_history(history if history is not None else load_scorecard_history())
     prior_date = snap.prior_session_date
     prior_dt = datetime.fromisoformat(snap.prior_session_date)
     today_dt = datetime.fromisoformat(snap.generated_at[:10])
@@ -4739,8 +4731,11 @@ def _grade_prediction(bias: str, pct: float | None) -> tuple[str, str, str, str]
                 f"{label_adv} thesis broke: {sign}{p:.2f}% — moved sharply against the call.")
 
 
-def _entry_from_pred(ticker: str, rationale: str, pct: float | None) -> ScorecardEntry:
-    bias = _infer_bias(rationale)
+def _entry_from_pred(ticker: str, rationale: str, pct: float | None,
+                     bias: str | None = None) -> ScorecardEntry:
+    # Prefer the prediction's stated directional bias; fall back to inferring
+    # it from the rationale text only when the pick didn't record one.
+    bias = (bias or "").strip().lower() or _infer_bias(rationale)
     verdict, letter, reason_std, reason_adv = _grade_prediction(bias, pct)
     return ScorecardEntry(
         ticker=ticker, rationale=rationale, bias=bias,
@@ -4803,7 +4798,7 @@ def score_predictions(prior_briefing: dict, snap: Snapshot) -> list[ScorecardEnt
     for w in watches:
         t = (w.get("ticker") or "").strip().upper()
         if not t: continue
-        out.append(_entry_from_pred(t, w.get("rationale", ""), price_map.get(t)))
+        out.append(_entry_from_pred(t, w.get("rationale", ""), price_map.get(t), w.get("bias")))
     return out
 
 
@@ -4871,7 +4866,7 @@ def backfill_scorecard_history(force_dates: list[str] | None = None) -> dict:
             t = (w.get("ticker") or "").strip().upper()
             if not t: continue
             pct = fetch_eod_change_pct(t, date)
-            entries.append(_entry_from_pred(t, w.get("rationale", ""), pct))
+            entries.append(_entry_from_pred(t, w.get("rationale", ""), pct, w.get("bias")))
         # Skip non-trading days: if every pick returned None, the date had no
         # market data (weekend/holiday or session not yet closed).
         if entries and any(e.actual_pct is not None for e in entries):
@@ -5058,7 +5053,6 @@ def _calibration_html(cal: dict) -> str:
 
     bull_label = mode_pair("How often we were right when we said \"up\"", "Bullish hit-rate")
     bear_label = mode_pair("How often we were right when we said \"down\"", "Bearish hit-rate")
-    neut_label = mode_pair("How often \"watch\" stocks actually moved", "Neutral hit-rate")
     return (
         '<div class="sc-calibration">'
         f'<div class="cal-head"><span class="cal-label">{cal_label}</span>{stale_html}</div>'
@@ -5070,8 +5064,6 @@ def _calibration_html(cal: dict) -> str:
         f'<div class="cal-val">{_hr(hr.get("bullish", {"rate":None,"n":0}))}</div></div>'
         f'<div class="cal-tile"><div class="cal-key">{bear_label}</div>'
         f'<div class="cal-val">{_hr(hr.get("bearish", {"rate":None,"n":0}))}</div></div>'
-        f'<div class="cal-tile"><div class="cal-key">{neut_label}</div>'
-        f'<div class="cal-val">{_hr(hr.get("neutral", {"rate":None,"n":0}))}</div></div>'
         '</div></div>'
     )
 
@@ -5099,6 +5091,8 @@ def render_today_picks(snap: Snapshot, briefing: dict | None = None,
     else:
         ai = briefing or snap.ai or {}
         watch_picks = ai.get("tickers_to_watch") or _b_tickers_prediction(snap) or []
+        # Directional calls only — drop any 'neutral' / just-watching picks.
+        watch_picks = [p for p in watch_picks if (p.get("bias") or "").lower() != "neutral"]
         picks_html = _ticker_cards_html(watch_picks) if watch_picks else ""
         preds_title = mode_pair("Today's stock picks", "Today's Predictions")
         preds_sub = mode_pair("Stocks we think are worth watching today", "Next session watchlist")
@@ -5130,6 +5124,25 @@ def _report_card_heading(date_iso: str) -> str:
     if prior is not None and d == prior:
         return "Yesterday's Report Card"
     return f"{d.strftime('%A')}'s Report Card"
+
+
+def drop_neutral_history(history: dict | None) -> dict:
+    """Return the scorecard history with non-directional ('neutral') picks removed.
+
+    The scorecard grades directional up/down calls only. A 'just watching' pick,
+    graded on whether it happened to move, isn't a real prediction — so it's
+    excluded from the track record, GPA, and hit-rates. This also scrubs any
+    neutral picks already persisted in older history. Days left with no
+    directional picks are dropped entirely.
+    """
+    if not history:
+        return {"days": []}
+    days_out = []
+    for d in history.get("days", []):
+        kept = [e for e in d.get("entries", []) if (e.get("bias") or "").lower() != "neutral"]
+        if kept:
+            days_out.append({**d, "entries": kept})
+    return {**history, "days": days_out}
 
 
 def render_report_card(history: dict | None = None) -> str:
