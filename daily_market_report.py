@@ -413,6 +413,7 @@ class Snapshot:
     watchlist_news: list[MoverWithNews] = field(default_factory=list)
     earnings_reactions: list[MoverWithNews] = field(default_factory=list)
     earnings_results: dict = field(default_factory=dict)   # sym → {eps_est, eps_act, surprise_pct, verdict}
+    week_ahead: list[dict] = field(default_factory=list)   # next N trading days: earnings + econ summary
 
 
 # ------------------------------------------------------------------------
@@ -1036,6 +1037,114 @@ def fetch_econ_events(date_str: str) -> list[CalendarEvent]:
             )
         except Exception as e:
             log(f"  skipping econ row: {e}")
+    return out
+
+
+def _fetch_earnings_light(date_str: str) -> list[CalendarEvent]:
+    """Earnings for a date from Nasdaq WITHOUT per-symbol yfinance enrichment.
+
+    Parses the market-cap string straight from the API row so we can rank the
+    biggest reporters cheaply. Used by the multi-day week-ahead view, where the
+    heavier per-symbol enrichment in fetch_earnings_calendar would be too slow.
+    """
+    url = f"https://api.nasdaq.com/api/calendar/earnings?date={date_str}"
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.nasdaq.com/",
+    }
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        r.raise_for_status()
+        rows = ((r.json().get("data") or {}).get("rows")) or []
+    except Exception as e:
+        log(f"  week-ahead earnings {date_str} failed: {e}")
+        return []
+    out: list[CalendarEvent] = []
+    for row in rows:
+        sym = (row.get("symbol") or "").strip()
+        if not sym:
+            continue
+        try:
+            mcap = float(re.sub(r"[^\d.]", "", str(row.get("marketCap", "") or "0")) or 0)
+        except ValueError:
+            mcap = 0.0
+        out.append(CalendarEvent(
+            time=row.get("time", "") or "—",
+            symbol_or_event=sym,
+            description=row.get("name", "") or sym,
+            extra=fmt_mcap_compact(mcap),
+            market_cap=mcap,
+        ))
+    return out
+
+
+# $50B+ reporters flag a day as "big-name" for the week-ahead high-impact badge
+_WEEK_AHEAD_MEGA_CAP = 5e10
+
+
+def fetch_week_ahead(days: int = 5, max_names: int = 6) -> list[dict]:
+    """Summarize earnings + economic events for the next `days` trading days.
+
+    Returns one dict per trading day (today ET first): earnings count, the
+    biggest reporters, notable (med/high-impact) econ releases, and a
+    high-impact flag. Kept lightweight so it can fetch several days at once.
+    """
+    today = datetime.now(ET).date()
+    dates: list[str] = []
+    d = today
+    while len(dates) < days:
+        if d.weekday() < 5:
+            dates.append(d.isoformat())
+        d += timedelta(days=1)
+
+    def _one(date_iso: str):
+        return date_iso, _fetch_earnings_light(date_iso), fetch_econ_events(date_iso)
+
+    results: dict[str, tuple] = {}
+    try:
+        with ThreadPoolExecutor(max_workers=min(5, len(dates))) as ex:
+            for date_iso, earn, econ in ex.map(_one, dates):
+                results[date_iso] = (earn, econ)
+    except Exception as e:
+        log(f"week-ahead fetch failed: {e}")
+        return []
+
+    _impact_rank = {"high-impact": 0, "med-impact": 1, "low-impact": 2}
+    out: list[dict] = []
+    for date_iso in dates:
+        earn, econ = results.get(date_iso, ([], []))
+        earn_sorted = sorted(earn, key=lambda e: e.market_cap or 0, reverse=True)
+        top = [
+            {"sym": e.symbol_or_event, "mcap": e.market_cap or 0,
+             "mcap_str": e.extra, "time": e.time}
+            for e in earn_sorted[:max_names] if e.symbol_or_event
+        ]
+        # Notable econ events only (drop low-impact noise), de-duplicated by name
+        seen: set[str] = set()
+        econ_items: list[dict] = []
+        for ev in econ:
+            name = (ev.description or "").strip()
+            key = name.lower()
+            if not name or key in seen:
+                continue
+            impact = _impact_level(name)
+            if impact == "low-impact":
+                continue
+            seen.add(key)
+            econ_items.append({"name": name, "impact": impact, "time": ev.time})
+        econ_items.sort(key=lambda x: _impact_rank.get(x["impact"], 3))
+        high_impact = (
+            any(x["impact"] == "high-impact" for x in econ_items)
+            or any(t["mcap"] >= _WEEK_AHEAD_MEGA_CAP for t in top)
+        )
+        out.append({
+            "date": date_iso,
+            "earnings_count": len(earn),
+            "top_earnings": top,
+            "econ": econ_items[:4],
+            "high_impact": high_impact,
+        })
     return out
 
 
@@ -1874,6 +1983,85 @@ def render_earnings_section(snap: Snapshot) -> str:
         + featured_html
         + extra_html
         + '</div>'
+    )
+
+
+def render_week_ahead(snap: Snapshot) -> str:
+    """Forward 5-day calendar strip: earnings + notable econ events per day."""
+    days = snap.week_ahead or []
+    if not days:
+        return ""
+
+    today_iso = datetime.now(ET).date().isoformat()
+    impact_label = {"high-impact": "High impact", "med-impact": "Notable"}
+    cards = []
+    for day in days:
+        date_iso = day.get("date", "")
+        try:
+            dt = datetime.fromisoformat(date_iso)
+            wd = dt.strftime("%a")
+            dm = dt.strftime("%b %-d")
+        except Exception:
+            wd, dm = "", date_iso
+        is_today = date_iso == today_iso
+        today_tag = '<span class="wa-today">Today</span>' if is_today else ""
+        hi_tag = ('<span class="wa-flag" title="High-impact day">◆</span>'
+                  if day.get("high_impact") else "")
+
+        top = day.get("top_earnings", [])
+        count = day.get("earnings_count", 0)
+        if top:
+            chips = "".join(
+                f'<span class="wa-chip{" wa-mega" if t.get("mcap", 0) >= _WEEK_AHEAD_MEGA_CAP else ""}">'
+                f'{escape_html(t.get("sym", ""))}</span>'
+                for t in top
+            )
+            more = count - len(top)
+            more_html = f'<span class="wa-more">+{more} more</span>' if more > 0 else ""
+            earn_html = (
+                f'<div class="wa-earn-count">{count} '
+                f'{mode_pair("companies report", "reporting")}</div>'
+                f'<div class="wa-chips">{chips}{more_html}</div>'
+            )
+        else:
+            earn_html = (
+                f'<div class="wa-earn-count wa-empty">{mode_pair("No major earnings", "No earnings")}</div>'
+                if count == 0 else
+                f'<div class="wa-earn-count">{count} {mode_pair("companies report", "reporting")}</div>'
+            )
+
+        econ = day.get("econ", [])
+        if econ:
+            rows = "".join(
+                f'<div class="wa-econ-row">'
+                f'<span class="wa-dot {e.get("impact","")}" '
+                f'title="{impact_label.get(e.get("impact",""), "")}"></span>'
+                f'<span class="wa-econ-name">{escape_html(e.get("name",""))}</span>'
+                f'</div>'
+                for e in econ
+            )
+            econ_html = f'<div class="wa-econ">{rows}</div>'
+        else:
+            econ_html = f'<div class="wa-econ wa-empty">{mode_pair("No major data", "No key data")}</div>'
+
+        cards.append(
+            f'<div class="wa-card{" wa-is-today" if is_today else ""}">'
+            f'<div class="wa-card-head"><span class="wa-wd">{escape_html(wd)}</span>'
+            f'<span class="wa-dm">{escape_html(dm)}</span>{today_tag}{hi_tag}</div>'
+            f'<div class="wa-earn">{earn_html}</div>'
+            f'{econ_html}'
+            f'</div>'
+        )
+
+    title = mode_pair("This Week Ahead", "Week Ahead")
+    sub = mode_pair("Earnings &amp; economic events over the next 5 trading days",
+                    "Next 5 trading sessions · earnings + econ")
+    return (
+        f'<div class="week-ahead" id="week-ahead">'
+        f'<div class="wa-head"><span class="wa-title">{title}</span>'
+        f'<span class="wa-sub">{sub}</span></div>'
+        f'<div class="wa-grid">{"".join(cards)}</div>'
+        f'</div>'
     )
 
 
@@ -4059,6 +4247,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         crypto_rows=render_movers_block(crypto_list, why_c, "No crypto data."),
         crypto_top_n=CRYPTO_TOP_N,
         outlook_block=render_outlook_block(snap, briefing),
+        week_ahead_block=render_week_ahead(snap),
         earnings_section_block=render_earnings_section(snap),
         crypto_outlook_block=render_crypto_outlook(ai),
         risk_block=render_risk_block(ai),
@@ -5369,6 +5558,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     log(f"Fetching economic events for {today_iso}…")
     snap.econ_events_today = fetch_econ_events(today_iso)
 
+    log("Fetching week-ahead calendar…")
+    try:
+        snap.week_ahead = fetch_week_ahead(days=5)
+    except Exception as e:
+        warn(f"week-ahead fetch failed: {e}", snap)
+
     log(f"Fetching earnings reactions ({snap.prior_session_date})…")
     try:
         prior_earnings_cal = fetch_earnings_calendar(snap.prior_session_date)
@@ -5473,6 +5668,7 @@ def load_cache() -> Snapshot | None:
             watchlist_news=[mw_from(x) for x in raw.get("watchlist_news", [])],
             earnings_reactions=[mw_from(x) for x in raw.get("earnings_reactions", [])],
             earnings_results=raw.get("earnings_results", {}),
+            week_ahead=raw.get("week_ahead", []),
             world_news_raw=raw.get("world_news_raw", []),
         )
         return snap
