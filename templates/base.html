@@ -686,10 +686,12 @@ function wlCard(sym) { return document.querySelector('.sb-card[data-symbol="' + 
 function wlMoney(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function wlQuote(sym) { return "'" + String(sym).replace(/'/g, "\\'") + "'"; }
 
-function setWlAlert(sym, target, note, base) {
+function wlSignedMoney(n) { return (n >= 0 ? '+' : '−') + wlMoney(Math.abs(n)); }
+
+function setWlAlert(sym, data) {
   var all = getWlAlerts();
-  if (target == null && !note) { delete all[sym]; }
-  else { all[sym] = {target: target, note: note || '', base: base}; }
+  var has = data && (data.target != null || (data.note && data.note.length) || data.shares != null);
+  if (!has) { delete all[sym]; } else { all[sym] = data; }
   saveWlAlerts(all);
   renderCardAlert(sym);
 }
@@ -698,12 +700,13 @@ function renderCardAlert(sym) {
   var card = wlCard(sym);
   if (!card) return;
   var price = parseFloat(card.getAttribute('data-price')) || 0;
+  var change = parseFloat(card.getAttribute('data-change')) || 0;
   var a = getWlAlerts()[sym] || null;
   var foot = card.querySelector('.sb-alert');
   if (!foot) { foot = document.createElement('div'); foot.className = 'sb-alert'; card.appendChild(foot); }
   card.classList.remove('alert-hit');
   if (!a) {
-    foot.innerHTML = '<button class="sb-alert-add" onclick="openWlAlertEditor(' + wlQuote(sym) + ')">+ Set target / note</button>';
+    foot.innerHTML = '<button class="sb-alert-add" onclick="openWlAlertEditor(' + wlQuote(sym) + ')">+ Target / holding / note</button>';
     return;
   }
   var html = '';
@@ -718,6 +721,24 @@ function renderCardAlert(sym) {
       + (hit ? '' : ' <span class="sb-target-away">' + (away >= 0 ? '+' : '') + away.toFixed(1) + '%</span>')
       + '</div>';
   }
+  // Position P&L
+  if (a.shares != null && a.shares !== '' && !isNaN(a.shares)) {
+    var sh = Number(a.shares);
+    var dayPL = sh * change;
+    var dayCls = dayPL > 0 ? 'up' : (dayPL < 0 ? 'down' : 'flat');
+    html += '<div class="sb-pnl">'
+      + '<div class="sb-pnl-head">' + (sh % 1 === 0 ? sh : sh) + ' sh · <span class="sb-pnl-val">' + wlMoney(sh * price) + '</span></div>';
+    if (a.cost != null && a.cost !== '' && !isNaN(a.cost) && Number(a.cost) > 0) {
+      var cost = Number(a.cost);
+      var totPL = sh * (price - cost);
+      var plPct = (price - cost) / cost * 100;
+      var totCls = totPL > 0 ? 'up' : (totPL < 0 ? 'down' : 'flat');
+      html += '<div class="sb-pnl-row"><span class="sb-pnl-lbl">Total</span> <span class="num ' + totCls + '">'
+        + wlSignedMoney(totPL) + ' (' + (plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%)</span></div>';
+    }
+    html += '<div class="sb-pnl-row"><span class="sb-pnl-lbl">Today</span> <span class="num ' + dayCls + '">'
+      + wlSignedMoney(dayPL) + '</span></div></div>';
+  }
   if (a.note) html += '<div class="sb-note">' + escapeHtmlJs(a.note) + '</div>';
   html += '<button class="sb-alert-edit" onclick="openWlAlertEditor(' + wlQuote(sym) + ')">edit</button>';
   foot.innerHTML = html;
@@ -731,14 +752,19 @@ function openWlAlertEditor(sym) {
   var foot = card.querySelector('.sb-alert') || (function () {
     var f = document.createElement('div'); f.className = 'sb-alert'; card.appendChild(f); return f;
   })();
+  var has = a.target != null || a.note || a.shares != null;
   foot.innerHTML =
     '<div class="sb-alert-editor">' +
     '  <input type="number" step="any" class="sb-alert-target" placeholder="Target price (now ' + wlMoney(price) + ')" value="' + (a.target != null ? a.target : '') + '">' +
+    '  <div class="sb-holding-row">' +
+    '    <input type="number" step="any" min="0" class="sb-alert-shares" placeholder="Shares" value="' + (a.shares != null ? a.shares : '') + '">' +
+    '    <input type="number" step="any" min="0" class="sb-alert-cost" placeholder="Cost / share" value="' + (a.cost != null ? a.cost : '') + '">' +
+    '  </div>' +
     '  <input type="text" class="sb-alert-note" maxlength="120" placeholder="Note (optional)" value="' + escapeHtmlJs(a.note || '') + '">' +
     '  <div class="sb-alert-actions">' +
     '    <button class="sb-alert-save" onclick="saveWlAlertFromEditor(' + wlQuote(sym) + ',' + price + ')">Save</button>' +
     '    <button class="sb-alert-cancel" onclick="renderCardAlert(' + wlQuote(sym) + ')">Cancel</button>' +
-    (a.target != null || a.note ? '    <button class="sb-alert-clear" onclick="setWlAlert(' + wlQuote(sym) + ',null,\'\',' + price + ')">Clear</button>' : '') +
+    (has ? '    <button class="sb-alert-clear" onclick="setWlAlert(' + wlQuote(sym) + ',null)">Clear</button>' : '') +
     '  </div>' +
     '</div>';
   var ti = foot.querySelector('.sb-alert-target'); if (ti) ti.focus();
@@ -747,9 +773,14 @@ function openWlAlertEditor(sym) {
 function saveWlAlertFromEditor(sym, price) {
   var card = wlCard(sym);
   if (!card) return;
-  var t = parseFloat(card.querySelector('.sb-alert-target').value);
-  var note = card.querySelector('.sb-alert-note').value.trim();
-  setWlAlert(sym, isNaN(t) ? null : t, note, price);
+  var numOrNull = function (v) { var n = parseFloat(v); return isNaN(n) ? null : n; };
+  setWlAlert(sym, {
+    target: numOrNull(card.querySelector('.sb-alert-target').value),
+    shares: numOrNull(card.querySelector('.sb-alert-shares').value),
+    cost:   numOrNull(card.querySelector('.sb-alert-cost').value),
+    note:   card.querySelector('.sb-alert-note').value.trim(),
+    base:   price
+  });
 }
 
 (function initWatchlistAlerts() {

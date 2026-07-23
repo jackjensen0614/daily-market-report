@@ -6086,7 +6086,7 @@ def render_sidebar_block(snap: Snapshot) -> str:
 
         sym_js = escape_html(q.symbol).replace("'", "\\'")
         cards_html += (
-            f'<div class="sb-card {cls}" data-symbol="{escape_html(q.symbol)}" data-price="{q.price:.4f}">'
+            f'<div class="sb-card {cls}" data-symbol="{escape_html(q.symbol)}" data-price="{q.price:.4f}" data-change="{q.change:.4f}">'
             f'  <div class="sb-card-top">'
             f'    <span class="sb-sym">{escape_html(q.symbol)}</span>'
             f'    <span class="sb-pct {cls}">{pct_sign}{q.change_pct:.2f}%</span>'

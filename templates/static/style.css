@@ -1448,6 +1448,19 @@ body.wl-collapsed .sb-reopen { display: inline-flex; }
 }
 .sb-alert-save { background: var(--accent) !important; color: #062018 !important; border-color: var(--accent) !important; font-weight: 700; }
 .sb-alert-actions button:hover { border-color: var(--accent-2); }
+.sb-holding-row { display: flex; gap: 5px; }
+.sb-holding-row input { flex: 1; }
+/* Position P&L */
+.sb-pnl { font-size: 11px; margin-top: 5px; padding: 6px 9px; background: var(--bg-1);
+  border: 1px solid var(--border); border-radius: 6px; }
+.sb-pnl-head { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.sb-pnl-val { color: var(--text); }
+.sb-pnl-row { display: flex; justify-content: space-between; margin-top: 2px; }
+.sb-pnl-lbl { color: var(--text-faint); }
+.sb-pnl-row .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.sb-pnl-row .num.up { color: var(--green); }
+.sb-pnl-row .num.down { color: var(--red); }
+.sb-pnl-row .num.flat { color: var(--text-dim); }
 
 /* user-added TV charts */
 .sb-user-card {
