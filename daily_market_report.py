@@ -4574,6 +4574,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         watchlist_block=render_watchlist(snap),
         risk_barometer_block=render_risk_barometer(snap),
         sector_heatmap_block=render_sector_heatmap(snap),
+        sector_rotation_block=render_sector_rotation(snap),
         yield_curve_block=render_yield_curve(snap),
         sentiment_block=render_sentiment_strip(snap),
         report_card_block=render_report_card(history),
@@ -4677,6 +4678,50 @@ def render_sector_heatmap(snap: Snapshot) -> str:
         f'{render_breadth_strip(snap)}'
         f'{bars_html}'
         f'<div class="sector-grid">{"".join(cards)}</div>'
+    )
+
+
+def render_sector_rotation(snap: Snapshot) -> str:
+    """Sectors ranked by 1-week return — a rotation lens (which groups money
+    moved into/out of this week), distinct from the 1-day heatmap. Each row also
+    shows today's move so you can see whether the weekly trend is still running.
+    """
+    sectors = snap.sectors or []
+    if len(sectors) < 3:
+        return ""
+    ranked = sorted(sectors, key=lambda s: s.pct_1w, reverse=True)
+    max_abs = max((abs(s.pct_1w) for s in ranked), default=1.0) or 1.0
+
+    rows = []
+    for i, s in enumerate(ranked, 1):
+        cls = cls_for(s.pct_1w)
+        width = min(100.0, abs(s.pct_1w) / max_abs * 50.0)
+        side = "right" if s.pct_1w >= 0 else "left"
+        d_cls = cls_for(s.pct_1d)
+        mom = "▲" if s.pct_1d > 0.05 else ("▼" if s.pct_1d < -0.05 else "·")
+        rows.append(
+            '<div class="rot-row">'
+            f'<div class="rot-rank">{i}</div>'
+            f'<div class="rot-name">{escape_html(s.name)}</div>'
+            f'<div class="rot-track"><div class="rot-axis"></div>'
+            f'<div class="rot-fill rot-{side} {cls}" style="width:{width:.2f}%"></div></div>'
+            f'<div class="rot-1w num {cls}">{fmt_pct(s.pct_1w)}</div>'
+            f'<div class="rot-1d num {d_cls}" title="today">{mom} {fmt_pct(s.pct_1d)}</div>'
+            '</div>'
+        )
+    caption = mode_pair("Ranked by this week's move · today's move on the right",
+                        "Ranked by 1-week return · 1-day at right")
+    return (
+        '<div class="sector-rotation">'
+        '<div class="rot-head">'
+        '<span class="rot-title"><span class="std-only">Where Money Moved This Week</span>'
+        '<span class="adv-only">Sector Rotation · 1-Week</span></span>'
+        f'<span class="rot-caption">{caption}</span>'
+        '</div>'
+        '<div class="rot-col-head"><span class="rot-rank"></span><span class="rot-name"></span>'
+        '<span class="rot-track"></span><span class="rot-1w">1W</span><span class="rot-1d">Today</span></div>'
+        + "".join(rows) +
+        '</div>'
     )
 
 

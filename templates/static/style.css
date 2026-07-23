@@ -888,6 +888,39 @@ details.scorecard-details > .scorecard-body {
 .sb-fill.down { background: var(--red); }
 .sb-fill.flat { background: var(--text-faint); }
 .sb-pct { font-size: 12px; text-align: right; font-weight: 600; }
+
+/* Sector rotation (ranked by 1-week return) */
+.sector-rotation {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.015), transparent 42%), var(--bg-panel);
+  padding: 14px 18px 16px; margin: 12px 0 18px;
+}
+.rot-head { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.rot-title { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .07em; }
+.rot-caption { font-size: 11px; color: var(--text-faint); }
+.rot-row, .rot-col-head {
+  display: grid; grid-template-columns: 22px 132px 1fr 58px 74px;
+  align-items: center; gap: 10px; padding: 4px 0;
+}
+.rot-col-head { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-faint); padding: 0 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
+.rot-col-head .rot-1w, .rot-col-head .rot-1d { text-align: right; }
+.rot-rank { font-size: 11px; color: var(--text-faint); text-align: center; font-variant-numeric: tabular-nums; }
+.rot-name { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rot-track { position: relative; height: 14px; background: var(--bg-panel-2); border-radius: 4px; overflow: hidden; }
+.rot-axis { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.rot-fill { position: absolute; top: 1px; bottom: 1px; height: 12px; border-radius: 2px; }
+.rot-fill.rot-right { left: 50%; }
+.rot-fill.rot-left  { right: 50%; }
+.rot-fill.up { background: var(--green); } .rot-fill.down { background: var(--red); } .rot-fill.flat { background: var(--text-faint); }
+.rot-1w { font-size: 12.5px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rot-1d { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.rot-1w.up, .rot-1d.up { color: var(--green); } .rot-1w.down, .rot-1d.down { color: var(--red); }
+.rot-1w.flat, .rot-1d.flat { color: var(--text-dim); }
+@media (max-width: 620px) { .rot-row, .rot-col-head { grid-template-columns: 20px 92px 1fr 50px 62px; gap: 7px; } }
+
 @media (max-width: 720px) {
   .sb-row { grid-template-columns: 120px 1fr 56px; gap: 8px; }
   .sb-name { font-size: 12px; }
