@@ -4442,6 +4442,36 @@ def render_crypto_overview(snap: Snapshot) -> str:
     return f'<div class="crypto-overview">{tile_html}</div>'
 
 
+def econ_countdown_data(snap: Snapshot) -> list[dict]:
+    """De-duplicated, time-sorted economic events for the client-side countdown.
+
+    Feed times are treated as ET (24h). Events without a parseable HH:MM time
+    are skipped. The client picks the next upcoming one and counts down to it.
+    """
+    seen: set = set()
+    out: list[dict] = []
+    for e in snap.econ_events_today:
+        t = (e.symbol_or_event or "").strip()
+        m = re.match(r"^(\d{1,2}):(\d{2})$", t)
+        if not m:
+            continue
+        hh, mm = int(m.group(1)), int(m.group(2))
+        if hh > 23 or mm > 59:
+            continue
+        label = (e.description or "").strip()
+        if not label:
+            continue
+        key = (hh, mm, label.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        ap = "AM" if hh < 12 else "PM"
+        h12 = hh % 12 or 12
+        out.append({"m": hh * 60 + mm, "label": label, "t": f"{h12}:{mm:02d} {ap} ET"})
+    out.sort(key=lambda x: x["m"])
+    return out
+
+
 def build_text_summary(snap: Snapshot) -> str:
     """A plain-text digest of the session for quick sharing (Slack / email).
 
@@ -4562,6 +4592,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         ticker_db_json=ticker_db_json,
         text_summary=escape_html(build_text_summary(snap)),
         scorecard_csv_json=json.dumps(scorecard_csv_rows(history)),
+        econ_countdown_json=json.dumps(econ_countdown_data(snap)),
         prior_date=prior_date,
         prior_date_human=prior_dt.strftime("%A, %B %-d, %Y"),
         generated_human=gen_dt_et.strftime("%Y-%m-%d %H:%M %Z"),

@@ -362,6 +362,20 @@ a { color: #8ab4f8; }
 .theme-btn { padding: 6px 11px; font-size: 14px; line-height: 1; }
 
 /* Live market-status clock */
+/* Economic-release countdown banner */
+.econ-countdown {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 8px; padding: 8px 14px; margin: 0 0 16px; font-size: 12.5px;
+}
+.ec-icon { font-size: 14px; line-height: 1; }
+.ec-label { color: var(--text-faint); text-transform: uppercase; font-size: 10px; letter-spacing: .05em; }
+.ec-name { font-weight: 700; color: var(--text); }
+.ec-time { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ec-away { color: var(--accent-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ec-more { color: var(--text-faint); font-size: 11px; margin-left: auto; }
+
 .market-clock {
   display: inline-flex; align-items: center; gap: 7px;
   font-size: 12px; white-space: nowrap;
@@ -1933,7 +1947,7 @@ body.js-tabs .tab-panel.active { display: block; animation: panel-in .16s ease; 
   .refresh-btn, .print-btn, .mode-toggle, #refresh-status,
   .lookup-search, .lookup-suggest, .sb-add, .sb-suggest,
   #lk-suggest, #sb-suggest, .crypto-toggle, .fab, #sb-restore-btn,
-  .movers-filter, .back-to-top, #copy-summary-src, .market-clock, .tr-toolbar,
+  .movers-filter, .back-to-top, #copy-summary-src, .market-clock, .tr-toolbar, .econ-countdown,
   .sb-reopen {
     display: none !important;
   }

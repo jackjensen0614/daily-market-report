@@ -126,6 +126,8 @@
 <!-- ===== TAB: TODAY (the morning cockpit: snapshot → scorecard → narrative) ===== -->
 <section class="tab-panel" id="tab-today" data-panel="today">
 
+<div id="econ-countdown" class="econ-countdown" hidden></div>
+
 <div class="market-snapshot" id="market-snapshot">
   <div class="snapshot-head">
     <span class="std-only">Market Snapshot</span><span class="adv-only">Indices &amp; Macro</span>
@@ -246,6 +248,7 @@
 <button id="sb-reopen" class="sb-reopen" onclick="toggleWatchlist()" title="Show watchlist" aria-label="Show watchlist">&#9733; <span class="std-only">Watching</span><span class="adv-only">Watchlist</span></button>
 <button id="back-to-top" class="back-to-top" onclick="scrollToTop()" title="Back to top" aria-label="Back to top" hidden>&#8593;</button>
 <script type="application/json" id="scorecard-csv-data">{{ scorecard_csv_json }}</script>
+<script type="application/json" id="econ-events-data">{{ econ_countdown_json }}</script>
 <script>
 // Local file:// previously redirected to the published GitHub Pages copy.
 // That blocks local development (changes to report.html aren't visible
@@ -1075,6 +1078,44 @@ function doRefresh() {
   }
   update();
   setInterval(update, 1000);
+})();
+
+// ── Economic-release countdown ───────────────────────────────────────────
+// Counts down to the next scheduled economic release today (times treated as
+// ET). Data is de-duped server-side; global and US events are both included.
+(function initEconCountdown() {
+  var box = document.getElementById('econ-countdown');
+  var dataEl = document.getElementById('econ-events-data');
+  if (!box || !dataEl) return;
+  var events;
+  try { events = JSON.parse(dataEl.textContent || '[]'); } catch (e) { return; }
+  if (!events.length) return;
+
+  function nowEtMinutes() {
+    var f = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit'});
+    var o = {}; f.formatToParts(new Date()).forEach(function (p) { o[p.type] = p.value; });
+    var h = parseInt(o.hour === '24' ? '0' : o.hour, 10);
+    return h * 60 + parseInt(o.minute, 10);
+  }
+  function fmtAway(mins) { var h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm'); }
+  function update() {
+    var now = nowEtMinutes();
+    var next = null, remaining = 0;
+    for (var i = 0; i < events.length; i++) {
+      if (events[i].m > now) { if (!next) next = events[i]; remaining++; }
+    }
+    if (!next) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML =
+      '<span class="ec-icon">⏱</span>' +
+      '<span class="ec-label">Next release</span>' +
+      '<span class="ec-name">' + escapeHtmlJs(next.label) + '</span>' +
+      '<span class="ec-time">' + escapeHtmlJs(next.t) + '</span>' +
+      '<span class="ec-away">in ' + fmtAway(next.m - now) + '</span>' +
+      (remaining > 1 ? '<span class="ec-more">+' + (remaining - 1) + ' more today</span>' : '');
+  }
+  update();
+  setInterval(update, 30000);
 })();
 
 (function () {
