@@ -109,6 +109,12 @@ FX_TICKERS = {
     "USDCNY=X": "USD/CNY", "USDCAD=X": "USD/CAD", "AUDUSD=X": "AUD/USD",
 }
 
+# Commodity futures for the commodities strip (Yahoo continuous-front tickers).
+COMMODITY_TICKERS = {
+    "GC=F": "Gold", "SI=F": "Silver", "CL=F": "Crude Oil (WTI)",
+    "BZ=F": "Brent Crude", "HG=F": "Copper", "NG=F": "Natural Gas",
+}
+
 # Global equity indices
 GLOBAL_INDICES = {
     "^GDAXI": "DAX (Germany)",
@@ -414,6 +420,7 @@ class Snapshot:
     global_indices: list[Quote] = field(default_factory=list)
     yields: list[Quote] = field(default_factory=list)   # Treasury tenors (3M/5Y/10Y/30Y)
     fx: list[Quote] = field(default_factory=list)        # major currency pairs
+    commodities: list[Quote] = field(default_factory=list)  # gold/oil/copper/etc.
     earnings_today: list[CalendarEvent] = field(default_factory=list)
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
@@ -4385,6 +4392,27 @@ def render_fx_strip(snap: Snapshot) -> str:
     )
 
 
+def render_commodities_strip(snap: Snapshot) -> str:
+    """Compact grid of major commodities (metals, energy) for the World tab."""
+    if not snap.commodities:
+        return ""
+    tiles = []
+    for q in snap.commodities:
+        cls = cls_for(q.change_pct)
+        tiles.append(
+            f'<div class="fx-tile">'
+            f'<div class="fx-pair">{escape_html(q.name)}</div>'
+            f'<div class="fx-px num">{fmt_usd(q.price)}</div>'
+            f'<div class="fx-chg num {cls}">{fmt_pct(q.change_pct)}</div>'
+            f'</div>'
+        )
+    return (
+        '<h2 id="commodities"><span class="std-only">Commodities</span>'
+        '<span class="adv-only">Commodities · Metals &amp; Energy</span></h2>'
+        f'<div class="fx-grid">{"".join(tiles)}</div>'
+    )
+
+
 def render_crypto_overview(snap: Snapshot) -> str:
     """Whole-market crypto stats: total market cap (+24h change), 24h volume,
     and BTC/ETH dominance. Sits above the top-coins list on the Crypto tab."""
@@ -4566,6 +4594,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         risk_block=render_risk_block(ai),
         global_block=render_global_block(snap),
         fx_block=render_fx_strip(snap),
+        commodities_block=render_commodities_strip(snap),
         world_news_block=render_world_news_block(snap, briefing),
         sidebar_block=render_sidebar_block(snap),
     )
@@ -6177,6 +6206,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     except Exception as e:
         warn(f"FX fetch failed: {e}", snap)
 
+    log("Fetching commodities…")
+    try:
+        snap.commodities = fetch_quotes(COMMODITY_TICKERS)
+    except Exception as e:
+        warn(f"commodities fetch failed: {e}", snap)
+
     log("Fetching sector performance (YTD)…")
     try:
         snap.sectors = fetch_sectors()
@@ -6352,6 +6387,7 @@ def load_cache() -> Snapshot | None:
             global_indices=[q_from(x) for x in raw.get("global_indices", [])],
             yields=[q_from(x) for x in raw.get("yields", [])],
             fx=[q_from(x) for x in raw.get("fx", [])],
+            commodities=[q_from(x) for x in raw.get("commodities", [])],
             gainers=[mw_from(x) for x in raw.get("gainers", [])],
             losers=[mw_from(x) for x in raw.get("losers", [])],
             most_active=[mw_from(x) for x in raw.get("most_active", [])],
