@@ -58,7 +58,7 @@
     <h1><span class="std-only">Your Daily Market Snapshot</span><span class="adv-only">Daily Market Report</span>
       <span class="subtle"><span class="std-only">Yesterday's close · {{ prior_date_human }}</span><span class="adv-only">Prior session · {{ prior_date_human }}</span></span>
     </h1>
-    <div class="meta"><span class="std-only">Updated {{ last_updated }} · {{ today_human }}</span><span class="adv-only">Last updated: {{ last_updated }} · Today is {{ today_human }}</span></div>
+    <div class="meta" id="updated-line"><span class="std-only">Updated {{ last_updated }} · {{ today_human }}</span><span class="adv-only">Last updated: {{ last_updated }} · Today is {{ today_human }}</span></div>
   </div>
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
     <div class="meta">{{ warnings_html }}</div>
@@ -650,7 +650,10 @@ function loadUserCards() {
     var card = document.createElement('div');
     card.className = 'sb-user-card';
     card.style.margin = '0 12px 10px';
-    var tvSym = sym.includes(':') ? sym : 'NASDAQ:' + sym;
+    // Let TradingView auto-resolve the exchange (crypto handled explicitly).
+    // Hardcoding "NASDAQ:" broke every NYSE name, crypto, and index.
+    var tvSym = sym.indexOf(':') >= 0 ? sym
+      : (/-USD$/.test(sym) ? 'CRYPTO:' + sym.replace('-USD', '') + 'USD' : sym);
     card.innerHTML =
       '<div class="sb-user-card-head">' +
       '  <span class="sb-user-sym">' + sym + '</span>' +
@@ -783,11 +786,12 @@ function saveWlAlertFromEditor(sym, price) {
   });
 }
 
-(function initWatchlistAlerts() {
+function applyWatchlistAlerts() {
   document.querySelectorAll('.sb-card[data-symbol]').forEach(function (card) {
     renderCardAlert(card.getAttribute('data-symbol'));
   });
-})();
+}
+applyWatchlistAlerts();
 
 // ── Ticker lookup panel (research any symbol on demand) ───────────────────
 // Reuses TICKER_DB autocomplete (sbLocalMatches/sbRemoteSearch) and the same
@@ -1014,12 +1018,63 @@ function saveScroll() {
   });
 })();
 
-function doRefresh() {
-  saveScroll();
+// ── Soft in-place refresh ────────────────────────────────────────────────
+// Instead of location.reload() (which flashes, jumps scroll, resets the tab,
+// and wipes any in-progress edit), fetch the freshly-generated page and swap
+// only the data content — preserving the sidebar/watchlist, active tab, scroll,
+// theme, reading mode, expanded sections, and open editors.
+var srInFlight = false;
+function softRefresh(isManual) {
+  if (srInFlight) return;
+  if (!isManual) {
+    // Don't interrupt active work; the loop retries on the next cycle.
+    if (document.hidden) return;
+    var ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    if (document.querySelector('.sb-alert-editor')) return;      // watchlist editor open
+    var lk = document.getElementById('lk-result');
+    if (lk && lk.innerHTML.trim()) return;                       // a ticker lookup is showing
+  }
+  srInFlight = true;
   var btn = document.getElementById('refresh-btn');
-  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
-  location.reload();
+  if (btn) btn.classList.add('spinning');
+  fetch(window.location.pathname + '?_sr=' + Date.now(), {cache: 'no-store'})
+    .then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.text(); })
+    .then(function (html) {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var y = window.pageYOffset || 0;
+      // Remember expanded <details> + crypto list so we can restore them
+      var openDetails = {};
+      document.querySelectorAll('details[id]').forEach(function (d) { openDetails[d.id] = d.open; });
+      var cp0 = document.getElementById('crypto-panel');
+      var cryptoExpanded = cp0 && !cp0.classList.contains('collapsed');
+
+      document.querySelectorAll('.tab-panel').forEach(function (panel) {
+        var fresh = doc.getElementById(panel.id);
+        if (fresh) panel.innerHTML = fresh.innerHTML;
+      });
+      var pairs = [['sb-server-cards', 'innerHTML'], ['updated-line', 'innerHTML'],
+                   ['scorecard-csv-data', 'textContent'], ['econ-events-data', 'textContent']];
+      pairs.forEach(function (p) {
+        var f = doc.getElementById(p[0]), c = document.getElementById(p[0]);
+        if (f && c) c[p[1]] = f[p[1]];
+      });
+
+      document.querySelectorAll('details[id]').forEach(function (d) { if (openDetails[d.id]) d.open = true; });
+      var cp = document.getElementById('crypto-panel');
+      if (cryptoExpanded && cp) {
+        cp.classList.remove('collapsed');
+        var tg = cp.querySelector('.crypto-toggle');
+        if (tg) tg.textContent = tg.getAttribute('data-expanded-label');
+      }
+      applyWatchlistAlerts();
+      window.scrollTo(0, y);
+    })
+    .catch(function () { /* keep the current page on any failure */ })
+    .then(function () { if (btn) btn.classList.remove('spinning'); srInFlight = false; });
 }
+function doRefresh() { softRefresh(true); }
+
 (function(){
   function isMarketHours() {
     var now = new Date();
@@ -1036,12 +1091,12 @@ function doRefresh() {
     var next = 60;
     function setStatus(s) { if (statusEl) statusEl.textContent = s; }
     function setLabel(s)  { if (labelEl)  labelEl.textContent  = s; }
-    setStatus('Live · auto-refresh in ' + next + 's');
-    var timer = setInterval(function() {
+    setStatus('Live · updates in ' + next + 's');
+    setInterval(function() {
       next--;
-      setStatus('Live · auto-refresh in ' + next + 's');
-      setLabel('Refresh (' + next + 's)');
-      if (next <= 0) { saveScroll(); clearInterval(timer); location.reload(); }
+      if (next <= 0) { next = 60; softRefresh(false); }   // soft — no page reset
+      setStatus('Live · updates in ' + next + 's');
+      setLabel(next < 60 ? 'Refresh (' + next + 's)' : 'Refresh');
     }, 1000);
   } else {
     // Market-status is shown by the live clock below; keep this slot clean.
@@ -1114,14 +1169,8 @@ function doRefresh() {
 // ── Economic-release countdown ───────────────────────────────────────────
 // Counts down to the next scheduled economic release today (times treated as
 // ET). Data is de-duped server-side; global and US events are both included.
+// Re-acquires its element and data each tick so it survives soft-refresh swaps.
 (function initEconCountdown() {
-  var box = document.getElementById('econ-countdown');
-  var dataEl = document.getElementById('econ-events-data');
-  if (!box || !dataEl) return;
-  var events;
-  try { events = JSON.parse(dataEl.textContent || '[]'); } catch (e) { return; }
-  if (!events.length) return;
-
   function nowEtMinutes() {
     var f = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit'});
     var o = {}; f.formatToParts(new Date()).forEach(function (p) { o[p.type] = p.value; });
@@ -1129,7 +1178,20 @@ function doRefresh() {
     return h * 60 + parseInt(o.minute, 10);
   }
   function fmtAway(mins) { var h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm'); }
+  function readEvents() {
+    var el = document.getElementById('econ-events-data');
+    if (!el) return [];
+    try { return JSON.parse(el.textContent || '[]'); } catch (e) { return []; }
+  }
   function update() {
+    var box = document.getElementById('econ-countdown');
+    if (!box) return;
+    var events = readEvents();
+    if (!events.length) { box.hidden = true; return; }
+    box.title = 'Countdown to the next scheduled economic data release today (times in ET). ' +
+                'Releases like CPI, GDP and jobs data can move the market.';
+    var label = document.body.classList.contains('mode-advanced')
+      ? 'Next econ release' : 'Next economic data release';
     var now = nowEtMinutes();
     var next = null, remaining = 0;
     for (var i = 0; i < events.length; i++) {
@@ -1138,8 +1200,8 @@ function doRefresh() {
     if (!next) { box.hidden = true; return; }
     box.hidden = false;
     box.innerHTML =
-      '<span class="ec-icon">⏱</span>' +
-      '<span class="ec-label">Next release</span>' +
+      '<span class="ec-icon">📅</span>' +
+      '<span class="ec-label">' + label + '</span>' +
       '<span class="ec-name">' + escapeHtmlJs(next.label) + '</span>' +
       '<span class="ec-time">' + escapeHtmlJs(next.t) + '</span>' +
       '<span class="ec-away">in ' + fmtAway(next.m - now) + '</span>' +
@@ -1149,18 +1211,17 @@ function doRefresh() {
   setInterval(update, 30000);
 })();
 
-(function () {
+// Delegated so it survives soft-refresh content swaps.
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest && e.target.closest('.crypto-toggle');
+  if (!btn) return;
   var panel = document.getElementById('crypto-panel');
   if (!panel) return;
-  var btn = panel.querySelector('.crypto-toggle');
-  if (!btn) return;
-  btn.addEventListener('click', function () {
-    var collapsed = panel.classList.toggle('collapsed');
-    btn.textContent = collapsed
-      ? btn.getAttribute('data-collapsed-label')
-      : btn.getAttribute('data-expanded-label');
-  });
-})();
+  var collapsed = panel.classList.toggle('collapsed');
+  btn.textContent = collapsed
+    ? btn.getAttribute('data-collapsed-label')
+    : btn.getAttribute('data-expanded-label');
+});
 
 // Print / Save-as-PDF: the @media print stylesheet flattens tabs and hides
 // interactive chrome. Here we temporarily expand the collapsed crypto list so
