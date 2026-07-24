@@ -115,6 +115,23 @@ COMMODITY_TICKERS = {
     "BZ=F": "Brent Crude", "HG=F": "Copper", "NG=F": "Natural Gas",
 }
 
+# Curated popular tickers pre-fetched (with 52-week range) so the lookup panel
+# can show a native quote card. The day's movers + watchlist are added on top.
+POPULAR_LOOKUP_SYMBOLS = [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "AVGO", "ORCL",
+    "ADBE", "CRM", "AMD", "INTC", "CSCO", "QCOM", "TXN", "IBM", "NOW", "INTU",
+    "AMAT", "MU", "PANW", "SNPS", "CDNS", "KLAC", "ARM", "SMCI", "DELL",
+    "WMT", "COST", "HD", "LOW", "NKE", "MCD", "SBUX", "TGT", "PG", "KO",
+    "PEP", "PM", "MO", "DIS", "NFLX", "CMCSA", "TMUS", "VZ", "T",
+    "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP", "V", "MA", "PYPL",
+    "UNH", "JNJ", "LLY", "MRK", "PFE", "ABBV", "TMO", "ABT", "DHR", "BMY", "AMGN",
+    "BA", "CAT", "GE", "HON", "UPS", "RTX", "LMT", "DE", "XOM", "CVX", "COP", "SLB",
+    "BRK-B", "COIN", "MSTR", "PLTR", "SOFI", "HOOD", "RIVN", "LCID", "F", "GM",
+    "UBER", "ABNB", "SHOP", "RBLX", "SNAP", "DKNG", "MARA", "RIOT",
+    "SPY", "QQQ", "DIA", "IWM", "VTI", "VOO", "XLK", "XLF", "XLE", "XLV",
+    "GLD", "SLV", "TLT", "HYG", "SOXL", "SOXX", "SMH", "ARKK",
+]
+
 # Global equity indices
 GLOBAL_INDICES = {
     "^GDAXI": "DAX (Germany)",
@@ -421,6 +438,7 @@ class Snapshot:
     yields: list[Quote] = field(default_factory=list)   # Treasury tenors (3M/5Y/10Y/30Y)
     fx: list[Quote] = field(default_factory=list)        # major currency pairs
     commodities: list[Quote] = field(default_factory=list)  # gold/oil/copper/etc.
+    quote_universe: dict = field(default_factory=dict)      # sym -> quote block for the lookup
     earnings_today: list[CalendarEvent] = field(default_factory=list)
     econ_events_today: list[CalendarEvent] = field(default_factory=list)
     ai: dict = field(default_factory=dict)
@@ -744,6 +762,75 @@ def attach_52w_range(quotes: list[Quote]) -> None:
                 q.wk52_high, q.wk52_low = hi, lo
         except Exception:
             continue
+
+
+def build_quote_universe(snap: "Snapshot") -> dict:
+    """One bulk 1-year daily download → a per-ticker quote block (price, change,
+    52-week range, prior-session range, volume) for the lookup panel's native
+    info card. Universe: curated popular names + the day's movers + watchlist.
+    """
+    name_db = {}
+    try:
+        name_db = {s: n for s, n in load_all_tickers()}
+    except Exception:
+        pass
+    names: dict[str, str] = {}
+    for s in POPULAR_LOOKUP_SYMBOLS:
+        names[s] = name_db.get(s, s)
+    for mw in (snap.gainers + snap.losers + snap.most_active + (snap.watchlist_news or [])):
+        s = (mw.quote.symbol or "").upper()
+        if s:
+            names.setdefault(s, mw.quote.name or s)
+    for q in snap.watchlist:
+        s = (q.symbol or "").upper()
+        if s:
+            names.setdefault(s, q.name or s)
+
+    syms = list(names.keys())
+    if not syms:
+        return {}
+    try:
+        data = yf.download(syms, period="1y", interval="1d", auto_adjust=False,
+                           progress=False, group_by="ticker", threads=True)
+    except Exception as e:
+        warn(f"quote universe download failed: {e}", snap)
+        return {}
+    if data is None or data.empty:
+        return {}
+
+    uni: dict = {}
+    for sym in syms:
+        try:
+            if len(syms) == 1:
+                hist = data
+            elif sym in data.columns.get_level_values(0):
+                hist = data[sym]
+            else:
+                continue
+            close = hist["Close"].dropna()
+            if len(close) < 2:
+                continue
+            price = float(close.iloc[-1]); prev = float(close.iloc[-2])
+            high = hist["High"].dropna(); low = hist["Low"].dropna()
+            wk_hi = max(float(high.max()), price) if not high.empty else price
+            wk_lo = min(float(low.min()), price) if not low.empty else price
+            vol = hist["Volume"].dropna()
+            chg = price - prev
+            uni[sym.upper()] = {
+                "name": names.get(sym, sym),
+                "price": round(price, 2),
+                "chg": round(chg, 2),
+                "pct": round((chg / prev * 100.0) if prev else 0.0, 2),
+                "hi52": round(wk_hi, 2),
+                "lo52": round(wk_lo, 2),
+                "dhi": round(float(high.iloc[-1]), 2) if not high.empty else None,
+                "dlo": round(float(low.iloc[-1]), 2) if not low.empty else None,
+                "vol": int(vol.iloc[-1]) if not vol.empty else None,
+            }
+        except Exception:
+            continue
+    log(f"Quote universe built: {len(uni)}/{len(syms)} tickers")
+    return uni
 
 
 def fetch_screener(screener_id: str, count: int = 25) -> list[Quote]:
@@ -4593,6 +4680,7 @@ def render_report(snap: Snapshot, briefing: dict | None = None,
         text_summary=escape_html(build_text_summary(snap)),
         scorecard_csv_json=json.dumps(scorecard_csv_rows(history)),
         econ_countdown_json=json.dumps(econ_countdown_data(snap)),
+        quote_universe_json=json.dumps(snap.quote_universe),
         prior_date=prior_date,
         prior_date_human=prior_dt.strftime("%A, %B %-d, %Y"),
         generated_human=gen_dt_et.strftime("%Y-%m-%d %H:%M %Z"),
@@ -6333,6 +6421,12 @@ def build_snapshot(no_ai: bool = False, no_premarket: bool = False) -> Snapshot:
     snap.losers = attach_news(losers_q)
     snap.most_active = attach_news(active_q)
 
+    log("Building quote universe for ticker lookup…")
+    try:
+        snap.quote_universe = build_quote_universe(snap)
+    except Exception as e:
+        warn(f"quote universe build failed: {e}", snap)
+
     log("Fetching world / macro news headlines…")
     try:
         snap.world_news_raw = fetch_world_news()
@@ -6464,6 +6558,7 @@ def load_cache() -> Snapshot | None:
             yields=[q_from(x) for x in raw.get("yields", [])],
             fx=[q_from(x) for x in raw.get("fx", [])],
             commodities=[q_from(x) for x in raw.get("commodities", [])],
+            quote_universe=raw.get("quote_universe", {}),
             gainers=[mw_from(x) for x in raw.get("gainers", [])],
             losers=[mw_from(x) for x in raw.get("losers", [])],
             most_active=[mw_from(x) for x in raw.get("most_active", [])],

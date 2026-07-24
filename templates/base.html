@@ -249,6 +249,7 @@
 <button id="back-to-top" class="back-to-top" onclick="scrollToTop()" title="Back to top" aria-label="Back to top" hidden>&#8593;</button>
 <script type="application/json" id="scorecard-csv-data">{{ scorecard_csv_json }}</script>
 <script type="application/json" id="econ-events-data">{{ econ_countdown_json }}</script>
+<script type="application/json" id="quote-universe-data">{{ quote_universe_json }}</script>
 <script>
 // Local file:// previously redirected to the published GitHub Pages copy.
 // That blocks local development (changes to report.html aren't visible
@@ -816,6 +817,55 @@ function lkInject(container, src, config) {
   container.querySelector('.tradingview-widget-container').appendChild(s);
 }
 
+function lkQuoteUniverse() {
+  var el = document.getElementById('quote-universe-data');
+  if (!el) return {};
+  try { return JSON.parse(el.textContent || '{}'); } catch (e) { return {}; }
+}
+function lkFmtNum(n) {
+  return Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function lkFmtVol(n) {
+  if (n == null) return '—';
+  var a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+// Native quote card (real 52-week range + day range + volume) for pre-fetched
+// tickers. Returns '' for tickers not in the embedded universe.
+function lkNativeCard(sym) {
+  var d = lkQuoteUniverse()[sym];
+  if (!d) return '';
+  var cls = d.pct > 0 ? 'up' : (d.pct < 0 ? 'down' : 'flat');
+  var sign = d.pct >= 0 ? '+' : '';
+  var pos = (d.hi52 > d.lo52) ? Math.max(0, Math.min(100, (d.price - d.lo52) / (d.hi52 - d.lo52) * 100)) : 50;
+  var fromHigh = d.hi52 ? (d.price - d.hi52) / d.hi52 * 100 : 0;
+  var mcls = pos >= 66 ? 'up' : (pos <= 33 ? 'down' : 'flat');
+  var dayRange = (d.dlo != null && d.dhi != null) ? ('$' + lkFmtNum(d.dlo) + ' – $' + lkFmtNum(d.dhi)) : '—';
+  return '' +
+    '<div class="lk-native">' +
+    '  <div class="lkn-head">' +
+    '    <div class="lkn-id"><span class="lkn-sym">' + escapeHtmlJs(sym) + '</span>' +
+    '      <span class="lkn-name">' + escapeHtmlJs(d.name || '') + '</span></div>' +
+    '    <div class="lkn-quote"><span class="lkn-price">$' + lkFmtNum(d.price) + '</span> ' +
+    '      <span class="lkn-chg ' + cls + '">' + sign + lkFmtNum(d.chg) + ' (' + sign + d.pct.toFixed(2) + '%)</span></div>' +
+    '  </div>' +
+    '  <div class="lkn-52w">' +
+    '    <div class="lkn-52w-top"><span class="lkn-52w-label">52-week range</span>' +
+    '      <span class="lkn-52w-from ' + (fromHigh < 0 ? 'down' : 'up') + '">' + (fromHigh >= 0 ? '+' : '') + fromHigh.toFixed(1) + '% from high</span></div>' +
+    '    <div class="lkn-52w-track"><div class="lkn-52w-marker ' + mcls + '" style="left:' + pos.toFixed(1) + '%"></div></div>' +
+    '    <div class="lkn-52w-ends"><span>$' + lkFmtNum(d.lo52) + '</span><span>$' + lkFmtNum(d.hi52) + '</span></div>' +
+    '  </div>' +
+    '  <div class="lkn-stats">' +
+    '    <div class="lkn-stat"><div class="lkn-k">Day range</div><div class="lkn-v">' + dayRange + '</div></div>' +
+    '    <div class="lkn-stat"><div class="lkn-k">Volume</div><div class="lkn-v">' + lkFmtVol(d.vol) + '</div></div>' +
+    '    <div class="lkn-stat"><div class="lkn-k">Prev close</div><div class="lkn-v">$' + lkFmtNum(d.price - d.chg) + '</div></div>' +
+    '  </div>' +
+    '</div>';
+}
+
 function lkShow(sym, name) {
   sym = String(sym || '').toUpperCase();
   if (!sym) return;
@@ -824,6 +874,7 @@ function lkShow(sym, name) {
   var box = document.getElementById('lk-result');
   if (!box) return;
   box.innerHTML =
+    lkNativeCard(sym) +
     '<div class="lk-card">' +
     '  <div class="lk-widget lk-info"></div>' +
     '  <div class="lk-row">' +
@@ -1054,7 +1105,8 @@ function softRefresh(isManual) {
         if (fresh) panel.innerHTML = fresh.innerHTML;
       });
       var pairs = [['sb-server-cards', 'innerHTML'], ['updated-line', 'innerHTML'],
-                   ['scorecard-csv-data', 'textContent'], ['econ-events-data', 'textContent']];
+                   ['scorecard-csv-data', 'textContent'], ['econ-events-data', 'textContent'],
+                   ['quote-universe-data', 'textContent']];
       pairs.forEach(function (p) {
         var f = doc.getElementById(p[0]), c = document.getElementById(p[0]);
         if (f && c) c[p[1]] = f[p[1]];
