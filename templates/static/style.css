@@ -1508,6 +1508,21 @@ body.wl-collapsed .sb-reopen { display: inline-flex; }
   cursor: pointer; font-size: 14px; padding: 0 2px;
 }
 .sb-user-rm:hover { color: var(--down); }
+/* Compact native 52-week block on watchlist cards */
+.wln { padding: 2px 12px 8px; }
+.wln-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.wln-price { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wln-chg { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wln-chg.up { color: var(--green); } .wln-chg.down { color: var(--red); } .wln-chg.flat { color: var(--text-dim); }
+.wln-52w-track { position: relative; height: 6px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--red), var(--yellow) 50%, var(--green)); opacity: .85; }
+.wln-52w-marker { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: var(--text); border: 2px solid var(--bg-panel);
+  box-shadow: 0 0 0 1px var(--border-strong); }
+.wln-52w-ends { display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  margin-top: 4px; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.wln-from { font-weight: 600; white-space: nowrap; }
+.wln-from.up { color: var(--green); } .wln-from.down { color: var(--red); }
 
 /* ── World news section ── */
 details.world-news-details { margin: 28px 0 0; }

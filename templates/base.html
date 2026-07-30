@@ -641,6 +641,25 @@ function removeSbTicker(sym) {
   saveSbTickers(getSbTickers().filter(function(s){ return s !== sym; }));
   loadUserCards();
 }
+// Compact native 52-week block for watchlist cards (pre-fetched tickers only).
+function wlNativeMini(sym) {
+  var d = lkQuoteUniverse()[String(sym).toUpperCase()];
+  if (!d) return '';
+  var cls = d.pct > 0 ? 'up' : (d.pct < 0 ? 'down' : 'flat');
+  var sign = d.pct >= 0 ? '+' : '';
+  var pos = (d.hi52 > d.lo52) ? Math.max(0, Math.min(100, (d.price - d.lo52) / (d.hi52 - d.lo52) * 100)) : 50;
+  var fromHigh = d.hi52 ? (d.price - d.hi52) / d.hi52 * 100 : 0;
+  return '' +
+    '<div class="wln">' +
+    '  <div class="wln-top"><span class="wln-price">$' + lkFmtNum(d.price) + '</span>' +
+    '    <span class="wln-chg ' + cls + '">' + sign + d.pct.toFixed(2) + '%</span></div>' +
+    '  <div class="wln-52w-track"><div class="wln-52w-marker" style="left:' + pos.toFixed(1) + '%"></div></div>' +
+    '  <div class="wln-52w-ends"><span>$' + lkFmtNum(d.lo52) + '</span>' +
+    '    <span class="wln-from ' + (fromHigh < 0 ? 'down' : 'up') + '">' + (fromHigh >= 0 ? '+' : '') + fromHigh.toFixed(1) + '% frm hi</span>' +
+    '    <span>$' + lkFmtNum(d.hi52) + '</span></div>' +
+    '</div>';
+}
+
 function loadUserCards() {
   var container = document.getElementById('sb-user-cards');
   if (!container) return;
@@ -660,6 +679,7 @@ function loadUserCards() {
       '  <span class="sb-user-sym">' + sym + '</span>' +
       '  <button class="sb-user-rm" title="Remove" onclick="removeSbTicker(\'' + sym.replace(/'/g,"\\'") + '\')">✕</button>' +
       '</div>' +
+      wlNativeMini(sym) +
       '<div class="tradingview-widget-container" style="height:130px">' +
       '  <div class="tradingview-widget-container__widget"></div>' +
       '</div>';
