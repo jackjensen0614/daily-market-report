@@ -65,11 +65,16 @@
     <span id="market-clock" class="market-clock" aria-live="polite" hidden>
       <span class="mc-dot"></span><span class="mc-time"></span><span class="mc-state"></span>
     </span>
-    <div class="mode-toggle" role="group" aria-label="Reading mode">
+    <div class="mode-toggle" role="group" aria-label="Reading mode"
+         title="Standard: plain English, just the essentials. Advanced: full detail — volume, market cap, every sector, per-ticker stats.">
       <span class="mt-label">View</span>
       <button id="mt-std" class="active" onclick="setReadingMode('standard')">Standard</button>
       <button id="mt-adv" onclick="setReadingMode('advanced')">Advanced</button>
     </div>
+    <span class="mode-hint">
+      <span class="std-only">Plain English · essentials only</span>
+      <span class="adv-only">Full detail · volume, market cap, all sectors</span>
+    </span>
     <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
       <span class="spin">&#8635;</span> <span id="refresh-label">Refresh</span>
     </button>

@@ -141,6 +141,8 @@ h2 {
   margin-top: 5px; font-size: 10px; color: var(--text-faint);
 }
 .tr-cap { color: var(--text-dim); font-size: 9.5px; letter-spacing: .02em; }
+/* Standard hides the numeric endpoints, so center the plain-language caption */
+body.mode-standard .tr-labels { justify-content: center; }
 .zone-hot  .tr-cap { color: var(--green); }
 .zone-cold .tr-cap { color: var(--red); }
 
@@ -200,6 +202,8 @@ svg.spark { display: block; overflow: visible; }
 .mover .sym { font-weight: 700; letter-spacing: 0.02em; }
 .mover .name { color: var(--text-dim); font-size: 12px; margin-top: 2px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mover .why { color: var(--text); font-size: 12.5px; margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--border); color: #cfd4e3; }
+.mover .mv-stats { margin-top: 6px; font-size: 11px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums; letter-spacing: .01em; }
 .mover .news { margin-top: 6px; }
 .mover .news a { display: block; color: #b7c0d6; font-size: 12px; text-decoration: none; margin: 2px 0; }
 .mover .news a:hover { color: #dce3f5; text-decoration: underline; }
@@ -360,6 +364,8 @@ a { color: #8ab4f8; }
 }
 .print-btn:hover { background: #252d42; border-color: var(--accent-2); color: var(--accent-2); }
 .theme-btn { padding: 6px 11px; font-size: 14px; line-height: 1; }
+.mode-hint { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+@media (max-width: 720px) { .mode-hint { display: none; } }
 
 /* Live market-status clock */
 /* Economic-release countdown banner */
@@ -949,6 +955,12 @@ details.scorecard-details > .scorecard-body {
   display: grid; grid-template-columns: 22px 132px 1fr 58px 74px;
   align-items: center; gap: 10px; padding: 4px 0;
 }
+/* Advanced adds a YTD column */
+body.mode-advanced .rot-row, body.mode-advanced .rot-col-head {
+  grid-template-columns: 22px 132px 1fr 58px 74px 58px;
+}
+.rot-ytd { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.rot-ytd.up { color: var(--green); } .rot-ytd.down { color: var(--red); } .rot-ytd.flat { color: var(--text-dim); }
 .rot-col-head { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em;
   color: var(--text-faint); padding: 0 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
 .rot-col-head .rot-1w, .rot-col-head .rot-1d { text-align: right; }

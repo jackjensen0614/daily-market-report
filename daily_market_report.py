@@ -1827,11 +1827,19 @@ def render_index_tile(q: Quote) -> str:
         from_high = (q.price - q.wk52_high) / q.wk52_high * 100.0
         # Near-high (top 10%) reads bullish; near-low (bottom 10%) bearish
         zone = "hot" if pos >= 90 else ("cold" if pos <= 10 else "mid")
+        # Standard gets a plain-English read of where it sits in the year's range;
+        # Advanced gets the actual high/low numbers and % from high.
+        if pos >= 90:   plain = "Near its 12-month high"
+        elif pos >= 66: plain = "Toward the top of its 12-month range"
+        elif pos > 33:  plain = "Middle of its 12-month range"
+        elif pos > 10:  plain = "Toward the bottom of its 12-month range"
+        else:           plain = "Near its 12-month low"
         wk52 = {
             "pos": f"{pos:.1f}",
             "low": fmt_num(q.wk52_low),
             "high": fmt_num(q.wk52_high),
             "from_high": fmt_pct(from_high),
+            "plain": plain,
             "zone": zone,
             "title": f"52-week range {fmt_num(q.wk52_low)} – {fmt_num(q.wk52_high)} · "
                      f"{fmt_pct(from_high)} from high",
@@ -1921,6 +1929,21 @@ def text_pair(plain: str, advanced: str) -> str:
     )
 
 
+def fmt_shares_compact(n) -> str:
+    """Format a share count as 25.3M / 1.2B (no currency symbol)."""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return ""
+    if not n:
+        return ""
+    a = abs(n)
+    if a >= 1e9: return f"{n/1e9:.2f}B"
+    if a >= 1e6: return f"{n/1e6:.1f}M"
+    if a >= 1e3: return f"{n/1e3:.0f}K"
+    return f"{n:,.0f}"
+
+
 def fmt_mcap_compact(value) -> str:
     """Format a market cap value as $X.XT / $X.XB / $XM.
 
@@ -1980,21 +2003,38 @@ def render_mover_row(m: MoverWithNews, ai_why: dict[str, str] | None = None) -> 
     if why_text:
         why = f'<div class="why">{escape_html(why_text)}</div>'
 
+    # News density is a mode difference: Standard shows one headline (the gist),
+    # Advanced shows the full set.
     news_html = ""
     if m.news:
         items = []
-        for n in m.news[:NEWS_PER_TICKER]:
+        for i, n in enumerate(m.news[:NEWS_PER_TICKER]):
             title = escape_html(n.title or "(untitled)")
             pub = escape_html(n.publisher or "")
             link = n.link or "#"
             pub_html = f' <span class="pub">· {pub}</span>' if pub else ""
-            items.append(f'<a href="{escape_html(link)}" target="_blank" rel="noopener">{title}{pub_html}</a>')
+            cls_extra = "" if i == 0 else ' class="adv-only"'
+            items.append(
+                f'<a{cls_extra} href="{escape_html(link)}" target="_blank" rel="noopener">{title}{pub_html}</a>'
+            )
         news_html = '<div class="news">' + "".join(items) + '</div>'
+
+    # Advanced-only microstructure line — the numbers a trader wants, and noise
+    # for everyone else.
+    bits = []
+    if q.volume:
+        bits.append(f"Vol {fmt_shares_compact(q.volume)}")
+    if q.dollar_volume:
+        bits.append(f"{fmt_usd(q.dollar_volume)} traded")
+    if q.market_cap:
+        bits.append(f"Mkt cap {fmt_usd(q.market_cap)}")
+    stats = f'<div class="mv-stats adv-only">{escape_html(" · ".join(bits))}</div>' if bits else ""
 
     return _jinja_env.get_template("_mover.html").render(
         symbol=escape_html(q.symbol),
         name=escape_html(q.name),
         why=why,
+        stats=stats,
         news_html=news_html,
         cls=cls,
         pct=fmt_pct(q.change_pct),
@@ -4773,8 +4813,10 @@ def render_sector_heatmap(snap: Snapshot) -> str:
             f'<div class="sb-pct num {cls}">{fmt_pct(s.pct_1d)}</div>'
             f'</div>'
         )
+    # The scaled bar chart is a dense, analyst-style view — Advanced only. The
+    # card grid below carries the same story in a friendlier form for Standard.
     bars_html = (
-        '<div class="sector-bars">'
+        '<div class="sector-bars adv-only">'
         '<div class="sb-caption">1-day performance · scaled to range</div>'
         + "".join(bar_rows) +
         '</div>'
@@ -4811,25 +4853,33 @@ def render_sector_rotation(snap: Snapshot) -> str:
     ranked = sorted(sectors, key=lambda s: s.pct_1w, reverse=True)
     max_abs = max((abs(s.pct_1w) for s in ranked), default=1.0) or 1.0
 
+    # Standard sees only the 3 clearest leaders and laggards; Advanced sees the
+    # full ranking plus a YTD column.
+    n = len(ranked)
+    std_visible = set(range(min(3, n))) | set(range(max(0, n - 3), n))
+
     rows = []
     for i, s in enumerate(ranked, 1):
         cls = cls_for(s.pct_1w)
         width = min(100.0, abs(s.pct_1w) / max_abs * 50.0)
         side = "right" if s.pct_1w >= 0 else "left"
         d_cls = cls_for(s.pct_1d)
+        y_cls = cls_for(s.pct_ytd)
         mom = "▲" if s.pct_1d > 0.05 else ("▼" if s.pct_1d < -0.05 else "·")
+        row_cls = "rot-row" if (i - 1) in std_visible else "rot-row adv-only"
         rows.append(
-            '<div class="rot-row">'
+            f'<div class="{row_cls}">'
             f'<div class="rot-rank">{i}</div>'
             f'<div class="rot-name">{escape_html(s.name)}</div>'
             f'<div class="rot-track"><div class="rot-axis"></div>'
             f'<div class="rot-fill rot-{side} {cls}" style="width:{width:.2f}%"></div></div>'
             f'<div class="rot-1w num {cls}">{fmt_pct(s.pct_1w)}</div>'
             f'<div class="rot-1d num {d_cls}" title="today">{mom} {fmt_pct(s.pct_1d)}</div>'
+            f'<div class="rot-ytd num {y_cls} adv-only" title="year to date">{fmt_pct(s.pct_ytd)}</div>'
             '</div>'
         )
-    caption = mode_pair("Ranked by this week's move · today's move on the right",
-                        "Ranked by 1-week return · 1-day at right")
+    caption = mode_pair("Just the 3 biggest winners and losers this week",
+                        "Ranked by 1-week return · 1-day and YTD at right")
     return (
         '<div class="sector-rotation">'
         '<div class="rot-head">'
@@ -4838,7 +4888,8 @@ def render_sector_rotation(snap: Snapshot) -> str:
         f'<span class="rot-caption">{caption}</span>'
         '</div>'
         '<div class="rot-col-head"><span class="rot-rank"></span><span class="rot-name"></span>'
-        '<span class="rot-track"></span><span class="rot-1w">1W</span><span class="rot-1d">Today</span></div>'
+        '<span class="rot-track"></span><span class="rot-1w">1W</span><span class="rot-1d">Today</span>'
+        '<span class="rot-ytd adv-only">YTD</span></div>'
         + "".join(rows) +
         '</div>'
     )
@@ -5885,8 +5936,9 @@ def render_scorecard_analytics(history: dict) -> str:
                 f'<div class="sa-gpa num">{gpa}</div>'
                 '</div>'
             )
+        # The per-ticker table is analyst detail — Advanced only.
         board_html = (
-            '<div class="sa-board">'
+            '<div class="sa-board adv-only">'
             '<div class="sa-row sa-head-row">'
             '<div class="sa-tkr">Ticker</div><div class="sa-bar"></div>'
             '<div class="sa-wr">Win</div><div class="sa-n">Record</div><div class="sa-gpa">GPA</div>'
@@ -5895,7 +5947,7 @@ def render_scorecard_analytics(history: dict) -> str:
             '</div>'
         )
     else:
-        board_html = ('<div class="sa-empty">Per-ticker win rates appear once a name has '
+        board_html = ('<div class="sa-empty adv-only">Per-ticker win rates appear once a name has '
                       'been called at least twice.</div>')
 
     title = mode_pair("How our calls have done", "Prediction Analytics")

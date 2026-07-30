@@ -15,9 +15,9 @@
           <div class="tr-marker" style="left:{{ wk52.pos }}%"></div>
         </div>
         <div class="tr-labels">
-          <span class="tr-lo num">{{ wk52.low }}</span>
-          <span class="tr-cap">52-wk · {{ wk52.from_high }} from high</span>
-          <span class="tr-hi num">{{ wk52.high }}</span>
+          <span class="tr-lo num adv-only">{{ wk52.low }}</span>
+          <span class="tr-cap"><span class="std-only">{{ wk52.plain }}</span><span class="adv-only">52-wk · {{ wk52.from_high }} from high</span></span>
+          <span class="tr-hi num adv-only">{{ wk52.high }}</span>
         </div>
       </div>
       {% endif %}
