@@ -2551,6 +2551,122 @@
           "grade_reason_advanced": "Bullish call closed mildly correct: +0.56% \u2014 direction right, conviction lacking."
         }
       ]
+    },
+    {
+      "date": "2026-08-20",
+      "graded_at": "2026-08-20T16:57:44-04:00",
+      "entries": [
+        {
+          "ticker": "MSTR",
+          "rationale": "Led gainers at +12.7% to $104.25 yesterday.",
+          "bias": "bullish",
+          "actual_pct": 7.808152891749101,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +7.81% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+7.81%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +7.81% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "SOXL",
+          "rationale": "Led losers at -6.5% to $120.74 yesterday.",
+          "bias": "bearish",
+          "actual_pct": 1.217493164412444,
+          "verdict": "MISS",
+          "letter_grade": "D",
+          "grade_reason": "Bearish thesis underwhelmed: +1.22% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go down, but it went the other way a little (+1.22%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bearish thesis underwhelmed: +1.22% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "SPY",
+          "rationale": "Most active at $30.95B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": -0.8399893367440514,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Bullish thesis underwhelmed: -0.84% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a little (-0.84%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bullish thesis underwhelmed: -0.84% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "QQQ",
+          "rationale": "Most active at $25.53B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": -0.7191967784539289,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Bearish call closed mildly correct: -0.72% \u2014 direction right, conviction lacking.",
+          "grade_reason_standard": "We said this stock would go down. It barely moved the right way (-0.72%). Right idea, but weak.",
+          "grade_reason_advanced": "Bearish call closed mildly correct: -0.72% \u2014 direction right, conviction lacking."
+        },
+        {
+          "ticker": "MU",
+          "rationale": "Most active at $24.99B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": 3.9717890450519455,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bearish thesis broke: +3.97% \u2014 moved sharply against the call.",
+          "grade_reason_standard": "We said this stock would go down, but it went the other way a lot (+3.97%). Bad call.",
+          "grade_reason_advanced": "Bearish thesis broke: +3.97% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "NVDA",
+          "rationale": "Most active at $20.97B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": -0.32634283096409233,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Bearish call closed mildly correct: -0.33% \u2014 direction right, conviction lacking.",
+          "grade_reason_standard": "We said this stock would go down. It barely moved the right way (-0.33%). Right idea, but weak.",
+          "grade_reason_advanced": "Bearish call closed mildly correct: -0.33% \u2014 direction right, conviction lacking."
+        },
+        {
+          "ticker": "AAPL",
+          "rationale": "Most active at $15.98B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": -1.745415211206828,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bullish thesis broke: -1.75% \u2014 moved sharply against the call.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a lot (-1.75%). Bad call.",
+          "grade_reason_advanced": "Bullish thesis broke: -1.75% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "TSLA",
+          "rationale": "Most active at $12.86B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": -1.7059667115727262,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bullish thesis broke: -1.71% \u2014 moved sharply against the call.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a lot (-1.71%). Bad call.",
+          "grade_reason_advanced": "Bullish thesis broke: -1.71% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "AVGO",
+          "rationale": "Most active at $12.69B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": 0.42760641855840487,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Bearish thesis underwhelmed: +0.43% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go down, but it went the other way a little (+0.43%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bearish thesis underwhelmed: +0.43% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "MRVL",
+          "rationale": "Most active at $10.39B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 5.790866939335976,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +5.79% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+5.79%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +5.79% \u2014 strong follow-through."
+        }
+      ]
     }
   ]
 }
