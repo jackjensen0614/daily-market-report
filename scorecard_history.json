@@ -2783,6 +2783,122 @@
           "grade_reason_advanced": "Bearish thesis worked: -2.24% \u2014 direction right, solid magnitude."
         }
       ]
+    },
+    {
+      "date": "2026-08-24",
+      "graded_at": "2026-08-24T16:59:28-04:00",
+      "entries": [
+        {
+          "ticker": "HOOD",
+          "rationale": "Led gainers at +13.7% to $108.13 yesterday.",
+          "bias": "bullish",
+          "actual_pct": -4.170900417454119,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bullish thesis broke: -4.17% \u2014 moved sharply against the call.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a lot (-4.17%). Bad call.",
+          "grade_reason_advanced": "Bullish thesis broke: -4.17% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "MRVL",
+          "rationale": "Led losers at -5.6% to $237.04 yesterday.",
+          "bias": "bearish",
+          "actual_pct": -3.2694904739745394,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bearish thesis confirmed with conviction: -3.27% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go down, and it went down a lot (-3.27%). Great call.",
+          "grade_reason_advanced": "Bearish thesis confirmed with conviction: -3.27% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "SPY",
+          "rationale": "Most active at $29.89B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": -0.29384110198065355,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Bullish thesis underwhelmed: -0.29% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a little (-0.29%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bullish thesis underwhelmed: -0.29% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "QQQ",
+          "rationale": "Most active at $23.76B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": -0.9979809224073127,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Bullish thesis underwhelmed: -1.00% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a little (-1.00%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bullish thesis underwhelmed: -1.00% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "TSLA",
+          "rationale": "Most active at $21.40B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": -3.8334271361044,
+          "verdict": "MISS",
+          "letter_grade": "F",
+          "grade_reason": "Bullish thesis broke: -3.83% \u2014 moved sharply against the call.",
+          "grade_reason_standard": "We said this stock would go up, but it went the other way a lot (-3.83%). Bad call.",
+          "grade_reason_advanced": "Bullish thesis broke: -3.83% \u2014 moved sharply against the call."
+        },
+        {
+          "ticker": "NVDA",
+          "rationale": "Most active at $21.16B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": -2.9061128249297004,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Bearish thesis worked: -2.91% \u2014 direction right, solid magnitude.",
+          "grade_reason_standard": "We said this stock would go down, and it did (-2.91%). Good call.",
+          "grade_reason_advanced": "Bearish thesis worked: -2.91% \u2014 direction right, solid magnitude."
+        },
+        {
+          "ticker": "MU",
+          "rationale": "Most active at $21.02B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": -5.828630599876615,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bearish thesis confirmed with conviction: -5.83% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go down, and it went down a lot (-5.83%). Great call.",
+          "grade_reason_advanced": "Bearish thesis confirmed with conviction: -5.83% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "AAPL",
+          "rationale": "Most active at $14.47B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": 0.3200226975407676,
+          "verdict": "FLAT",
+          "letter_grade": "D",
+          "grade_reason": "Bearish thesis underwhelmed: +0.32% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go down, but it went the other way a little (+0.32%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bearish thesis underwhelmed: +0.32% \u2014 wrong direction, contained."
+        },
+        {
+          "ticker": "MSFT",
+          "rationale": "Most active at $10.87B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 0.8422331360127637,
+          "verdict": "FLAT",
+          "letter_grade": "C",
+          "grade_reason": "Bullish call closed mildly correct: +0.84% \u2014 direction right, conviction lacking.",
+          "grade_reason_standard": "We said this stock would go up. It barely moved the right way (+0.84%). Right idea, but weak.",
+          "grade_reason_advanced": "Bullish call closed mildly correct: +0.84% \u2014 direction right, conviction lacking."
+        },
+        {
+          "ticker": "AMZN",
+          "rationale": "Most active at $9.22B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": 1.3300863691221538,
+          "verdict": "MISS",
+          "letter_grade": "D",
+          "grade_reason": "Bearish thesis underwhelmed: +1.33% \u2014 wrong direction, contained.",
+          "grade_reason_standard": "We said this stock would go down, but it went the other way a little (+1.33%). Wrong, but only by a little.",
+          "grade_reason_advanced": "Bearish thesis underwhelmed: +1.33% \u2014 wrong direction, contained."
+        }
+      ]
     }
   ]
 }
