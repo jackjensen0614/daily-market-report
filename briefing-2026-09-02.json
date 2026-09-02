@@ -1,0 +1,106 @@
+{
+  "tickers_to_watch": [
+    {
+      "ticker": "SIRI",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+1.4-3.5%",
+      "rationale": "Led gainers at +7.0% to $29.56 yesterday.",
+      "analysis": "Large single-session moves in high-volume names often see partial continuation into the following session as momentum traders add and short-sellers cover. The primary risk is a mean-reversion fade if yesterday's move was news-driven without a fundamental repricing. Watch for volume confirmation in the first 30 minutes \u2014 low open volume is an early fade signal.",
+      "rationale_plain": "Was yesterday's biggest winner \u2014 up 7.0% to $29.56.",
+      "analysis_plain": "When a stock has a really strong day, it often keeps going up the next day too \u2014 other traders see the gain and pile in. The risk: if yesterday's jump was just from one piece of news, the stock could give some of those gains back. Watch the first 30 minutes of trading \u2014 if not many people are buying, it might fade."
+    },
+    {
+      "ticker": "PANW",
+      "bias": "bearish",
+      "risk_level": "medium",
+      "return_estimate": "-1.2-2.9%",
+      "rationale": "Led losers at -8.2% to $332.30 yesterday.",
+      "analysis": "High-volume declines frequently see follow-through selling as institutional holders reposition and stop-losses trigger below the prior close. A dead-cat bounce is possible intraday but the path of least resistance is lower until a fundamental catalyst appears. Short thesis is best expressed intraday given elevated borrow costs after large single-day drops.",
+      "rationale_plain": "Was yesterday's biggest loser \u2014 down 8.2% to $332.30.",
+      "analysis_plain": "When a stock falls hard, it often keeps falling the next day \u2014 big investors keep selling, and automatic 'sell' orders kick in. It might bounce briefly during the day, but the overall direction is usually down until something good happens. Betting on further declines gets expensive after a big drop, so this is best played carefully and quickly."
+    },
+    {
+      "ticker": "NVDA",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+0.8-1.6%",
+      "rationale": "Most active at $15.09B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "NVDA traded $15.09B (+3.9% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($15.09B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "NVDA saw $15.09B change hands (+3.9% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "MU",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+0.2-0.4%",
+      "rationale": "Most active at $10.18B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "MU traded $10.18B (+1.0% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($10.18B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "MU saw $10.18B change hands (+1.0% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "QQQ",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+1-3%",
+      "rationale": "Most active at $7.70B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "QQQ traded $7.70B (+0.3% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($7.70B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "QQQ saw $7.70B change hands (+0.3% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "SPY",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+1-3%",
+      "rationale": "Most active at $7.41B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "SPY traded $7.41B (+0.6% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($7.41B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "SPY saw $7.41B change hands (+0.6% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "TSLA",
+      "bias": "bearish",
+      "risk_level": "medium",
+      "return_estimate": "+1-3%",
+      "rationale": "Most active at $5.91B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "TSLA traded $5.91B (-0.6% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($5.91B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "TSLA saw $5.91B change hands (-0.6% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "META",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+0.6-1.1%",
+      "rationale": "Most active at $4.63B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "META traded $4.63B (+2.8% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($4.63B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "META saw $4.63B change hands (+2.8% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "AAPL",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+1-3%",
+      "rationale": "Most active at $4.04B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "AAPL traded $4.04B (+0.5% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($4.04B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "AAPL saw $4.04B change hands (+0.5% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    },
+    {
+      "ticker": "SOXL",
+      "bias": "bullish",
+      "risk_level": "medium",
+      "return_estimate": "+0.2-0.4%",
+      "rationale": "Most active at $3.03B dollar volume \u2014 elevated institutional flow.",
+      "analysis": "SOXL traded $3.03B (+1.0% on the session) \u2014 heavy institutional flow that tends to extend the move, but also leaves it exposed to the broad tape. Use yesterday's high/low as breakout/breakdown triggers.",
+      "rationale_plain": "One of the most heavily traded stocks ($3.03B changed hands) \u2014 big investors are paying attention.",
+      "analysis_plain": "SOXL saw $3.03B change hands (+1.0% on the day) \u2014 that much money usually means big investors are active, which tends to keep it moving. The catch: it'll swing harder when the whole market has a good or bad day."
+    }
+  ],
+  "generated_by": "data-fallback",
+  "generated_at": "2026-09-02T11:38:01-04:00"
+}
