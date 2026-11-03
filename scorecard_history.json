@@ -8470,7 +8470,7 @@
     },
     {
       "date": "2026-11-02",
-      "graded_at": "2026-11-02T16:05:12-05:00",
+      "graded_at": "2026-11-02T21:33:07-05:00",
       "entries": [
         {
           "ticker": "ENPH",
@@ -8509,12 +8509,12 @@
           "ticker": "SPY",
           "rationale": "Most active at $34.77B dollar volume \u2014 elevated institutional flow.",
           "bias": "bearish",
-          "actual_pct": -0.47239009520166675,
+          "actual_pct": -0.47901276365893064,
           "verdict": "FLAT",
           "letter_grade": "C",
-          "grade_reason": "Bearish call closed mildly correct: -0.47% \u2014 direction right, conviction lacking.",
-          "grade_reason_standard": "We said this stock would go down. It barely moved the right way (-0.47%). Right idea, but weak.",
-          "grade_reason_advanced": "Bearish call closed mildly correct: -0.47% \u2014 direction right, conviction lacking."
+          "grade_reason": "Bearish call closed mildly correct: -0.48% \u2014 direction right, conviction lacking.",
+          "grade_reason_standard": "We said this stock would go down. It barely moved the right way (-0.48%). Right idea, but weak.",
+          "grade_reason_advanced": "Bearish call closed mildly correct: -0.48% \u2014 direction right, conviction lacking."
         },
         {
           "ticker": "MU",
