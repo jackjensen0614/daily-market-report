@@ -9279,6 +9279,122 @@
           "grade_reason_advanced": "Bullish call closed mildly correct: +1.48% \u2014 direction right, conviction lacking."
         }
       ]
+    },
+    {
+      "date": "2026-11-11",
+      "graded_at": "2026-11-11T14:01:10-05:00",
+      "entries": [
+        {
+          "ticker": "DJT",
+          "rationale": "Led gainers at +27.0% to $5.43 yesterday.",
+          "bias": "bullish",
+          "actual_pct": 26.752334691539293,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +26.75% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+26.75%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +26.75% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "SQQQ",
+          "rationale": "Led losers at -8.9% to $39.69 yesterday.",
+          "bias": "bearish",
+          "actual_pct": -8.769512337909307,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bearish thesis confirmed with conviction: -8.77% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go down, and it went down a lot (-8.77%). Great call.",
+          "grade_reason_advanced": "Bearish thesis confirmed with conviction: -8.77% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "NVDA",
+          "rationale": "Most active at $34.01B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 4.662798287914892,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +4.66% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+4.66%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +4.66% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "MU",
+          "rationale": "Most active at $20.84B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 13.677923994895036,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +13.68% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+13.68%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +13.68% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "QQQ",
+          "rationale": "Most active at $19.80B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 2.925483127139026,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Bullish thesis worked: +2.93% \u2014 direction right, solid magnitude.",
+          "grade_reason_standard": "We said this stock would go up, and it did (+2.93%). Good call.",
+          "grade_reason_advanced": "Bullish thesis worked: +2.93% \u2014 direction right, solid magnitude."
+        },
+        {
+          "ticker": "AMD",
+          "rationale": "Most active at $17.44B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 9.732915967763354,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +9.73% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+9.73%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +9.73% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "SPY",
+          "rationale": "Most active at $13.88B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 1.5961745267581853,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Bullish thesis worked: +1.60% \u2014 direction right, solid magnitude.",
+          "grade_reason_standard": "We said this stock would go up, and it did (+1.60%). Good call.",
+          "grade_reason_advanced": "Bullish thesis worked: +1.60% \u2014 direction right, solid magnitude."
+        },
+        {
+          "ticker": "SOXL",
+          "rationale": "Most active at $12.59B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 22.559755706956405,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +22.56% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+22.56%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +22.56% \u2014 strong follow-through."
+        },
+        {
+          "ticker": "MSFT",
+          "rationale": "Most active at $8.69B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bearish",
+          "actual_pct": -2.220715435647093,
+          "verdict": "HIT",
+          "letter_grade": "B",
+          "grade_reason": "Bearish thesis worked: -2.22% \u2014 direction right, solid magnitude.",
+          "grade_reason_standard": "We said this stock would go down, and it did (-2.22%). Good call.",
+          "grade_reason_advanced": "Bearish thesis worked: -2.22% \u2014 direction right, solid magnitude."
+        },
+        {
+          "ticker": "TSLA",
+          "rationale": "Most active at $7.17B dollar volume \u2014 elevated institutional flow.",
+          "bias": "bullish",
+          "actual_pct": 3.7311110309337416,
+          "verdict": "HIT",
+          "letter_grade": "A",
+          "grade_reason": "Bullish thesis confirmed with conviction: +3.73% \u2014 strong follow-through.",
+          "grade_reason_standard": "We said this stock would go up, and it went up a lot (+3.73%). Great call.",
+          "grade_reason_advanced": "Bullish thesis confirmed with conviction: +3.73% \u2014 strong follow-through."
+        }
+      ]
     }
   ]
 }
