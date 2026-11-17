@@ -9630,7 +9630,7 @@
     },
     {
       "date": "2026-11-16",
-      "graded_at": "2026-11-16T16:26:12-05:00",
+      "graded_at": "2026-11-16T22:03:16-05:00",
       "entries": [
         {
           "ticker": "SQQQ",
@@ -9669,7 +9669,7 @@
           "ticker": "SPY",
           "rationale": "Most active at $48.16B dollar volume \u2014 elevated institutional flow.",
           "bias": "bearish",
-          "actual_pct": -1.910199668306364,
+          "actual_pct": -1.9115265723043742,
           "verdict": "HIT",
           "letter_grade": "B",
           "grade_reason": "Bearish thesis worked: -1.91% \u2014 direction right, solid magnitude.",
